@@ -61,12 +61,16 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
   const generateQRCode = async (url: string) => {
     try {
       // Use a QR code API service (QR Server is free and reliable)
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&format=png&data=${encodeURIComponent(url)}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&format=png&data=${encodeURIComponent(
+        url
+      )}`;
       setQrCodeUrl(qrUrl);
     } catch (error) {
       console.error("Failed to generate QR code:", error);
       // Fallback: still set the URL so the image tries to load
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&format=png&data=${encodeURIComponent(url)}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&format=png&data=${encodeURIComponent(
+        url
+      )}`;
       setQrCodeUrl(qrUrl);
     }
   };
@@ -213,8 +217,8 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
       </main>
 
       {/* Share Modal */}
-      <Dialog 
-        open={shareModalOpen} 
+      <Dialog
+        open={shareModalOpen}
         onOpenChange={(open) => {
           setShareModalOpen(open);
           if (!open) {
@@ -230,7 +234,7 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
               Share this space
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-6">
             {/* QR Code */}
             <div className="flex justify-center">
@@ -246,7 +250,9 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
                 <div className="w-56 h-56 flex items-center justify-center bg-muted rounded-lg border-2 border-dashed border-border">
                   <div className="text-center">
                     <QrCode className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">Generating QR code...</p>
+                    <p className="text-sm text-muted-foreground">
+                      Generating QR code...
+                    </p>
                   </div>
                 </div>
               )}
@@ -254,16 +260,20 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
 
             {/* Share URL */}
             <div className="space-y-3">
-              <label className="text-sm font-medium text-foreground">Share link</label>
+              <label className="text-sm font-medium text-foreground">
+                Share link
+              </label>
               <div className="flex gap-2">
                 <div className="flex-1 p-3 bg-muted rounded-md text-sm font-mono text-foreground border">
                   woff.space/r/{space.slug}
                 </div>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   onClick={handleCopyFromModal}
                   variant={copied ? "default" : "outline"}
-                  className={copied ? "bg-green-600 hover:bg-green-700 text-white" : ""}
+                  className={
+                    copied ? "bg-green-600 hover:bg-green-700 text-white" : ""
+                  }
                 >
                   {copied ? (
                     <>

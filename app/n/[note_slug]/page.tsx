@@ -20,7 +20,7 @@ export async function generateMetadata({
 
 export default async function NotePage({ params }: NotePageProps) {
   const { note_slug } = await params;
-  
+
   return (
     <div className="min-h-screen bg-background">
       <NoteEditor noteSlug={note_slug} />

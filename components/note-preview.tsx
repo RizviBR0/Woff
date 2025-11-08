@@ -43,7 +43,7 @@ export function NotePreview({
         setIsLoading(true);
         try {
           const noteData = await getNote(noteSlug);
-          
+
           if (noteData) {
             setNote({
               title: noteData.title,
@@ -60,7 +60,7 @@ export function NotePreview({
 
       loadNote();
     }
-    
+
     // Reset note data when modal closes
     if (!isOpen && note) {
       setNote(null);

@@ -25,7 +25,7 @@ export async function generateMetadata({
 
 export default async function NoteViewPage({ params }: NoteViewPageProps) {
   const { public_code } = await params;
-  
+
   return (
     <div className="min-h-screen bg-background">
       <NoteViewer publicCode={public_code} />
