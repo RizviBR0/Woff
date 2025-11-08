@@ -1,0 +1,20 @@
+{
+  "json.schemas": [
+    {
+      "fileMatch": [".eslintrc.json"],
+      "schema": {
+        "type": "object",
+        "properties": {
+          "extends": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "json.schemaDownload.enable": false,
+  "typescript.preferences.includePackageJsonAutoImports": "auto"
+}
