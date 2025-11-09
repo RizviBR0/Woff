@@ -20,20 +20,20 @@ export function JoinRoomSection() {
 
     // Clean the room code - remove any URL parts and extract just the code
     let cleanCode = roomCode.trim();
-    
+
     // Handle various input formats:
     // - Full URL: localhost:3000/r/KQ34RR or https://woff.space/r/KQ34RR
     // - Partial URL: /r/KQ34RR
     // - Just the code: KQ34RR
-    
+
     if (cleanCode.includes("/r/")) {
       const parts = cleanCode.split("/r/");
       cleanCode = parts[1] || "";
     }
-    
+
     // Remove any trailing slashes or query parameters
     cleanCode = cleanCode.split("/")[0].split("?")[0];
-    
+
     if (!cleanCode) {
       setError("Invalid room code format");
       return;
@@ -95,11 +95,9 @@ export function JoinRoomSection() {
             )}
           </Button>
         </div>
-        
-        {error && (
-          <p className="text-sm text-destructive text-left">{error}</p>
-        )}
-        
+
+        {error && <p className="text-sm text-destructive text-left">{error}</p>}
+
         <p className="text-xs text-muted-foreground text-left">
           Paste a room URL or enter just the room code
         </p>

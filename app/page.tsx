@@ -16,17 +16,17 @@ export default function HomePage() {
         {/* CTA Section */}
         <div className="space-y-6">
           <CreateSpaceButton />
-          
+
           {/* Divider */}
           <div className="flex items-center gap-4">
             <div className="flex-1 h-px bg-border"></div>
             <span className="text-sm text-muted-foreground">or</span>
             <div className="flex-1 h-px bg-border"></div>
           </div>
-          
+
           {/* Join Room Section */}
           <JoinRoomSection />
-          
+
           <p className="text-sm text-muted-foreground">No signup required</p>
         </div>
       </div>
