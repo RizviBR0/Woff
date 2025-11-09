@@ -54,7 +54,7 @@ export async function createSpace(): Promise<Space> {
     slug,
     creator_device_id: deviceId,
     visibility: "unlisted",
-    allow_public_post: false,
+    allow_public_post: true,
   });
 
   const { data, error } = await supabase
@@ -63,7 +63,7 @@ export async function createSpace(): Promise<Space> {
       slug,
       creator_device_id: deviceId,
       visibility: "unlisted",
-      allow_public_post: false,
+      allow_public_post: true,
     })
     .select()
     .single();
@@ -257,7 +257,22 @@ export async function updateNote(
 
   const entry = entries[0];
 
-  if (entry.created_by_device_id !== deviceId) {
+  // Allow anyone to update notes in shared spaces - check if space allows public posting
+  const { data: space, error: spaceError } = await supabase
+    .from("spaces")
+    .select("creator_device_id, allow_public_post")
+    .eq("id", entry.space_id)
+    .single();
+
+  if (spaceError || !space) {
+    throw new Error("Space not found");
+  }
+
+  // Check if user can edit (either creator or public posting allowed)
+  const canEdit =
+    space.creator_device_id === deviceId || space.allow_public_post;
+
+  if (!canEdit) {
     throw new Error("Not authorized to update this note");
   }
 

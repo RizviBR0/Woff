@@ -11,7 +11,7 @@ import {
   Edit,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 
 export interface Entry {
   id: string;
@@ -28,7 +28,7 @@ interface EntryCardProps {
   entry: Entry;
 }
 
-export function EntryCard({ entry }: EntryCardProps) {
+export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentImageUrl, setCurrentImageUrl] = useState<string>("");
   const [modalBgColor, setModalBgColor] = useState<string>("bg-black/90");
@@ -639,4 +639,4 @@ export function EntryCard({ entry }: EntryCardProps) {
       </div>
     </div>
   );
-}
+});

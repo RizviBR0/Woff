@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Copy, Check, Share, Settings, X, QrCode } from "lucide-react";
 import { Space } from "@/lib/actions";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
 import { ThemeToggle } from "./theme-toggle";
+import { createClientSupabaseClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -32,10 +33,117 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
 
-  const handleNewEntry = (entry: Entry) => {
-    setEntries((prev) => [...prev, entry]);
-    setHasPosted(true);
-  };
+  // Function to scroll to bottom smoothly
+  const scrollToBottom = useCallback(() => {
+    // Scroll the window to the bottom
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: "smooth",
+    });
+  }, []);
+
+  // Auto-scroll to bottom when entries change
+  useEffect(() => {
+    if (entries.length > 0) {
+      // Small delay to ensure DOM has updated
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    }
+  }, [entries, scrollToBottom]);
+
+  // Real-time subscription for new entries
+  useEffect(() => {
+    const supabase = createClientSupabaseClient();
+
+    const channel = supabase
+      .channel("entries-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "entries",
+          filter: `space_id=eq.${space.id}`,
+        },
+        (payload) => {
+          console.log("🔄 Real-time: New entry received", payload);
+          const newEntry = payload.new as Entry;
+
+          // Add a small delay to let local updates settle first
+          setTimeout(() => {
+            setEntries((prev) => {
+              const exists = prev.some((entry) => entry.id === newEntry.id);
+              if (exists) {
+                console.log(
+                  "🔄 Real-time: Entry already exists, skipping",
+                  newEntry.id
+                );
+                return prev;
+              }
+
+              console.log(
+                "🔄 Real-time: Adding new entry",
+                newEntry.id,
+                "Current count:",
+                prev.length
+              );
+              // Since entries are already ordered by created_at from the server,
+              // and new entries are always newer, just append to the end
+              // This avoids re-sorting and layout shifts
+              const updated = [...prev, newEntry];
+              console.log("🔄 Real-time: New count:", updated.length);
+              return updated;
+            });
+            setHasPosted(true);
+          }, 100); // Small delay to prevent race conditions
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "entries",
+          filter: `space_id=eq.${space.id}`,
+        },
+        (payload) => {
+          console.log("🔄 Real-time: Entry updated", payload);
+          const updatedEntry = payload.new as Entry;
+
+          setEntries((prev) =>
+            prev.map((entry) =>
+              entry.id === updatedEntry.id ? updatedEntry : entry
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log("🔄 Real-time: Unsubscribing from channel");
+      supabase.removeChannel(channel);
+    };
+  }, [space.id]);
+
+  const handleNewEntry = useCallback(
+    (entry: Entry) => {
+      console.log("📝 Local: Adding new entry", entry.id);
+      setEntries((prev) => {
+        console.log("📝 Local: Current count:", prev.length);
+        const updated = [...prev, entry];
+        console.log("📝 Local: New count:", updated.length);
+        return updated;
+      });
+      setHasPosted(true);
+
+      // Scroll to bottom immediately after adding new entry
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    },
+    [scrollToBottom]
+  );
 
   const handleCopy = async () => {
     try {

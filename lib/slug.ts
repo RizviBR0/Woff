@@ -1,9 +1,18 @@
-import { nanoid } from "nanoid";
+import { customAlphabet } from "nanoid";
+
+// Simple alphabet without confusing characters (no underscores, hyphens, or similar symbols)
+// Excludes: 0, O, I, l, 1 to avoid confusion
+const simpleAlphabet =
+  "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
+
+// Create custom nanoid generators
+const generateSimpleId = customAlphabet(simpleAlphabet, 6);
+const generateDeviceIdAlphabet = customAlphabet(simpleAlphabet, 21);
 
 export function generateShortSlug(): string {
-  return nanoid(6); // 6 characters for short URLs
+  return generateSimpleId(); // 6 characters using simple alphabet
 }
 
 export function generateDeviceId(): string {
-  return nanoid(21); // 21 characters for device IDs
+  return generateDeviceIdAlphabet(); // 21 characters using simple alphabet
 }
