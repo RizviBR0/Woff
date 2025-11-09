@@ -48,24 +48,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { SlashMenu } from "./slash-menu";
-import { getNote, updateNote } from "@/lib/actions";
+import { getNote, updateNote, type Note } from "@/lib/actions";
 
 interface NoteEditorProps {
   noteSlug: string;
-}
-
-interface Note {
-  id: string;
-  slug: string;
-  title: string;
-  content: string;
-  public_code: string;
-  visibility: "public" | "unlisted" | "private";
-  font_family: "system" | "serif" | "mono";
-  space_id: string;
-  created_by_device_id: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export function NoteEditor({ noteSlug }: NoteEditorProps) {
@@ -2043,7 +2029,13 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => router.push("/spaces")}
+                onClick={() => {
+                  if (note?.space_slug) {
+                    router.push(`/r/${note.space_slug}`);
+                  } else {
+                    router.push("/");
+                  }
+                }}
                 className="h-11 w-11 hover:scale-105 transition-all duration-200 hover:bg-primary/10 rounded-xl"
               >
                 <ArrowLeft className="h-5 w-5" />

@@ -42,6 +42,30 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
     });
   }, []);
 
+  // Helper function to safely add entry without duplicates
+  const addEntryIfNotExists = useCallback((newEntry: Entry, source: string) => {
+    setEntries((prev) => {
+      const exists = prev.some((entry) => entry.id === newEntry.id);
+      if (exists) {
+        console.log(
+          `🔄 ${source}: Entry already exists, skipping duplicate`,
+          newEntry.id
+        );
+        return prev;
+      }
+
+      console.log(
+        `🔄 ${source}: Adding entry`,
+        newEntry.id,
+        "Current count:",
+        prev.length
+      );
+      const updated = [...prev, newEntry];
+      console.log(`🔄 ${source}: New count:`, updated.length);
+      return updated;
+    });
+  }, []);
+
   // Auto-scroll to bottom when entries change
   useEffect(() => {
     if (entries.length > 0) {
@@ -70,33 +94,11 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
           console.log("🔄 Real-time: New entry received", payload);
           const newEntry = payload.new as Entry;
 
-          // Add a small delay to let local updates settle first
+          // Add a longer delay to let local updates settle first
           setTimeout(() => {
-            setEntries((prev) => {
-              const exists = prev.some((entry) => entry.id === newEntry.id);
-              if (exists) {
-                console.log(
-                  "🔄 Real-time: Entry already exists, skipping",
-                  newEntry.id
-                );
-                return prev;
-              }
-
-              console.log(
-                "🔄 Real-time: Adding new entry",
-                newEntry.id,
-                "Current count:",
-                prev.length
-              );
-              // Since entries are already ordered by created_at from the server,
-              // and new entries are always newer, just append to the end
-              // This avoids re-sorting and layout shifts
-              const updated = [...prev, newEntry];
-              console.log("🔄 Real-time: New count:", updated.length);
-              return updated;
-            });
+            addEntryIfNotExists(newEntry, "Real-time");
             setHasPosted(true);
-          }, 100); // Small delay to prevent race conditions
+          }, 200); // Increased delay to prevent race conditions with local updates
         }
       )
       .on(
@@ -124,17 +126,12 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
       console.log("🔄 Real-time: Unsubscribing from channel");
       supabase.removeChannel(channel);
     };
-  }, [space.id]);
+  }, [space.id, addEntryIfNotExists]);
 
   const handleNewEntry = useCallback(
     (entry: Entry) => {
-      console.log("📝 Local: Adding new entry", entry.id);
-      setEntries((prev) => {
-        console.log("📝 Local: Current count:", prev.length);
-        const updated = [...prev, entry];
-        console.log("📝 Local: New count:", updated.length);
-        return updated;
-      });
+      console.log("📝 Local: Received new entry", entry.id);
+      addEntryIfNotExists(entry, "Local");
       setHasPosted(true);
 
       // Scroll to bottom immediately after adding new entry
@@ -142,7 +139,7 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
         scrollToBottom();
       }, 100);
     },
-    [scrollToBottom]
+    [scrollToBottom, addEntryIfNotExists]
   );
 
   const handleCopy = async () => {

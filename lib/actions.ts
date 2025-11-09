@@ -168,6 +168,7 @@ export interface Note {
   visibility: "public" | "unlisted" | "private";
   font_family: "system" | "serif" | "mono";
   space_id: string;
+  space_slug?: string;
   created_by_device_id: string | null;
   created_at: string;
   updated_at: string;
@@ -366,10 +367,17 @@ export async function updateNote(
 export async function getNote(noteSlug: string): Promise<Note | null> {
   const supabase = await createServerSupabaseClient();
 
-  // Find the entry with this note slug
+  // Find the entry with this note slug and join with spaces to get the space slug
   const { data: entries, error } = await supabase
     .from("entries")
-    .select("*")
+    .select(
+      `
+      *,
+      spaces:space_id (
+        slug
+      )
+    `
+    )
     .eq("kind", "text")
     .like("text", `NOTE:${noteSlug}:%`);
 
@@ -392,6 +400,7 @@ export async function getNote(noteSlug: string): Promise<Note | null> {
     visibility: entry.meta?.visibility || "unlisted",
     font_family: entry.meta?.font_family || "system",
     space_id: entry.space_id,
+    space_slug: (entry.spaces as any)?.slug,
     created_by_device_id: entry.created_by_device_id,
     created_at: entry.created_at,
     updated_at: entry.meta?.updated_at || entry.created_at,
