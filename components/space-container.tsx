@@ -6,6 +6,7 @@ import { Space } from "@/lib/actions";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
 import { ThemeToggle } from "./theme-toggle";
+import { Logo } from "./logo";
 import { createClientSupabaseClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import {
@@ -204,7 +205,7 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-2">
-            <h1 className="text-sm font-medium">WoFF</h1>
+            <Logo width={80} height={24} />
           </div>
 
           {/* Center copy button */}

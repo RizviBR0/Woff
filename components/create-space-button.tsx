@@ -27,9 +27,16 @@ export function CreateSpaceButton() {
       onClick={handleCreateSpace}
       disabled={isCreating}
       size="lg"
-      className="min-w-[140px]"
+      className="h-12 px-8 min-w-[160px] rounded-xl font-medium shadow-sm hover:shadow-md transition-all duration-200 text-base"
     >
-      {isCreating ? "Creating..." : "Create Space"}
+      {isCreating ? (
+        <>
+          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+          Creating...
+        </>
+      ) : (
+        "Create Space"
+      )}
     </Button>
   );
 }
