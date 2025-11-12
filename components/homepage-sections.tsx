@@ -15,6 +15,7 @@ import {
   Github,
   Mail,
   Heart,
+  Link,
 } from "lucide-react";
 
 const features = [
@@ -179,7 +180,14 @@ export function HomepageSections() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Button variant="outline" size="lg" className="rounded-full group">
+            <Button
+              onClick={() =>
+                window.open("https://github.com/rizvibr0", "_blank")
+              }
+              variant="outline"
+              size="lg"
+              className="rounded-full group"
+            >
               <Github className="w-4 h-4 mr-2" />
               GitHub
               <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />

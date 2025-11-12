@@ -27,6 +27,8 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
   const [drawingOpen, setDrawingOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const multiFileInputRef = useRef<HTMLInputElement>(null);
+  const lastUploadSignatureRef = useRef<string>("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,7 +79,14 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
     }
   };
 
-  const handleCamera = () => {
+  const handleImages = () => {
+    setPopoverOpen(false);
+    if (multiFileInputRef.current) {
+      multiFileInputRef.current.click();
+    }
+  };
+
+  const handlePhoto = () => {
     setPopoverOpen(false);
     if (fileInputRef.current) {
       fileInputRef.current.click();
@@ -115,6 +124,9 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
   const handleImageCapture = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
+    if (isSubmitting) {
+      return;
+    }
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -160,6 +172,91 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
 
     // Reset the input
     event.target.value = "";
+  };
+
+  const handleMultiplePhotos = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    if (isSubmitting) {
+      return;
+    }
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    // Check if all files are images
+    const imageFiles = Array.from(files).filter((file) =>
+      file.type.startsWith("image/")
+    );
+    if (imageFiles.length === 0) {
+      alert("Please select image files");
+      return;
+    }
+
+    if (imageFiles.length !== files.length) {
+      alert(`${files.length - imageFiles.length} non-image files were skipped`);
+    }
+
+    const signature = Array.from(files)
+      .map((f) => `${f.name}:${f.size}`)
+      .join("|");
+    if (signature === lastUploadSignatureRef.current) {
+      // Prevent duplicate processing of same file selection
+      event.target.value = "";
+      return;
+    }
+    lastUploadSignatureRef.current = signature;
+
+    setIsSubmitting(true);
+    try {
+      const imageDataUrls: string[] = [];
+
+      // Convert all images to data URLs
+      await Promise.all(
+        imageFiles.map((file) => {
+          return new Promise<void>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const dataUrl = e.target?.result as string;
+              if (dataUrl) {
+                imageDataUrls.push(dataUrl);
+                resolve();
+              } else {
+                reject(new Error("Failed to read file"));
+              }
+            };
+            reader.onerror = () => reject(new Error("File reading error"));
+            reader.readAsDataURL(file);
+          });
+        })
+      );
+
+      if (imageDataUrls.length === 1) {
+        // Store single image as PHOTO entry for consistency
+        const entry = await createEntry(
+          spaceId,
+          "text",
+          `PHOTO:${imageDataUrls[0]}`
+        );
+        onNewEntry(entry);
+      } else if (imageDataUrls.length > 1) {
+        // Store multiple photos as PHOTOS entry
+        const entry = await createEntry(
+          spaceId,
+          "text",
+          `PHOTOS:${JSON.stringify(imageDataUrls)}`
+        );
+        onNewEntry(entry);
+      }
+    } catch (error) {
+      console.error("Failed to process photos:", error);
+      alert("Failed to upload some photos. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+      // Reset the file input
+      if (multiFileInputRef.current) {
+        multiFileInputRef.current.value = "";
+      }
+    }
   };
 
   if (centered) {
@@ -239,14 +336,26 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
                         </div>
                       </button>
                       <button
-                        onClick={handleCamera}
+                        onClick={handlePhoto}
                         className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm hover:bg-accent/80 transition-colors group"
                       >
                         <span className="text-lg">📷</span>
                         <div className="text-left">
                           <div className="font-medium">Photo</div>
                           <div className="text-xs text-muted-foreground">
-                            Capture or upload image
+                            Capture photo instantly
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={handleImages}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm hover:bg-accent/80 transition-colors group"
+                      >
+                        <span className="text-lg">🖼️</span>
+                        <div className="text-left">
+                          <div className="font-medium">Images</div>
+                          <div className="text-xs text-muted-foreground">
+                            Select multiple or single images
                           </div>
                         </div>
                       </button>
@@ -296,13 +405,22 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
                 <span>Create note</span>
               </button>
               <button
-                onClick={handleCamera}
+                onClick={handlePhoto}
                 className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-medium bg-green-50 dark:bg-green-950/30 hover:bg-green-100 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300 transition-all duration-200 border border-green-200/60 dark:border-green-800/60 hover:border-green-300 dark:hover:border-green-700 shadow-sm hover:shadow-lg hover:shadow-green-500/20 hover:-translate-y-1 backdrop-blur-sm"
               >
                 <span className="text-base group-hover:scale-110 transition-transform duration-200">
                   📷
                 </span>
-                <span>Add image</span>
+                <span>Photo</span>
+              </button>
+              <button
+                onClick={handleImages}
+                className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-all duration-200 border border-blue-200/60 dark:border-blue-800/60 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm hover:shadow-lg hover:shadow-blue-500/20 hover:-translate-y-1 backdrop-blur-sm"
+              >
+                <span className="text-base group-hover:scale-110 transition-transform duration-200">
+                  🖼️
+                </span>
+                <span>Images</span>
               </button>
               <button
                 onClick={handleDrawing}
@@ -322,13 +440,21 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
             onSave={handleDrawingSave}
           />
 
-          {/* Hidden file input for camera/image capture */}
+          {/* Hidden inputs for centered composer (camera + multi images) */}
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
             capture="environment"
             onChange={handleImageCapture}
+            className="hidden"
+          />
+          <input
+            ref={multiFileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleMultiplePhotos}
             className="hidden"
           />
         </form>
@@ -375,11 +501,18 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
                 <span className="font-medium">File Upload</span>
               </button>
               <button
-                onClick={handleCamera}
+                onClick={handlePhoto}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-accent/80 transition-colors group"
               >
                 <span className="text-base">📷</span>
                 <span className="font-medium">Photo</span>
+              </button>
+              <button
+                onClick={handleImages}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-accent/80 transition-colors group"
+              >
+                <span className="text-base">🖼️</span>
+                <span className="font-medium">Images</span>
               </button>
               <button
                 onClick={handleDrawing}
@@ -444,6 +577,16 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
         accept="image/*"
         capture="environment"
         onChange={handleImageCapture}
+        className="hidden"
+      />
+
+      {/* Hidden file input for multiple photos */}
+      <input
+        ref={multiFileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleMultiplePhotos}
         className="hidden"
       />
     </div>

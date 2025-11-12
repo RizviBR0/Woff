@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, memo } from "react";
 import { getNote } from "@/lib/actions";
+import { PhotoGallery } from "./photo-gallery";
 
 export interface Entry {
   id: string;
@@ -37,6 +38,8 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isNoteLocked, setIsNoteLocked] = useState(false);
   const [noteLoaded, setNoteLoaded] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
+  const [hovering, setHovering] = useState(false);
 
   // Handle keyboard events for modal
   useEffect(() => {
@@ -457,6 +460,183 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
               </div>
             </div>
           )}
+        </div>
+      );
+    }
+
+    // Check if this is multiple photos
+    if (entry.text.startsWith("PHOTOS:")) {
+      const photosDataRaw = entry.text.replace("PHOTOS:", "");
+      let photosData: string[] = [];
+      // Prefer JSON format (new) fallback to legacy comma separated
+      try {
+        if (photosDataRaw.trim().startsWith("[")) {
+          const parsed = JSON.parse(photosDataRaw);
+          if (Array.isArray(parsed)) {
+            photosData = parsed.filter(
+              (v) => typeof v === "string" && v.startsWith("data:image")
+            );
+          }
+        } else {
+          photosData = photosDataRaw
+            .split(",")
+            .map((u) => u.trim())
+            .filter((u) => u.startsWith("data:image"));
+        }
+      } catch {
+        photosData = photosDataRaw
+          .split(",")
+          .map((u) => u.trim())
+          .filter((u) => u.startsWith("data:image"));
+      }
+      // Deduplicate identical data URLs (defensive against double insertion)
+      photosData = Array.from(new Set(photosData));
+
+      const downloadAllAsZip = async () => {
+        try {
+          const JSZip = (await import("jszip")).default;
+          const zip = new JSZip();
+
+          photosData.forEach((dataUrl, index) => {
+            if (dataUrl.startsWith("data:image/")) {
+              const base64Data = dataUrl.split(",")[1];
+              const mimeType = dataUrl.split(";")[0].split(":")[1];
+              const extension =
+                mimeType === "image/jpeg"
+                  ? "jpg"
+                  : mimeType === "image/png"
+                  ? "png"
+                  : mimeType === "image/gif"
+                  ? "gif"
+                  : "jpg";
+              zip.file(`photo-${index + 1}.${extension}`, base64Data, {
+                base64: true,
+              });
+            }
+          });
+
+          const content = await zip.generateAsync({ type: "blob" });
+          const url = URL.createObjectURL(content);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `photos-${entry.id}.zip`;
+          link.style.display = "none";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error("Failed to create zip:", error);
+        }
+      };
+
+      const displayedPhotos = photosData.slice(0, 5);
+      const remainingCount = photosData.length - 5;
+
+      return (
+        <div className="group relative flex items-start justify-end gap-2 mb-4">
+          {/* Action buttons on the left - hidden by default, visible on hover */}
+          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 pt-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
+              onClick={() => setShowGallery(true)}
+              title="View all photos"
+            >
+              <Eye className="h-4 w-4 text-primary" />
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
+              onClick={downloadAllAsZip}
+              title="Download all as ZIP"
+            >
+              <Download className="h-4 w-4 text-primary" />
+            </Button>
+          </div>
+
+          {/* Photos message bubble */}
+          <div className="relative max-w-[85%] sm:max-w-[70%]">
+            <div className="relative bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-br-none p-3 shadow-sm hover:shadow-md transition-all duration-200 border border-border/10">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                  <span>📷</span>
+                  <span>
+                    {photosData.length === 1
+                      ? "1 Photo"
+                      : `${photosData.length} Photos`}
+                  </span>
+                </div>
+                <div
+                  className="relative cursor-pointer"
+                  onMouseEnter={() => setHovering(true)}
+                  onMouseLeave={() => setHovering(false)}
+                  onClick={() => setShowGallery(true)}
+                >
+                  <div
+                    className={`grid gap-1 ${
+                      photosData.length === 1 ? "grid-cols-1" : "grid-cols-3"
+                    }`}
+                  >
+                    {displayedPhotos.map((dataUrl, index) => (
+                      <div
+                        key={index}
+                        className={`relative ${
+                          photosData.length === 1
+                            ? "aspect-[4/3] max-w-sm"
+                            : "aspect-square"
+                        }`}
+                      >
+                        <img
+                          src={dataUrl}
+                          alt={`Photo ${index + 1}`}
+                          className="w-full h-full object-cover rounded border border-border/20"
+                        />
+                      </div>
+                    ))}
+                    {remainingCount > 0 && photosData.length > 5 && (
+                      <div className="relative aspect-square bg-black/20 rounded border border-border/20 flex items-center justify-center">
+                        <span className="text-white text-sm font-medium">
+                          +{remainingCount}
+                        </span>
+                        <div className="absolute inset-0 bg-black/40 rounded flex items-center justify-center">
+                          <span className="text-white text-xs">more</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Hover overlay for download all */}
+                  {hovering && (
+                    <div className="absolute inset-0 bg-black/60 rounded flex items-center justify-center transition-all duration-200">
+                      <div className="rounded-lg px-3 py-2 flex items-center gap-2 text-sm font-medium bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-gray-100 border border-border/30">
+                        <Download className="h-4 w-4" />
+                        Download All
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Message tail for photos */}
+              <div className="absolute bottom-0 right-0 w-0 h-0 border-l-[12px] border-l-gray-100 dark:border-l-gray-800 border-b-[12px] border-b-transparent"></div>
+            </div>
+            {/* Message timestamp */}
+            <div className="flex justify-end mt-1 px-1">
+              <span className="text-xs text-muted-foreground/70">
+                {formatTime(entry.created_at)}
+              </span>
+            </div>
+          </div>
+
+          {/* Photo Gallery Modal */}
+          <PhotoGallery
+            images={photosData}
+            onClose={() => setShowGallery(false)}
+            initialIndex={0}
+            isOpen={showGallery}
+          />
         </div>
       );
     }

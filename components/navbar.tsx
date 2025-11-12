@@ -38,7 +38,7 @@ const navLinks = [
   },
   {
     name: "GitHub",
-    href: "https://github.com",
+    href: "https://github.com/rizvibr0",
     icon: Github,
     external: true,
     description: "View source code",
