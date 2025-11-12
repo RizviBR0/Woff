@@ -172,6 +172,8 @@ export interface Note {
   created_by_device_id: string | null;
   created_at: string;
   updated_at: string;
+  is_locked?: boolean;
+  passcode?: string;
 }
 
 export async function createNoteEntry(
@@ -223,16 +225,24 @@ export async function updateNote(
   updates: Partial<{
     title: string;
     content: string;
-    visibility: string;
+    visibility: "public" | "unlisted" | "private";
     font_family: string;
+    is_locked: boolean;
+    passcode: string;
   }>
 ): Promise<Note> {
-  // Get device ID from cookies
+  // Get or create device ID
   const cookieStore = await cookies();
-  const deviceId = cookieStore.get("device_id")?.value;
+  let deviceId = cookieStore.get("device_id")?.value;
 
   if (!deviceId) {
-    throw new Error("No device ID found");
+    deviceId = generateDeviceId();
+    cookieStore.set("device_id", deviceId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+    });
   }
 
   const supabase = await createServerSupabaseClient();
@@ -343,6 +353,8 @@ export async function updateNote(
       created_by_device_id: updatedEntry.created_by_device_id,
       created_at: updatedEntry.created_at,
       updated_at: updatedMeta.updated_at || updatedEntry.created_at,
+      is_locked: updatedMeta.is_locked || false,
+      passcode: updatedMeta.passcode || undefined,
     };
   }
 
@@ -361,6 +373,8 @@ export async function updateNote(
     created_by_device_id: updatedEntry.created_by_device_id,
     created_at: updatedEntry.created_at,
     updated_at: updatedMeta.updated_at || updatedEntry.created_at,
+    is_locked: updatedMeta.is_locked || false,
+    passcode: updatedMeta.passcode || undefined,
   };
 }
 
@@ -404,7 +418,22 @@ export async function getNote(noteSlug: string): Promise<Note | null> {
     created_by_device_id: entry.created_by_device_id,
     created_at: entry.created_at,
     updated_at: entry.meta?.updated_at || entry.created_at,
+    is_locked: entry.meta?.is_locked || false,
+    passcode: entry.meta?.passcode || undefined,
   };
+}
+
+export async function verifyNotePasscode(
+  noteSlug: string,
+  passcode: string
+): Promise<boolean> {
+  const note = await getNote(noteSlug);
+
+  if (!note || !note.is_locked) {
+    return true; // Note doesn't exist or isn't locked
+  }
+
+  return note.passcode === passcode;
 }
 
 export async function updateNoteEntry(
@@ -452,5 +481,26 @@ export async function updateNoteEntry(
 
   if (error) {
     throw new Error(`Failed to update note entry: ${error.message}`);
+  }
+}
+
+export async function validateRoomCode(roomCode: string): Promise<boolean> {
+  try {
+    const supabase = await createServerSupabaseClient();
+    
+    const { data: space, error } = await supabase
+      .from("spaces")
+      .select("id")
+      .eq("slug", roomCode)
+      .single();
+
+    if (error || !space) {
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error validating room code:", error);
+    return false;
   }
 }

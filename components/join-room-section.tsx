@@ -55,8 +55,21 @@ export function JoinRoomSection() {
         const extractedCode = extractRoomCode(clipboardText);
 
         if (extractedCode) {
-          setRoomCode(extractedCode);
-          setError(""); // Clear any existing errors
+          // Validate the room code exists
+          try {
+            const { validateRoomCode } = await import("@/lib/actions");
+            const isValid = await validateRoomCode(extractedCode);
+            
+            if (isValid) {
+              setRoomCode(extractedCode);
+              setError(""); // Clear any existing errors
+            } else {
+              setError("Room not found - please check the code");
+            }
+          } catch (error) {
+            console.error("Error validating room:", error);
+            setError("Error validating room code");
+          }
         } else {
           setError("No valid room code found in clipboard");
         }
@@ -75,6 +88,13 @@ export function JoinRoomSection() {
     try {
       setIsScanning(true);
       setError("");
+
+      // Helper function to safely remove overlay
+      const safeRemoveOverlay = (overlayElement: HTMLElement) => {
+        if (document.body.contains(overlayElement)) {
+          document.body.removeChild(overlayElement);
+        }
+      };
 
       // Check if camera is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -120,16 +140,6 @@ export function JoinRoomSection() {
         font-size: 16px;
       `;
 
-      const statusText = document.createElement("div");
-      statusText.textContent = "Position QR code in camera view";
-      statusText.style.cssText = `
-        color: white;
-        margin-bottom: 20px;
-        text-align: center;
-        font-size: 16px;
-      `;
-
-      overlay.appendChild(statusText);
       overlay.appendChild(video);
       overlay.appendChild(closeButton);
       document.body.appendChild(overlay);
@@ -137,18 +147,25 @@ export function JoinRoomSection() {
       // Initialize QR Scanner
       const qrScanner = new QrScanner(
         video,
-        (result) => {
+        async (result) => {
           const extractedCode = extractRoomCode(result.data);
 
           if (extractedCode) {
-            setRoomCode(extractedCode);
-            setError("");
-            qrScanner.stop();
-            document.body.removeChild(overlay);
-            setIsScanning(false);
-          } else {
-            statusText.textContent = "No valid room code found - try again";
-            statusText.style.color = "#ff6b6b";
+            // Validate the room code exists
+            try {
+              const { validateRoomCode } = await import("@/lib/actions");
+              const isValid = await validateRoomCode(extractedCode);
+              
+              if (isValid) {
+                setRoomCode(extractedCode);
+                setError("");
+                qrScanner.stop();
+                safeRemoveOverlay(overlay);
+                setIsScanning(false);
+              }
+            } catch (error) {
+              console.error("Error validating room:", error);
+            }
           }
         },
         {
@@ -163,7 +180,7 @@ export function JoinRoomSection() {
       // Close button handler
       closeButton.onclick = () => {
         qrScanner.stop();
-        document.body.removeChild(overlay);
+        safeRemoveOverlay(overlay);
         setIsScanning(false);
       };
 
@@ -174,9 +191,7 @@ export function JoinRoomSection() {
       setTimeout(() => {
         if (qrScannerRef.current && isScanning) {
           qrScanner.stop();
-          if (document.body.contains(overlay)) {
-            document.body.removeChild(overlay);
-          }
+          safeRemoveOverlay(overlay);
           setIsScanning(false);
           if (!roomCode) {
             setError("QR scan timeout - please try again");
@@ -219,8 +234,16 @@ export function JoinRoomSection() {
     setError("");
 
     try {
-      // Navigate to the room - the room page will handle validation
-      router.push(`/r/${cleanCode}`);
+      // Validate the room exists before navigating
+      const { validateRoomCode } = await import("@/lib/actions");
+      const isValid = await validateRoomCode(cleanCode);
+      
+      if (isValid) {
+        router.push(`/r/${cleanCode}`);
+      } else {
+        setError("Room not found - please check the code");
+        setIsJoining(false);
+      }
     } catch (error) {
       console.error("Failed to join room:", error);
       setError("Failed to join room");

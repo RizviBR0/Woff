@@ -9,9 +9,11 @@ import {
   FileText,
   ExternalLink,
   Edit,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, memo } from "react";
+import { getNote } from "@/lib/actions";
 
 export interface Entry {
   id: string;
@@ -33,6 +35,8 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
   const [currentImageUrl, setCurrentImageUrl] = useState<string>("");
   const [modalBgColor, setModalBgColor] = useState<string>("bg-black/90");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isNoteLocked, setIsNoteLocked] = useState(false);
+  const [noteLoaded, setNoteLoaded] = useState(false);
 
   // Handle keyboard events for modal
   useEffect(() => {
@@ -52,6 +56,29 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
       document.body.style.overflow = "unset";
     };
   }, [showImageModal]);
+
+  // Check if note is locked (only for note entries)
+  useEffect(() => {
+    const checkNoteLock = async () => {
+      if (entry.text && entry.text.startsWith("NOTE:")) {
+        const noteData = entry.text.replace("NOTE:", "").split(":");
+        const noteSlug = noteData[0];
+
+        try {
+          const note = await getNote(noteSlug);
+          if (note) {
+            setIsNoteLocked(note.is_locked || false);
+          }
+          setNoteLoaded(true);
+        } catch (error) {
+          console.error("Failed to check note lock status:", error);
+          setNoteLoaded(true);
+        }
+      }
+    };
+
+    checkNoteLock();
+  }, [entry.text]);
 
   const formatTime = (dateString: string) => {
     try {
@@ -482,8 +509,15 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
                       <FileText className="h-5 w-5 text-primary-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground/90 leading-tight truncate">
-                        {noteTitle}
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-medium text-foreground/90 leading-tight truncate">
+                          {noteTitle}
+                        </div>
+                        {isNoteLocked && (
+                          <div title="Protected note">
+                            <Lock className="h-3 w-3 text-orange-500 flex-shrink-0" />
+                          </div>
+                        )}
                       </div>
                       <div className="text-xs text-muted-foreground/80 mt-0.5 mr-2.5">
                         Rich text note • Click to edit
