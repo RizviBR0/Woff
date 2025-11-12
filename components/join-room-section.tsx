@@ -50,10 +50,10 @@ export function JoinRoomSection() {
     try {
       setIsPasting(true);
       const clipboardText = await navigator.clipboard.readText();
-      
+
       if (clipboardText.trim()) {
         const extractedCode = extractRoomCode(clipboardText);
-        
+
         if (extractedCode) {
           setRoomCode(extractedCode);
           setError(""); // Clear any existing errors
@@ -84,7 +84,7 @@ export function JoinRoomSection() {
       }
 
       // Create a modal or overlay for the camera view
-      const overlay = document.createElement('div');
+      const overlay = document.createElement("div");
       overlay.style.cssText = `
         position: fixed;
         top: 0;
@@ -99,7 +99,7 @@ export function JoinRoomSection() {
         z-index: 9999;
       `;
 
-      const video = document.createElement('video');
+      const video = document.createElement("video");
       video.style.cssText = `
         width: 90%;
         max-width: 400px;
@@ -107,8 +107,8 @@ export function JoinRoomSection() {
         border-radius: 8px;
       `;
 
-      const closeButton = document.createElement('button');
-      closeButton.textContent = 'Cancel';
+      const closeButton = document.createElement("button");
+      closeButton.textContent = "Cancel";
       closeButton.style.cssText = `
         margin-top: 20px;
         padding: 10px 20px;
@@ -120,8 +120,8 @@ export function JoinRoomSection() {
         font-size: 16px;
       `;
 
-      const statusText = document.createElement('div');
-      statusText.textContent = 'Position QR code in camera view';
+      const statusText = document.createElement("div");
+      statusText.textContent = "Position QR code in camera view";
       statusText.style.cssText = `
         color: white;
         margin-bottom: 20px;
@@ -139,7 +139,7 @@ export function JoinRoomSection() {
         video,
         (result) => {
           const extractedCode = extractRoomCode(result.data);
-          
+
           if (extractedCode) {
             setRoomCode(extractedCode);
             setError("");
@@ -147,12 +147,12 @@ export function JoinRoomSection() {
             document.body.removeChild(overlay);
             setIsScanning(false);
           } else {
-            statusText.textContent = 'No valid room code found - try again';
-            statusText.style.color = '#ff6b6b';
+            statusText.textContent = "No valid room code found - try again";
+            statusText.style.color = "#ff6b6b";
           }
         },
         {
-          preferredCamera: 'environment', // Use back camera
+          preferredCamera: "environment", // Use back camera
           highlightScanRegion: true,
           highlightCodeOutline: true,
         }
@@ -183,15 +183,14 @@ export function JoinRoomSection() {
           }
         }
       }, 30000);
-
     } catch (error) {
       console.error("Failed to start QR scanner:", error);
       if (error instanceof Error) {
-        if (error.name === 'NotAllowedError') {
+        if (error.name === "NotAllowedError") {
           setError("Camera permission denied");
-        } else if (error.name === 'NotFoundError') {
+        } else if (error.name === "NotFoundError") {
           setError("No camera found");
-        } else if (error.name === 'NotSupportedError') {
+        } else if (error.name === "NotSupportedError") {
           setError("QR scanning not supported");
         } else {
           setError("Unable to access camera");

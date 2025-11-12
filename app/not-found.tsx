@@ -9,11 +9,12 @@ export default function NotFound() {
         <div className="flex justify-center">
           <Logo width={160} height={48} />
         </div>
-        
+
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold">Page not found</h1>
           <p className="text-muted-foreground">
-            The page you&apos;re looking for doesn&apos;t exist or has been moved.
+            The page you&apos;re looking for doesn&apos;t exist or has been
+            moved.
           </p>
         </div>
 

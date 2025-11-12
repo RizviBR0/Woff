@@ -160,9 +160,7 @@ export function NoteViewer({ publicCode }: NoteViewerProps) {
           <p className="text-muted-foreground mb-6">
             This note is not publicly accessible. Only the owner can view it.
           </p>
-          <Button onClick={() => (window.location.href = "/")}>
-            Go Home
-          </Button>
+          <Button onClick={() => (window.location.href = "/")}>Go Home</Button>
         </div>
       </div>
     );
@@ -176,9 +174,7 @@ export function NoteViewer({ publicCode }: NoteViewerProps) {
           <p className="text-muted-foreground mb-4">
             This note doesn&apos;t exist or is no longer available.
           </p>
-          <Button onClick={() => (window.location.href = "/")}>
-            Go Home
-          </Button>
+          <Button onClick={() => (window.location.href = "/")}>Go Home</Button>
         </div>
       </div>
     );

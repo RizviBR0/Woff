@@ -23,7 +23,9 @@ export default function HomePage() {
           {/* Divider */}
           <div className="flex items-center gap-4 max-w-xs mx-auto">
             <div className="flex-1 h-px bg-border"></div>
-            <span className="text-sm text-muted-foreground font-medium">or</span>
+            <span className="text-sm text-muted-foreground font-medium">
+              or
+            </span>
             <div className="flex-1 h-px bg-border"></div>
           </div>
 

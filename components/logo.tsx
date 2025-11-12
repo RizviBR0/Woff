@@ -22,8 +22,8 @@ export function Logo({ width = 120, height = 40, className = "" }: LogoProps) {
   if (!mounted) {
     // Return a placeholder with the same dimensions to prevent layout shift
     return (
-      <div 
-        className={`${className}`} 
+      <div
+        className={`${className}`}
         style={{ width: `${width}px`, height: `${height}px` }}
       />
     );
