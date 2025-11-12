@@ -59,7 +59,7 @@ export function JoinRoomSection() {
           try {
             const { validateRoomCode } = await import("@/lib/actions");
             const isValid = await validateRoomCode(extractedCode);
-            
+
             if (isValid) {
               setRoomCode(extractedCode);
               setError(""); // Clear any existing errors
@@ -155,7 +155,7 @@ export function JoinRoomSection() {
             try {
               const { validateRoomCode } = await import("@/lib/actions");
               const isValid = await validateRoomCode(extractedCode);
-              
+
               if (isValid) {
                 setRoomCode(extractedCode);
                 setError("");
@@ -237,7 +237,7 @@ export function JoinRoomSection() {
       // Validate the room exists before navigating
       const { validateRoomCode } = await import("@/lib/actions");
       const isValid = await validateRoomCode(cleanCode);
-      
+
       if (isValid) {
         router.push(`/r/${cleanCode}`);
       } else {

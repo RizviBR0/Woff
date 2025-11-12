@@ -487,7 +487,7 @@ export async function updateNoteEntry(
 export async function validateRoomCode(roomCode: string): Promise<boolean> {
   try {
     const supabase = await createServerSupabaseClient();
-    
+
     const { data: space, error } = await supabase
       .from("spaces")
       .select("id")
