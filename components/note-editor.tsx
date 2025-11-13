@@ -52,7 +52,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { SlashMenu } from "./slash-menu";
-import { getNote, updateNote, type Note } from "@/lib/actions";
+import { updateNote, type Note } from "@/lib/actions";
 
 interface NoteEditorProps {
   noteSlug: string;
@@ -117,12 +117,13 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout>();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load note from server
+  // Load note from server (via API route to avoid client-side server action calls)
   useEffect(() => {
     const loadNote = async () => {
       setIsLoading(true);
       try {
-        const fetchedNote = await getNote(noteSlug);
+        const res = await fetch(`/api/notes/${noteSlug}`);
+        const fetchedNote = res.ok ? ((await res.json()) as Note) : null;
         if (fetchedNote) {
           console.log(
             "📝 Loaded existing note from database:",

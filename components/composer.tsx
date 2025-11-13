@@ -29,6 +29,48 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const multiFileInputRef = useRef<HTMLInputElement>(null);
   const lastUploadSignatureRef = useRef<string>("");
+  const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB per image
+
+  // Compress image on client to reduce payload size
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      try {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const maxDim = 2000; // max width/height
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+              const scale = Math.min(maxDim / width, maxDim / height);
+              width = Math.round(width * scale);
+              height = Math.round(height * scale);
+            }
+
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              reject(new Error("Canvas not supported"));
+              return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Export as JPEG to reduce size while keeping good quality
+            const quality = 0.85;
+            const dataUrl = canvas.toDataURL("image/jpeg", quality);
+            resolve(dataUrl);
+          } catch (err) {
+            reject(err as Error);
+          }
+        };
+        img.onerror = () => reject(new Error("Image load error"));
+        img.src = URL.createObjectURL(file);
+      } catch (err) {
+        reject(err as Error);
+      }
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,38 +175,33 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
     // Check if it's an image file
     if (!file.type.startsWith("image/")) {
       alert("Please select an image file");
+      event.target.value = "";
+      return;
+    }
+
+    // Check size limit
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      const mb = (file.size / (1024 * 1024)).toFixed(2);
+      alert(`Image is too large (${mb} MB). Max size is 10 MB.`);
+      event.target.value = "";
       return;
     }
 
     try {
       setIsSubmitting(true);
-
-      // Convert image file to data URL
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const dataUrl = e.target?.result as string;
-        if (dataUrl) {
-          try {
-            // Store the image as a text entry with the data URL (similar to drawings)
-            const entry = await createEntry(
-              spaceId,
-              "text",
-              `PHOTO:${dataUrl}`
-            );
-            onNewEntry(entry);
-          } catch (error) {
-            console.error("Failed to save photo:", error);
-          }
-        }
+      // Compress image before upload to avoid oversized payloads
+      const compressed = await compressImage(file);
+      try {
+        const entry = await createEntry(spaceId, "text", `PHOTO:${compressed}`);
+        onNewEntry(entry);
+      } catch (error: any) {
+        console.error("Failed to save photo:", error);
+        alert(
+          "Could not upload the photo. Try a smaller image or different one."
+        );
+      } finally {
         setIsSubmitting(false);
-      };
-
-      reader.onerror = () => {
-        console.error("Failed to read image file");
-        setIsSubmitting(false);
-      };
-
-      reader.readAsDataURL(file);
+      }
     } catch (error) {
       console.error("Failed to process image:", error);
       setIsSubmitting(false);
@@ -183,22 +220,32 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    // Check if all files are images
-    const imageFiles = Array.from(files).filter((file) =>
-      file.type.startsWith("image/")
+    const filesArr = Array.from(files);
+    const nonImages = filesArr.filter((f) => !f.type.startsWith("image/"));
+    const oversize = filesArr.filter(
+      (f) => f.type.startsWith("image/") && f.size > MAX_IMAGE_SIZE_BYTES
     );
+    const imageFiles = filesArr.filter(
+      (f) => f.type.startsWith("image/") && f.size <= MAX_IMAGE_SIZE_BYTES
+    );
+
+    if (nonImages.length > 0 && oversize.length > 0) {
+      alert(
+        `${nonImages.length} non-image file(s) and ${oversize.length} over 10 MB were skipped`
+      );
+    } else if (nonImages.length > 0) {
+      alert(`${nonImages.length} non-image file(s) were skipped`);
+    } else if (oversize.length > 0) {
+      alert(`${oversize.length} image(s) over 10 MB were skipped`);
+    }
+
     if (imageFiles.length === 0) {
-      alert("Please select image files");
+      alert("No valid images under 10 MB were selected");
+      event.target.value = "";
       return;
     }
 
-    if (imageFiles.length !== files.length) {
-      alert(`${files.length - imageFiles.length} non-image files were skipped`);
-    }
-
-    const signature = Array.from(files)
-      .map((f) => `${f.name}:${f.size}`)
-      .join("|");
+    const signature = imageFiles.map((f) => `${f.name}:${f.size}`).join("|");
     if (signature === lastUploadSignatureRef.current) {
       // Prevent duplicate processing of same file selection
       event.target.value = "";
@@ -208,48 +255,49 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
 
     setIsSubmitting(true);
     try {
-      const imageDataUrls: string[] = [];
-
-      // Convert all images to data URLs
-      await Promise.all(
-        imageFiles.map((file) => {
-          return new Promise<void>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              const dataUrl = e.target?.result as string;
-              if (dataUrl) {
-                imageDataUrls.push(dataUrl);
-                resolve();
-              } else {
-                reject(new Error("Failed to read file"));
-              }
-            };
-            reader.onerror = () => reject(new Error("File reading error"));
-            reader.readAsDataURL(file);
-          });
-        })
+      // Compress each image independently
+      const readResults = await Promise.allSettled(
+        imageFiles.map((file) => compressImage(file))
       );
 
-      if (imageDataUrls.length === 1) {
-        // Store single image as PHOTO entry for consistency
+      const successes: string[] = [];
+      let failedCount = 0;
+      for (const r of readResults) {
+        if (r.status === "fulfilled") successes.push(r.value);
+        else failedCount++;
+      }
+
+      if (failedCount > 0) {
+        alert(`${failedCount} image(s) failed to load and were skipped`);
+      }
+
+      if (successes.length === 0) {
+        alert(
+          "No images could be processed. Please try smaller files or different images."
+        );
+        return;
+      }
+
+      if (successes.length === 1) {
         const entry = await createEntry(
           spaceId,
           "text",
-          `PHOTO:${imageDataUrls[0]}`
+          `PHOTO:${successes[0]}`
         );
         onNewEntry(entry);
-      } else if (imageDataUrls.length > 1) {
-        // Store multiple photos as PHOTOS entry
+      } else {
         const entry = await createEntry(
           spaceId,
           "text",
-          `PHOTOS:${JSON.stringify(imageDataUrls)}`
+          `PHOTOS:${JSON.stringify(successes)}`
         );
         onNewEntry(entry);
       }
     } catch (error) {
       console.error("Failed to process photos:", error);
-      alert("Failed to upload some photos. Please try again.");
+      alert(
+        "We couldn't process your images right now. Please try again with smaller images."
+      );
     } finally {
       setIsSubmitting(false);
       // Reset the file input

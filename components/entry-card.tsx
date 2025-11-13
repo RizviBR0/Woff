@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, memo } from "react";
-import { getNote } from "@/lib/actions";
 import { PhotoGallery } from "./photo-gallery";
 
 export interface Entry {
@@ -68,9 +67,12 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
         const noteSlug = noteData[0];
 
         try {
-          const note = await getNote(noteSlug);
-          if (note) {
-            setIsNoteLocked(note.is_locked || false);
+          const res = await fetch(`/api/notes/${noteSlug}`);
+          if (res.ok) {
+            const note = await res.json();
+            if (note) {
+              setIsNoteLocked(!!note.is_locked);
+            }
           }
           setNoteLoaded(true);
         } catch (error) {
