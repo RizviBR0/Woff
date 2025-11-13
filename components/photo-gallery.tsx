@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import {
   X,
   Download,
@@ -179,11 +180,17 @@ export function PhotoGallery({
         )}
 
         {/* Main image */}
-        <img
-          src={images[currentIndex]}
-          alt={`Photo ${currentIndex + 1} of ${images.length}`}
-          className="max-w-full max-h-full object-contain rounded-lg"
-        />
+        <div className="relative w-full h-full">
+          <Image
+            src={images[currentIndex]}
+            alt={`Photo ${currentIndex + 1} of ${images.length}`}
+            fill
+            sizes="100vw"
+            className="object-contain rounded-lg"
+            unoptimized
+            priority
+          />
+        </div>
       </div>
     </div>
   );

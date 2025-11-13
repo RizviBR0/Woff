@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import { getNote } from "@/lib/actions";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { slug: string } }
-) {
+export async function GET(_req: Request, context: any) {
   try {
-    const slug = params.slug;
+    const params = await Promise.resolve(context?.params);
+    const slug = params?.slug as string | undefined;
     if (!slug) {
       return NextResponse.json({ error: "Missing slug" }, { status: 400 });
     }
