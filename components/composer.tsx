@@ -17,6 +17,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { createEntry } from "@/lib/actions";
+import { compressImageAdaptive } from "@/lib/image-compression";
 import { cn } from "@/lib/utils";
 import { type Entry } from "./entry-card";
 import { DrawingCanvas } from "./drawing-canvas";
@@ -47,45 +48,20 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
   const [uploadTotal, setUploadTotal] = useState(0);
   const [uploadMessage, setUploadMessage] = useState<string>("");
 
-  // Compress image on client to reduce payload size
-  const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      try {
-        const img = new Image();
-        img.onload = () => {
-          try {
-            const maxDim = 2000; // max width/height
-            let { width, height } = img;
-            if (width > maxDim || height > maxDim) {
-              const scale = Math.min(maxDim / width, maxDim / height);
-              width = Math.round(width * scale);
-              height = Math.round(height * scale);
-            }
-
-            const canvas = document.createElement("canvas");
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) {
-              reject(new Error("Canvas not supported"));
-              return;
-            }
-            ctx.drawImage(img, 0, 0, width, height);
-
-            // Export as JPEG to reduce size while keeping good quality
-            const quality = 0.85;
-            const dataUrl = canvas.toDataURL("image/jpeg", quality);
-            resolve(dataUrl);
-          } catch (err) {
-            reject(err as Error);
-          }
-        };
-        img.onerror = () => reject(new Error("Image load error"));
-        img.src = URL.createObjectURL(file);
-      } catch (err) {
-        reject(err as Error);
-      }
-    });
+  // Adaptive compression wrapper returning only dataUrl for legacy usage
+  const getCompressedDataUrl = async (file: File) => {
+    const result = await compressImageAdaptive(file);
+    // Update upload message with compression details when we are in a compression stage
+    setUploadMessage(
+      result.wasCompressed
+        ? `Optimized ${(result.originalBytes / 1024).toFixed(0)}KB → ${(
+            result.finalBytes / 1024
+          ).toFixed(0)}KB @ q=${result.qualityUsed.toFixed(2)}`
+        : `Image ${(result.originalBytes / 1024).toFixed(
+            0
+          )}KB did not need compression`
+    );
+    return result.dataUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -211,8 +187,8 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
       setUploadProcessed(0);
       setUploadMessage("");
 
-      // Compress image before upload to avoid oversized payloads
-      const compressed = await compressImage(file);
+      // Adaptive compression only if above threshold
+      const compressed = await getCompressedDataUrl(file);
       setUploadProcessed(1);
 
       try {
@@ -298,7 +274,7 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
       for (let i = 0; i < imageFiles.length; i++) {
         const f = imageFiles[i];
         try {
-          const dataUrl = await compressImage(f);
+          const dataUrl = await getCompressedDataUrl(f);
           successes.push(dataUrl);
         } catch (e) {
           failedCount++;
@@ -321,29 +297,63 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
         return;
       }
 
-      setUploadStage("Uploading");
-      if (successes.length === 1) {
-        const entry = await createEntry(
-          spaceId,
-          "text",
-          `PHOTO:${successes[0]}`
-        );
-        onNewEntry(entry);
-      } else {
-        const entry = await createEntry(
-          spaceId,
-          "text",
-          `PHOTOS:${JSON.stringify(successes)}`
-        );
-        onNewEntry(entry);
+      // Chunking logic to avoid oversized server action payloads
+      // Keep each batch safely under the configured 5 MB limit
+      const MAX_GROUP_CHARS = 4.5 * 1024 * 1024; // ~4.5MB headroom for JSON overhead
+      const groups: string[][] = [];
+      let current: string[] = [];
+      let currentLen = 0;
+
+      for (const img of successes) {
+        const imgLen = img.length;
+        // If adding this image exceeds threshold, push current group
+        if (current.length > 0 && currentLen + imgLen > MAX_GROUP_CHARS) {
+          groups.push(current);
+          current = [];
+          currentLen = 0;
+        }
+        current.push(img);
+        currentLen += imgLen;
       }
+      if (current.length > 0) groups.push(current);
+
+      setUploadStage("Uploading");
+      let createdCount = 0;
+      for (let gi = 0; gi < groups.length; gi++) {
+        const group = groups[gi];
+        try {
+          let entry;
+          if (group.length === 1) {
+            entry = await createEntry(spaceId, "text", `PHOTO:${group[0]}`);
+          } else {
+            entry = await createEntry(
+              spaceId,
+              "text",
+              `PHOTOS:${JSON.stringify(group)}`
+            );
+          }
+          onNewEntry(entry);
+          createdCount += group.length;
+          setUploadMessage(
+            `Uploaded group ${gi + 1}/${groups.length} (${createdCount}/${
+              successes.length
+            } images)`
+          );
+        } catch (groupErr: any) {
+          console.error("Group upload failed", groupErr);
+          setUploadMessage(
+            `A group failed to upload. Uploaded ${createdCount}/${successes.length}.`
+          );
+        }
+      }
+
       setUploadStage("Done");
       setUploadMessage(
         successes.length === 1
           ? "Photo uploaded successfully"
-          : "Images uploaded successfully"
+          : `Uploaded ${createdCount} image(s) in ${groups.length} batch(es)`
       );
-      setTimeout(() => setUploadOpen(false), 800);
+      setTimeout(() => setUploadOpen(false), 1000);
     } catch (error) {
       console.error("Failed to process photos:", error);
       setUploadStage("Error");

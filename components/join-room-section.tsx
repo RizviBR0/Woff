@@ -28,22 +28,29 @@ export function JoinRoomSection() {
 
   // Function to extract room code from various URL formats
   const extractRoomCode = (input: string): string => {
-    let cleanCode = input.trim();
+    let value = input.trim();
 
-    // Handle various input formats:
-    // - Full URL: localhost:3000/r/KQ34RR or https://woff.space/r/KQ34RR
-    // - Partial URL: /r/KQ34RR
-    // - Just the code: KQ34RR
-
-    if (cleanCode.includes("/r/")) {
-      const parts = cleanCode.split("/r/");
-      cleanCode = parts[1] || "";
+    // Try URL parsing if it's a full URL
+    try {
+      const url = new URL(value);
+      const path = url.pathname || "/";
+      if (path.startsWith("/r/")) {
+        return path.slice(3).split("/")[0];
+      }
+      // Root-level code: /CODE
+      const seg = path.split("/").filter(Boolean)[0];
+      return seg || "";
+    } catch {
+      // Not a full URL; treat as path or code
+      if (value.includes("/r/")) {
+        return value.split("/r/")[1].split("/")[0].split("?")[0];
+      }
+      if (value.includes("/")) {
+        const seg = value.split("/").filter(Boolean)[0];
+        return (seg || "").split("?")[0];
+      }
+      return value;
     }
-
-    // Remove any trailing slashes or query parameters
-    cleanCode = cleanCode.split("/")[0].split("?")[0];
-
-    return cleanCode;
   };
 
   const handlePaste = async () => {
@@ -239,7 +246,7 @@ export function JoinRoomSection() {
       const isValid = await validateRoomCode(cleanCode);
 
       if (isValid) {
-        router.push(`/r/${cleanCode}`);
+        router.push(`/${cleanCode}`);
       } else {
         setError("Room not found - please check the code");
         setIsJoining(false);

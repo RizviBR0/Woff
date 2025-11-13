@@ -53,6 +53,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { SlashMenu } from "./slash-menu";
 import { updateNote, type Note } from "@/lib/actions";
+import { compressImageAdaptive } from "@/lib/image-compression";
 
 interface NoteEditorProps {
   noteSlug: string;
@@ -1916,41 +1917,16 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
     />`;
   };
 
-  // Image optimization function
-  const optimizeImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      const img = new Image();
-
-      img.onload = () => {
-        // Calculate new dimensions (max 800px width, maintain aspect ratio)
-        const maxWidth = 800;
-        const maxHeight = 600;
-        let { width, height } = img;
-
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-
-        if (height > maxHeight) {
-          width = (width * maxHeight) / height;
-          height = maxHeight;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        // Draw and compress
-        ctx?.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-        resolve(dataUrl);
-      };
-
-      img.onerror = reject;
-      img.src = URL.createObjectURL(file);
+  // Adaptive image optimization using shared compression utility
+  const optimizeImage = async (file: File): Promise<string> => {
+    const { dataUrl } = await compressImageAdaptive(file, {
+      // Slightly smaller target for editor inline images to keep documents lean
+      targetMaxBytes: 380 * 1024,
+      // Editor context can use smaller dimensions than chat gallery
+      desktopMaxDimension: 1200,
+      mobileMaxDimension: 1000,
     });
+    return dataUrl;
   };
 
   // Insert image into editor
@@ -2128,7 +2104,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                 size="icon"
                 onClick={() => {
                   if (note?.space_slug) {
-                    router.push(`/r/${note.space_slug}`);
+                    router.push(`/${note.space_slug}`);
                   } else {
                     router.push("/");
                   }
@@ -2919,7 +2895,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                     onClick={() => {
                       // If we have a note with space info, go to the room
                       if (note?.space_slug) {
-                        router.push(`/r/${note.space_slug}`);
+                        router.push(`/${note.space_slug}`);
                       } else {
                         // Otherwise, go back in history
                         router.back();

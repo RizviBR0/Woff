@@ -15,6 +15,7 @@ import {
   Github,
   ExternalLink,
   HelpCircle,
+  FileText,
 } from "lucide-react";
 
 const navLinks = [
@@ -35,6 +36,12 @@ const navLinks = [
     href: "#contact",
     icon: Mail,
     description: "Get in touch with us",
+  },
+  {
+    name: "Blog",
+    href: "/blog",
+    icon: FileText,
+    description: "Product updates, tips, and news",
   },
   {
     name: "GitHub",

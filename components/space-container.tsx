@@ -145,14 +145,14 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
 
   const handleCopy = async () => {
     try {
-      const shareUrl = `${window.location.origin}/r/${space.slug}`;
+      const shareUrl = `${window.location.origin}/${space.slug}`;
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error("Failed to copy:", error);
       // Fallback for older browsers
-      const shareUrl = `${window.location.origin}/r/${space.slug}`;
+      const shareUrl = `${window.location.origin}/${space.slug}`;
       const textArea = document.createElement("textarea");
       textArea.value = shareUrl;
       document.body.appendChild(textArea);
@@ -182,14 +182,14 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
   };
 
   const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/r/${space.slug}`;
+    const shareUrl = `${window.location.origin}/${space.slug}`;
     setShareModalOpen(true);
     // Generate QR code after opening modal for better UX
     setTimeout(() => generateQRCode(shareUrl), 100);
   };
 
   const handleCopyFromModal = async () => {
-    const shareUrl = `${window.location.origin}/r/${space.slug}`;
+    const shareUrl = `${window.location.origin}/${space.slug}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
@@ -228,7 +228,7 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
               ) : (
                 <>
                   <span className="text-xs font-medium text-muted-foreground">
-                    woff.space/r/{space.slug}
+                    woff.space/{space.slug}
                   </span>
                   <Copy className="h-3 w-3" />
                 </>
@@ -371,7 +371,7 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
               </label>
               <div className="flex gap-2">
                 <div className="flex-1 p-3 bg-muted rounded-md text-sm font-mono text-foreground border">
-                  woff.space/r/{space.slug}
+                  woff.space/{space.slug}
                 </div>
                 <Button
                   size="sm"
