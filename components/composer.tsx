@@ -9,6 +9,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { createEntry } from "@/lib/actions";
 import { cn } from "@/lib/utils";
 import { type Entry } from "./entry-card";
@@ -30,6 +37,15 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
   const multiFileInputRef = useRef<HTMLInputElement>(null);
   const lastUploadSignatureRef = useRef<string>("");
   const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB per image
+
+  // Upload/compress modal state
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadStage, setUploadStage] = useState<
+    "Preparing" | "Compressing" | "Uploading" | "Done" | "Error"
+  >("Preparing");
+  const [uploadProcessed, setUploadProcessed] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
+  const [uploadMessage, setUploadMessage] = useState<string>("");
 
   // Compress image on client to reduce payload size
   const compressImage = (file: File): Promise<string> => {
@@ -189,14 +205,27 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
 
     try {
       setIsSubmitting(true);
+      setUploadOpen(true);
+      setUploadStage("Compressing");
+      setUploadTotal(1);
+      setUploadProcessed(0);
+      setUploadMessage("");
+
       // Compress image before upload to avoid oversized payloads
       const compressed = await compressImage(file);
+      setUploadProcessed(1);
+
       try {
+        setUploadStage("Uploading");
         const entry = await createEntry(spaceId, "text", `PHOTO:${compressed}`);
         onNewEntry(entry);
+        setUploadStage("Done");
+        setUploadMessage("Photo uploaded successfully");
+        setTimeout(() => setUploadOpen(false), 600);
       } catch (error: any) {
         console.error("Failed to save photo:", error);
-        alert(
+        setUploadStage("Error");
+        setUploadMessage(
           "Could not upload the photo. Try a smaller image or different one."
         );
       } finally {
@@ -204,6 +233,8 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
       }
     } catch (error) {
       console.error("Failed to process image:", error);
+      setUploadStage("Error");
+      setUploadMessage("Failed to process image");
       setIsSubmitting(false);
     }
 
@@ -254,30 +285,43 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
     lastUploadSignatureRef.current = signature;
 
     setIsSubmitting(true);
-    try {
-      // Compress each image independently
-      const readResults = await Promise.allSettled(
-        imageFiles.map((file) => compressImage(file))
-      );
+    setUploadOpen(true);
+    setUploadStage("Compressing");
+    setUploadTotal(imageFiles.length);
+    setUploadProcessed(0);
+    setUploadMessage("");
 
+    try {
+      // Compress each image sequentially to update progress
       const successes: string[] = [];
       let failedCount = 0;
-      for (const r of readResults) {
-        if (r.status === "fulfilled") successes.push(r.value);
-        else failedCount++;
+      for (let i = 0; i < imageFiles.length; i++) {
+        const f = imageFiles[i];
+        try {
+          const dataUrl = await compressImage(f);
+          successes.push(dataUrl);
+        } catch (e) {
+          failedCount++;
+        } finally {
+          setUploadProcessed(i + 1);
+        }
       }
 
       if (failedCount > 0) {
-        alert(`${failedCount} image(s) failed to load and were skipped`);
+        setUploadMessage(
+          `${failedCount} image(s) failed to process and were skipped`
+        );
       }
 
       if (successes.length === 0) {
-        alert(
-          "No images could be processed. Please try smaller files or different images."
+        setUploadStage("Error");
+        setUploadMessage(
+          "No images could be processed. Try smaller or different images."
         );
         return;
       }
 
+      setUploadStage("Uploading");
       if (successes.length === 1) {
         const entry = await createEntry(
           spaceId,
@@ -293,10 +337,18 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
         );
         onNewEntry(entry);
       }
+      setUploadStage("Done");
+      setUploadMessage(
+        successes.length === 1
+          ? "Photo uploaded successfully"
+          : "Images uploaded successfully"
+      );
+      setTimeout(() => setUploadOpen(false), 800);
     } catch (error) {
       console.error("Failed to process photos:", error);
-      alert(
-        "We couldn't process your images right now. Please try again with smaller images."
+      setUploadStage("Error");
+      setUploadMessage(
+        "We couldn't process your images right now. Please try again."
       );
     } finally {
       setIsSubmitting(false);
@@ -306,6 +358,80 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
       }
     }
   };
+
+  // Shared upload/compression dialog UI
+  const uploadDialog = (
+    <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {uploadStage === "Compressing" && "Preparing images"}
+            {uploadStage === "Uploading" && "Uploading"}
+            {uploadStage === "Done" && "All set"}
+            {uploadStage === "Error" && "Something went wrong"}
+          </DialogTitle>
+          <DialogDescription>
+            {uploadStage === "Compressing" &&
+              (uploadTotal > 1
+                ? "We are optimizing your images before upload."
+                : "Optimizing your photo before upload.")}
+            {uploadStage === "Uploading" && "Sending to your space..."}
+            {uploadStage === "Done" && "Upload complete."}
+            {uploadStage === "Error" &&
+              "Please try again or choose smaller images."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="text-sm text-muted-foreground">
+            {uploadTotal > 0 && (
+              <span>
+                {uploadStage === "Compressing" && (
+                  <>
+                    {uploadProcessed} / {uploadTotal} processed
+                  </>
+                )}
+                {uploadStage !== "Compressing" && uploadTotal > 0 && (
+                  <>
+                    {uploadTotal} {uploadTotal === 1 ? "item" : "items"}
+                  </>
+                )}
+              </span>
+            )}
+          </div>
+
+          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn(
+                "h-2 rounded-full transition-all",
+                uploadStage === "Error"
+                  ? "bg-red-500"
+                  : uploadStage === "Done"
+                  ? "bg-green-500"
+                  : "bg-primary"
+              )}
+              style={{
+                width:
+                  uploadStage === "Compressing" && uploadTotal > 0
+                    ? `${Math.round((uploadProcessed / uploadTotal) * 100)}%`
+                    : uploadStage === "Uploading"
+                    ? "100%"
+                    : uploadStage === "Done"
+                    ? "100%"
+                    : uploadStage === "Error"
+                    ? "100%"
+                    : "0%",
+              }}
+            />
+          </div>
+
+          {uploadMessage && (
+            <div className="text-xs text-muted-foreground">{uploadMessage}</div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   if (centered) {
     // Large centered composer for first post - Enhanced Design
@@ -505,6 +631,7 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
             onChange={handleMultiplePhotos}
             className="hidden"
           />
+          {uploadDialog}
         </form>
       </div>
     );
@@ -637,6 +764,7 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
         onChange={handleMultiplePhotos}
         className="hidden"
       />
+      {uploadDialog}
     </div>
   );
 }
