@@ -7,6 +7,15 @@ const nextConfig = {
       bodySizeLimit: "5mb",
     },
   },
+  images: {
+    // Allow external image hosts used in blog covers and avatars
+    domains: ["picsum.photos", "i.pravatar.cc"],
+    // Alternatively, remotePatterns can be used for more control
+    // remotePatterns: [
+    //   { protocol: "https", hostname: "picsum.photos" },
+    //   { protocol: "https", hostname: "i.pravatar.cc" },
+    // ],
+  },
 };
 
 module.exports = nextConfig;

@@ -24,9 +24,14 @@ import {
 interface SpaceContainerProps {
   space: Space;
   initialEntries: Entry[];
+  currentDeviceId?: string | null;
 }
 
-export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
+export function SpaceContainer({
+  space,
+  initialEntries,
+  currentDeviceId,
+}: SpaceContainerProps) {
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const [hasPosted, setHasPosted] = useState(initialEntries.length > 0);
   const [copied, setCopied] = useState(false);
@@ -302,7 +307,11 @@ export function SpaceContainer({ space, initialEntries }: SpaceContainerProps) {
           <div className="pb-20">
             <div className="mx-auto max-w-2xl space-y-6 py-8">
               {entries.map((entry) => (
-                <EntryCard key={entry.id} entry={entry} />
+                <EntryCard
+                  key={entry.id}
+                  entry={entry}
+                  currentDeviceId={currentDeviceId || null}
+                />
               ))}
             </div>
 

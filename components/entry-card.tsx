@@ -1,6 +1,5 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
 import {
   Eye,
   Download,
@@ -15,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import JSZip from "jszip";
 import { useState, useEffect, memo } from "react";
 import { PhotoGallery } from "./photo-gallery";
+import { displayNameForDevice } from "@/lib/display-name";
+import NextImage from "next/image";
 
 export interface Entry {
   id: string;
@@ -29,9 +30,13 @@ export interface Entry {
 
 interface EntryCardProps {
   entry: Entry;
+  currentDeviceId?: string | null;
 }
 
-export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
+export const EntryCard = memo(function EntryCard({
+  entry,
+  currentDeviceId = null,
+}: EntryCardProps) {
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentImageUrl, setCurrentImageUrl] = useState<string>("");
   const [modalBgColor, setModalBgColor] = useState<string>("bg-black/90");
@@ -40,6 +45,47 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
   const [noteLoaded, setNoteLoaded] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
   const [hovering, setHovering] = useState(false);
+
+  const isMine =
+    !!entry.created_by_device_id &&
+    !!currentDeviceId &&
+    entry.created_by_device_id === currentDeviceId;
+  const nameLabel = isMine
+    ? "You"
+    : displayNameForDevice(entry.created_by_device_id || entry.id);
+
+  // Deterministic color for avatar
+  const colorIndex = (() => {
+    const key = entry.created_by_device_id || entry.id;
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = (h << 5) - h + key.charCodeAt(i);
+    return Math.abs(h) % 8;
+  })();
+
+  const avatarColors = [
+    "bg-rose-500",
+    "bg-emerald-500",
+    "bg-amber-500",
+    "bg-sky-500",
+    "bg-fuchsia-500",
+    "bg-teal-500",
+    "bg-purple-500",
+    "bg-orange-500",
+  ];
+
+  const firstLetter = nameLabel.charAt(0).toUpperCase();
+
+  // Avatar component
+  const avatar = (
+    <div
+      className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ${
+        isMine ? "bg-blue-500" : avatarColors[colorIndex]
+      }`}
+      aria-label={nameLabel}
+    >
+      {firstLetter}
+    </div>
+  );
 
   // Handle keyboard events for modal
   useEffect(() => {
@@ -88,9 +134,14 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
 
   const formatTime = (dateString: string) => {
     try {
-      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+      const date = new Date(dateString);
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
     } catch {
-      return "just now";
+      return "";
     }
   };
 
@@ -231,59 +282,76 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
     if (entry.text.startsWith("DRAWING:")) {
       const dataUrl = entry.text.replace("DRAWING:", "");
       return (
-        <div className="group relative flex items-start justify-end gap-2 mb-4">
-          {/* Action buttons on the left - hidden by default, visible on hover */}
-          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 pt-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-              onClick={() => handleView(dataUrl)}
-              title="View image"
-            >
-              <Eye className="h-4 w-4 text-primary" />
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-              onClick={() => handleDownload(dataUrl, `drawing-${entry.id}.png`)}
-              title="Download image"
-            >
-              <Download className="h-4 w-4 text-primary" />
-            </Button>
-          </div>
+        <>
+          <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+            {/* Avatar */}
+            {avatar}
 
-          {/* Drawing message bubble */}
-          <div className="relative max-w-[85%] sm:max-w-[70%]">
-            <div className="relative bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-br-none p-3 shadow-sm hover:shadow-md transition-all duration-200 border border-border/10">
+            {/* Message content */}
+            <div className="flex-1 min-w-0">
+              {/* Header: Name and Time */}
+              <div className="flex items-baseline gap-2 mb-1">
+                <span
+                  className={`font-semibold text-sm ${
+                    isMine
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-foreground"
+                  }`}
+                >
+                  {nameLabel}
+                </span>
+                <span className="text-xs text-muted-foreground/60">
+                  {formatTime(entry.created_at)}
+                </span>
+              </div>
+
+              {/* Drawing content */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>🎨</span>
                   <span>Drawing</span>
                 </div>
                 <div className="relative">
-                  <img
+                  <NextImage
                     src={dataUrl}
                     alt="Hand drawn image"
-                    className="max-w-full h-auto rounded-lg border border-border/20 cursor-pointer"
+                    width={800}
+                    height={600}
+                    unoptimized
+                    className="max-w-full h-auto rounded-lg border border-border/20 cursor-pointer hover:opacity-90 transition-opacity"
                     style={{ maxHeight: "300px" }}
                     onClick={() => handleView(dataUrl)}
                   />
                 </div>
               </div>
-              {/* Message tail for drawings */}
-              <div className="absolute bottom-0 right-0 w-0 h-0 border-l-[12px] border-l-gray-100 dark:border-l-gray-800 border-b-[12px] border-b-transparent"></div>
-            </div>
-            {/* Message timestamp */}
-            <div className="flex justify-end mt-1 px-1">
-              <span className="text-xs text-muted-foreground/70">
-                {formatTime(entry.created_at)}
-              </span>
+
+              {/* Action buttons - shown on hover */}
+              <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => handleView(dataUrl)}
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  View
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() =>
+                    handleDownload(dataUrl, `drawing-${entry.id}.png`)
+                  }
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  Download
+                </Button>
+              </div>
             </div>
           </div>
 
-          {/* Image view modal - improved visibility with adaptive background */}
+          {/* Image view modal */}
           {showImageModal && currentImageUrl && (
             <div
               className={`fixed inset-0 ${modalBgColor} z-50 flex items-center justify-center p-2 sm:p-4 transition-colors duration-300`}
@@ -299,17 +367,24 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
                 className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center"
                 onClick={(e) => e.stopPropagation()}
               >
-                <img
-                  src={currentImageUrl}
-                  alt="Image - full view"
-                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                <div
+                  className="relative rounded-lg shadow-2xl"
                   style={{
                     minWidth: "50vw",
                     minHeight: "50vh",
                     maxWidth: "95vw",
                     maxHeight: "95vh",
                   }}
-                />
+                >
+                  <NextImage
+                    src={currentImageUrl}
+                    alt="Image - full view"
+                    fill
+                    unoptimized
+                    sizes="(max-width: 768px) 95vw, 90vw"
+                    className="object-contain rounded-lg"
+                  />
+                </div>
                 {/* Control buttons positioned at top right of viewport - adaptive colors */}
                 <div className="fixed top-4 right-4 flex gap-3 z-10">
                   <Button
@@ -351,7 +426,7 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
               </div>
             </div>
           )}
-        </div>
+        </>
       );
     }
 
@@ -359,55 +434,72 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
     if (entry.text.startsWith("PHOTO:")) {
       const dataUrl = entry.text.replace("PHOTO:", "");
       return (
-        <div className="group relative flex items-start justify-end gap-2 mb-4">
-          {/* Action buttons on the left - hidden by default, visible on hover */}
-          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 pt-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-              onClick={() => handleView(dataUrl)}
-              title="View image"
-            >
-              <Eye className="h-4 w-4 text-primary" />
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-              onClick={() => handleDownload(dataUrl, `photo-${entry.id}.jpg`)}
-              title="Download image"
-            >
-              <Download className="h-4 w-4 text-primary" />
-            </Button>
-          </div>
+        <>
+          <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+            {/* Avatar */}
+            {avatar}
 
-          {/* Photo message bubble */}
-          <div className="relative max-w-[85%] sm:max-w-[70%]">
-            <div className="relative bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-br-none p-3 shadow-sm hover:shadow-md transition-all duration-200 border border-border/10">
+            {/* Message content */}
+            <div className="flex-1 min-w-0">
+              {/* Header: Name and Time */}
+              <div className="flex items-baseline gap-2 mb-1">
+                <span
+                  className={`font-semibold text-sm ${
+                    isMine
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-foreground"
+                  }`}
+                >
+                  {nameLabel}
+                </span>
+                <span className="text-xs text-muted-foreground/60">
+                  {formatTime(entry.created_at)}
+                </span>
+              </div>
+
+              {/* Photo content */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>📷</span>
                   <span>Photo</span>
                 </div>
                 <div className="relative">
-                  <img
+                  <NextImage
                     src={dataUrl}
                     alt="Photo"
-                    className="max-w-full h-auto rounded-lg border border-border/20 cursor-pointer"
+                    width={800}
+                    height={600}
+                    unoptimized
+                    className="max-w-full h-auto rounded-lg border border-border/20 cursor-pointer hover:opacity-90 transition-opacity"
                     style={{ maxHeight: "300px" }}
                     onClick={() => handleView(dataUrl)}
                   />
                 </div>
               </div>
-              {/* Message tail for photos */}
-              <div className="absolute bottom-0 right-0 w-0 h-0 border-l-[12px] border-l-gray-100 dark:border-l-gray-800 border-b-[12px] border-b-transparent"></div>
-            </div>
-            {/* Message timestamp */}
-            <div className="flex justify-end mt-1 px-1">
-              <span className="text-xs text-muted-foreground/70">
-                {formatTime(entry.created_at)}
-              </span>
+
+              {/* Action buttons */}
+              <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => handleView(dataUrl)}
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  View
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() =>
+                    handleDownload(dataUrl, `photo-${entry.id}.jpg`)
+                  }
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  Download
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -427,17 +519,24 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
                 className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center"
                 onClick={(e) => e.stopPropagation()}
               >
-                <img
-                  src={currentImageUrl}
-                  alt="Image - full view"
-                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                <div
+                  className="relative rounded-lg shadow-2xl"
                   style={{
                     minWidth: "50vw",
                     minHeight: "50vh",
                     maxWidth: "95vw",
                     maxHeight: "95vh",
                   }}
-                />
+                >
+                  <NextImage
+                    src={currentImageUrl}
+                    alt="Image - full view"
+                    fill
+                    unoptimized
+                    sizes="(max-width: 768px) 95vw, 90vw"
+                    className="object-contain rounded-lg"
+                  />
+                </div>
                 {/* Control buttons positioned at top right of viewport - adaptive colors */}
                 <div className="fixed top-4 right-4 flex gap-3 z-10">
                   <Button
@@ -481,7 +580,7 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
               </div>
             </div>
           )}
-        </div>
+        </>
       );
     }
 
@@ -555,34 +654,32 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
       const remainingCount = photosData.length - 5;
 
       return (
-        <div className="group relative flex items-start justify-end gap-2 mb-4">
-          {/* Action buttons on the left - hidden by default, visible on hover */}
-          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 pt-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-              onClick={() => setShowGallery(true)}
-              title="View all photos"
-            >
-              <Eye className="h-4 w-4 text-primary" />
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-              onClick={downloadAllAsZip}
-              title="Download all as ZIP"
-            >
-              <Download className="h-4 w-4 text-primary" />
-            </Button>
-          </div>
+        <>
+          <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+            {/* Avatar */}
+            {avatar}
 
-          {/* Photos message bubble */}
-          <div className="relative max-w-[85%] sm:max-w-[70%]">
-            <div className="relative bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-br-none p-3 shadow-sm hover:shadow-md transition-all duration-200 border border-border/10">
+            {/* Message content */}
+            <div className="flex-1 min-w-0">
+              {/* Header: Name and Time */}
+              <div className="flex items-baseline gap-2 mb-1">
+                <span
+                  className={`font-semibold text-sm ${
+                    isMine
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-foreground"
+                  }`}
+                >
+                  {nameLabel}
+                </span>
+                <span className="text-xs text-muted-foreground/60">
+                  {formatTime(entry.created_at)}
+                </span>
+              </div>
+
+              {/* Photos content */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>📷</span>
                   <span>
                     {photosData.length === 1
@@ -610,10 +707,17 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
                             : "aspect-square"
                         }`}
                       >
-                        <img
+                        <NextImage
                           src={dataUrl}
                           alt={`Photo ${index + 1}`}
-                          className="w-full h-full object-cover rounded border border-border/20"
+                          fill
+                          unoptimized
+                          sizes={
+                            photosData.length === 1
+                              ? "(max-width: 768px) 90vw, 400px"
+                              : "(max-width: 768px) 30vw, 300px"
+                          }
+                          className="object-cover rounded border border-border/20 hover:opacity-90 transition-opacity"
                         />
                       </div>
                     ))}
@@ -640,14 +744,28 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
                   )}
                 </div>
               </div>
-              {/* Message tail for photos */}
-              <div className="absolute bottom-0 right-0 w-0 h-0 border-l-[12px] border-l-gray-100 dark:border-l-gray-800 border-b-[12px] border-b-transparent"></div>
-            </div>
-            {/* Message timestamp */}
-            <div className="flex justify-end mt-1 px-1">
-              <span className="text-xs text-muted-foreground/70">
-                {formatTime(entry.created_at)}
-              </span>
+
+              {/* Action buttons */}
+              <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setShowGallery(true)}
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  View All
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={downloadAllAsZip}
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  Download ZIP
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -658,7 +776,7 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
             initialIndex={0}
             isOpen={showGallery}
           />
-        </div>
+        </>
       );
     }
 
@@ -670,71 +788,81 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
       const noteTitle = noteData[2] || "Untitled Note";
 
       return (
-        <div className="group relative flex items-start justify-end gap-2 mb-4">
-          {/* Action buttons on the left - hidden by default, visible on hover */}
-          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 pt-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-              onClick={() => window.open(`/n/${noteSlug}`, "_blank")}
-              title="Edit note"
-            >
-              <Edit className="h-4 w-4 text-primary" />
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-              onClick={() => window.open(`/n/${noteSlug}`, "_blank")}
-              title="Edit note"
-            >
-              <ExternalLink className="h-4 w-4 text-primary" />
-            </Button>
-          </div>
+        <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+          {/* Avatar */}
+          {avatar}
 
-          {/* Note message bubble */}
-          <div className="relative max-w-[85%] sm:max-w-[70%]">
-            <div className="relative bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-br-none p-3 shadow-sm hover:shadow-md transition-all duration-200 border border-border/10">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                  <span>📝</span>
-                  <span>Note</span>
-                </div>
-                <div className="relative">
-                  <div
-                    className="flex items-center gap-3 p-3 bg-background rounded-lg border border-border/20 cursor-pointer hover:bg-accent/50 transition-colors"
-                    onClick={() => window.open(`/n/${noteSlug}`, "_blank")}
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center flex-shrink-0 shadow-sm">
-                      <FileText className="h-5 w-5 text-primary-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm font-medium text-foreground/90 leading-tight truncate">
-                          {noteTitle}
+          {/* Message content */}
+          <div className="flex-1 min-w-0">
+            {/* Header: Name and Time */}
+            <div className="flex items-baseline gap-2 mb-1">
+              <span
+                className={`font-semibold text-sm ${
+                  isMine
+                    ? "text-blue-600 dark:text-blue-400"
+                    : "text-foreground"
+                }`}
+              >
+                {nameLabel}
+              </span>
+              <span className="text-xs text-muted-foreground/60">
+                {formatTime(entry.created_at)}
+              </span>
+            </div>
+
+            {/* Note content */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>📝</span>
+                <span>Note</span>
+              </div>
+              <div className="relative">
+                <div
+                  className="flex items-center gap-3 p-3 bg-background rounded-lg border border-border/20 cursor-pointer hover:bg-accent/50 transition-colors"
+                  onClick={() => window.open(`/n/${noteSlug}`, "_blank")}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <FileText className="h-5 w-5 text-primary-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium text-foreground/90 leading-tight truncate">
+                        {noteTitle}
+                      </div>
+                      {isNoteLocked && (
+                        <div title="Protected note">
+                          <Lock className="h-3 w-3 text-orange-500 flex-shrink-0" />
                         </div>
-                        {isNoteLocked && (
-                          <div title="Protected note">
-                            <Lock className="h-3 w-3 text-orange-500 flex-shrink-0" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground/80 mt-0.5 mr-2.5">
-                        Rich text note • Click to edit
-                      </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground/80 mt-0.5 mr-2.5">
+                      Rich text note • Click to edit
                     </div>
                   </div>
                 </div>
               </div>
-              {/* Message tail for notes */}
-              <div className="absolute bottom-0 right-0 w-0 h-0 border-l-[12px] border-l-gray-100 dark:border-l-gray-800 border-b-[12px] border-b-transparent"></div>
             </div>
-            {/* Message timestamp */}
-            <div className="flex justify-end mt-1 px-1">
-              <span className="text-xs text-muted-foreground/70">
-                {formatTime(entry.created_at)}
-              </span>
+
+            {/* Action buttons */}
+            <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={() => window.open(`/n/${noteSlug}`, "_blank")}
+              >
+                <Edit className="h-3 w-3 mr-1" />
+                Edit
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={() => window.open(`/n/${noteSlug}`, "_blank")}
+              >
+                <ExternalLink className="h-3 w-3 mr-1" />
+                Open
+              </Button>
             </div>
           </div>
         </div>
@@ -743,34 +871,42 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
 
     // Regular text message
     return (
-      <div className="group relative flex items-start justify-end gap-2 mb-4">
-        {/* Copy button on the left - hidden by default, visible on hover */}
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 pt-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-            onClick={() => handleCopyText(entry.text || "")}
-            title="Copy text"
-          >
-            <Copy className="h-4 w-4 text-primary" />
-          </Button>
-        </div>
+      <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+        {/* Avatar */}
+        {avatar}
 
-        {/* Message bubble - right aligned like sent messages */}
-        <div className="relative max-w-[85%] sm:max-w-[70%]">
-          <div className="relative bg-blue-500 text-white rounded-2xl rounded-br-none px-4 py-3 shadow-sm hover:shadow-md transition-all duration-200">
-            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words overflow-wrap-anywhere">
-              {entry.text}
-            </p>
-            {/* Message tail - integrated into the bubble */}
-            <div className="absolute bottom-0 right-0 w-0 h-0 border-l-[12px] border-l-blue-500 border-b-[12px] border-b-transparent"></div>
-          </div>
-          {/* Message timestamp */}
-          <div className="flex justify-end mt-1 px-1">
-            <span className="text-xs text-muted-foreground/70">
+        {/* Message content */}
+        <div className="flex-1 min-w-0">
+          {/* Header: Name and Time */}
+          <div className="flex items-baseline gap-2 mb-1">
+            <span
+              className={`font-semibold text-sm ${
+                isMine ? "text-blue-600 dark:text-blue-400" : "text-foreground"
+              }`}
+            >
+              {nameLabel}
+            </span>
+            <span className="text-xs text-muted-foreground/60">
               {formatTime(entry.created_at)}
             </span>
+          </div>
+
+          {/* Message text */}
+          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/90 dark:text-foreground/95">
+            {entry.text}
+          </p>
+
+          {/* Action button - shown on hover */}
+          <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs"
+              onClick={() => handleCopyText(entry.text || "")}
+            >
+              <Copy className="h-3 w-3 mr-1" />
+              Copy
+            </Button>
           </div>
         </div>
       </div>
@@ -809,81 +945,79 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
     };
 
     return (
-      <div className="group relative flex items-start justify-end gap-2 mb-4">
-        {/* Action buttons on the left */}
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 pt-2">
-          {items.length > 1 && (
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-9 px-2 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-              onClick={handleDownloadAllZip}
-              title="Download all"
-            >
-              <Download className="h-4 w-4 text-primary" />
-            </Button>
-          )}
-        </div>
+      <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+        {/* Avatar */}
+        {avatar}
 
-        {/* Message bubble */}
-        <div className="relative max-w-[85%] sm:max-w-[70%]">
-          <div className="relative bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-br-none p-3 shadow-sm hover:shadow-md transition-all duration-200 border border-border/10">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                <span>📄</span>
-                <span>{items.length > 1 ? "Files" : "File"}</span>
-              </div>
-              <div className="divide-y rounded-md border">
-                {items.map((it) => (
-                  <div
-                    key={it.url}
-                    className="flex items-center justify-between p-2"
-                  >
-                    <div className="min-w-0">
-                      <div
-                        className="text-sm font-medium truncate max-w-[220px] sm:max-w-[360px]"
-                        title={it.name}
-                      >
-                        {it.name}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatBytes(it.size)} • {it.type || "file"}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-8 px-2"
-                        onClick={() => downloadFileUrl(it.url, it.name)}
-                        title="Download"
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {items.length > 1 && (
-                <div className="flex justify-end">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleDownloadAllZip}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download all as ZIP
-                  </Button>
-                </div>
-              )}
-            </div>
-            <div className="absolute bottom-0 right-0 w-0 h-0 border-l-[12px] border-l-gray-100 dark:border-l-gray-800 border-b-[12px] border-b-transparent"></div>
-          </div>
-          <div className="flex justify-end mt-1 px-1">
-            <span className="text-xs text-muted-foreground/70">
+        {/* Message content */}
+        <div className="flex-1 min-w-0">
+          {/* Header: Name and Time */}
+          <div className="flex items-baseline gap-2 mb-1">
+            <span
+              className={`font-semibold text-sm ${
+                isMine ? "text-blue-600 dark:text-blue-400" : "text-foreground"
+              }`}
+            >
+              {nameLabel}
+            </span>
+            <span className="text-xs text-muted-foreground/60">
               {formatTime(entry.created_at)}
             </span>
           </div>
+
+          {/* Files content */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>📄</span>
+              <span>{items.length > 1 ? "Files" : "File"}</span>
+            </div>
+            <div className="divide-y rounded-md border border-border/20 bg-background">
+              {items.map((it) => (
+                <div
+                  key={it.url}
+                  className="flex items-center justify-between p-2 hover:bg-accent/30 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div
+                      className="text-sm font-medium truncate max-w-[220px] sm:max-w-[360px]"
+                      title={it.name}
+                    >
+                      {it.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatBytes(it.size)} • {it.type || "file"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2"
+                      onClick={() => downloadFileUrl(it.url, it.name)}
+                      title="Download"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          {items.length > 1 && (
+            <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={handleDownloadAllZip}
+              >
+                <Download className="h-3 w-3 mr-1" />
+                Download All ZIP
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -891,98 +1025,102 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
 
   // Message-style file attachments
   return (
-    <div className="group relative flex items-start justify-end gap-2 mb-4">
-      {/* Action buttons on the left - only for images - hidden by default, visible on hover */}
-      {entry.kind === "image" && (
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 pt-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-            onClick={() => {
-              // Create a placeholder image URL for demo purposes
-              // In a real app, you'd use the actual image URL from entry.asset_id
-              const placeholderImageUrl =
-                "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzQ5NzlmZiIvPjx0ZXh0IHg9IjE1MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U2FtcGxlIEltYWdlPC90ZXh0Pjwvc3ZnPg==";
-              handleView(placeholderImageUrl);
-            }}
-            title="View image"
+    <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+      {/* Avatar */}
+      {avatar}
+
+      {/* Message content */}
+      <div className="flex-1 min-w-0">
+        {/* Header: Name and Time */}
+        <div className="flex items-baseline gap-2 mb-1">
+          <span
+            className={`font-semibold text-sm ${
+              isMine ? "text-blue-600 dark:text-blue-400" : "text-foreground"
+            }`}
           >
-            <Eye className="h-4 w-4 text-primary" />
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="h-9 w-9 p-0 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
-            onClick={() => {
-              // Create a placeholder image URL for download demo
-              const placeholderImageUrl =
-                "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzQ5NzlmZiIvPjx0ZXh0IHg9IjE1MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U2FtcGxlIEltYWdlPC90ZXh0Pjwvc3ZnPg==";
-              handleDownload(placeholderImageUrl, `image-${entry.id}.svg`);
-            }}
-            title="Download image"
-          >
-            <Download className="h-4 w-4 text-primary" />
-          </Button>
-        </div>
-      )}
-
-      <div className="relative max-w-[85%] sm:max-w-[70%]">
-        {/* File attachment bubble */}
-        <div className="relative bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-br-none p-4 shadow-sm hover:shadow-md transition-all duration-200 border border-border/10">
-          <div className="flex items-center gap-3">
-            {/* File icon with colored background */}
-            <div
-              className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm ${
-                entry.kind === "image"
-                  ? "bg-gradient-to-br from-blue-400 to-blue-600"
-                  : entry.kind === "pdf"
-                  ? "bg-gradient-to-br from-red-400 to-red-600"
-                  : "bg-gradient-to-br from-gray-400 to-gray-600"
-              }`}
-            >
-              <span className="text-white text-sm filter drop-shadow-sm">
-                {entry.kind === "image"
-                  ? "📷"
-                  : entry.kind === "pdf"
-                  ? "📄"
-                  : "📁"}
-              </span>
-            </div>
-
-            {/* File details */}
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-foreground/90 leading-tight">
-                {entry.kind === "image"
-                  ? "Photo"
-                  : entry.kind === "pdf"
-                  ? "Document"
-                  : "File"}
-              </div>
-              <div className="text-xs text-muted-foreground/80 mt-0.5">
-                {entry.kind === "image"
-                  ? "Image attachment"
-                  : entry.kind === "pdf"
-                  ? "PDF document"
-                  : "File attachment"}
-              </div>
-            </div>
-
-            {/* Action indicator for non-images */}
-            {entry.kind !== "image" && (
-              <div className="text-xs text-muted-foreground/60">📎</div>
-            )}
-          </div>
-          {/* Message tail for file attachments - integrated into the bubble */}
-          <div className="absolute bottom-0 right-0 w-0 h-0 border-l-[12px] border-l-gray-100 dark:border-l-gray-800 border-b-[12px] border-b-transparent"></div>
-        </div>
-
-        {/* Message timestamp */}
-        <div className="flex justify-end mt-1 px-1">
-          <span className="text-xs text-muted-foreground/70">
+            {nameLabel}
+          </span>
+          <span className="text-xs text-muted-foreground/60">
             {formatTime(entry.created_at)}
           </span>
         </div>
+
+        {/* File attachment content */}
+        <div className="flex items-center gap-3 p-3 bg-background rounded-lg border border-border/20">
+          {/* File icon with colored background */}
+          <div
+            className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm ${
+              entry.kind === "image"
+                ? "bg-gradient-to-br from-blue-400 to-blue-600"
+                : entry.kind === "pdf"
+                ? "bg-gradient-to-br from-red-400 to-red-600"
+                : "bg-gradient-to-br from-gray-400 to-gray-600"
+            }`}
+          >
+            <span className="text-white text-sm filter drop-shadow-sm">
+              {entry.kind === "image"
+                ? "📷"
+                : entry.kind === "pdf"
+                ? "📄"
+                : "📁"}
+            </span>
+          </div>
+
+          {/* File details */}
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-foreground/90 leading-tight">
+              {entry.kind === "image"
+                ? "Photo"
+                : entry.kind === "pdf"
+                ? "Document"
+                : "File"}
+            </div>
+            <div className="text-xs text-muted-foreground/80 mt-0.5">
+              {entry.kind === "image"
+                ? "Image attachment"
+                : entry.kind === "pdf"
+                ? "PDF document"
+                : "File attachment"}
+            </div>
+          </div>
+
+          {/* Action indicator for non-images */}
+          {entry.kind !== "image" && (
+            <div className="text-xs text-muted-foreground/60">📎</div>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        {entry.kind === "image" && (
+          <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs"
+              onClick={() => {
+                const placeholderImageUrl =
+                  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzQ5NzlmZiIvPjx0ZXh0IHg9IjE1MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U2FtcGxlIEltYWdlPC90ZXh0Pjwvc3ZnPg==";
+                handleView(placeholderImageUrl);
+              }}
+            >
+              <Eye className="h-3 w-3 mr-1" />
+              View
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs"
+              onClick={() => {
+                const placeholderImageUrl =
+                  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzQ5NzlmZiIvPjx0ZXh0IHg9IjE1MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U2FtcGxlIEltYWdlPC90ZXh0Pjwvc3ZnPg==";
+                handleDownload(placeholderImageUrl, `image-${entry.id}.svg`);
+              }}
+            >
+              <Download className="h-3 w-3 mr-1" />
+              Download
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

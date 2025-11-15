@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Navbar } from "@/components/navbar";
 import { getPostBySlug } from "@/lib/blog";
 
@@ -46,7 +47,40 @@ export default async function BlogPostPage({ params }: { params: any }) {
         <header className="mb-6">
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">{post.title}</h1>
           <div className="text-sm text-muted-foreground">
-            {new Date(post.date).toLocaleDateString()} • {post.tags.join(" · ")}
+            {post.tags.join(" · ")}
+          </div>
+          {post.coverImageUrl && (
+            <div className="mt-5">
+              <Image
+                src={post.coverImageUrl}
+                alt={post.title}
+                width={1200}
+                height={630}
+                className="w-full h-64 sm:h-80 object-cover rounded-xl"
+                priority
+              />
+            </div>
+          )}
+          <div className="mt-4 flex items-center gap-3">
+            {post.author?.avatarUrl ? (
+              <Image
+                src={post.author.avatarUrl}
+                alt={post.author.name}
+                width={32}
+                height={32}
+                className="rounded-full"
+              />
+            ) : (
+              <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
+                {post.author?.name?.charAt(0) ?? "W"}
+              </div>
+            )}
+            <div className="text-sm text-muted-foreground">
+              By{" "}
+              <span className="text-foreground font-medium">
+                {post.author?.name ?? "Woff"}
+              </span>
+            </div>
           </div>
         </header>
         <div className="prose prose-neutral dark:prose-invert max-w-none">
@@ -60,15 +94,18 @@ export default async function BlogPostPage({ params }: { params: any }) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'BlogPosting',
+              "@context": "https://schema.org",
+              "@type": "BlogPosting",
               headline: post.title,
-              datePublished: post.date,
               description: post.excerpt,
               url: `/blog/${post.slug}`,
+              image: post.coverImageUrl,
+              author: post.author?.name
+                ? { "@type": "Person", name: post.author.name }
+                : undefined,
               mainEntityOfPage: {
-                '@type': 'WebPage',
-                '@id': `/blog/${post.slug}`,
+                "@type": "WebPage",
+                "@id": `/blog/${post.slug}`,
               },
             }),
           }}

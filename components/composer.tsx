@@ -468,11 +468,10 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
       const entry = await createEntry(spaceId, "file", "FILE_ENTRY", meta);
       onNewEntry(entry);
       toast.success(`Uploaded ${pf.name}`);
-      // Remove it from the modal list
-      setPendingFiles((prev) => prev.filter((f) => f.id !== id));
-      if (pendingFiles.filter((f) => f.id !== id).length === 0) {
-        setFileModalOpen(false);
-      }
+      // Remove it from the modal list and close if none left
+      const next = pendingFiles.filter((f) => f.id !== id);
+      setPendingFiles(next);
+      if (next.length === 0) setFileModalOpen(false);
     } catch (e: any) {
       setPendingFiles((prev) =>
         prev.map((f) =>
@@ -505,6 +504,7 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
         type: string;
         url: string;
       }[] = [];
+      const failedIds: string[] = [];
       for (let i = 0; i < pendingFiles.length; i++) {
         const pf = pendingFiles[i];
         try {
@@ -520,6 +520,7 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
           );
         } catch (e) {
           console.error("Unexpected upload failure", e);
+          failedIds.push(pf.id);
           setPendingFiles((prev) =>
             prev.map((f) =>
               f.id === pf.id ? { ...f, progress: 100, status: "error" } : f
@@ -533,11 +534,15 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
         const entry = await createEntry(spaceId, "file", "FILE_ENTRY", meta);
         onNewEntry(entry);
         toast.success(`Uploaded ${uploaded.length} file(s) successfully`);
-        // Keep failed items (if any) in the list for retry; remove the ones done
-        setPendingFiles((prev) => prev.filter((f) => f.status !== "done"));
-        if (pendingFiles.filter((f) => f.status !== "done").length === 0) {
+        if (failedIds.length === 0) {
+          // All good: close modal and reset list
+          setPendingFiles([]);
           setFileModalOpen(false);
         } else {
+          // Keep only failed ones for retry
+          setPendingFiles((prev) =>
+            prev.filter((f) => failedIds.includes(f.id))
+          );
           toast.message("Some files failed. You can retry or cancel.");
         }
       }
