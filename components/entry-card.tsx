@@ -12,6 +12,7 @@ import {
   Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import JSZip from "jszip";
 import { useState, useEffect, memo } from "react";
 import { PhotoGallery } from "./photo-gallery";
 
@@ -204,6 +205,24 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
       } catch (fallbackError) {
         console.error("Fallback copy failed:", fallbackError);
       }
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(mb < 1 ? 2 : 1)} MB`;
+  };
+
+  const downloadFileUrl = (url: string, name: string) => {
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      window.open(url, "_blank");
     }
   };
 
@@ -748,6 +767,118 @@ export const EntryCard = memo(function EntryCard({ entry }: EntryCardProps) {
             <div className="absolute bottom-0 right-0 w-0 h-0 border-l-[12px] border-l-blue-500 border-b-[12px] border-b-transparent"></div>
           </div>
           {/* Message timestamp */}
+          <div className="flex justify-end mt-1 px-1">
+            <span className="text-xs text-muted-foreground/70">
+              {formatTime(entry.created_at)}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // File entries rendering
+  if (entry.kind === "file" && entry.meta?.type === "files") {
+    const items: Array<{
+      name: string;
+      size: number;
+      type: string;
+      url: string;
+    }> = entry.meta.items || [];
+
+    const handleDownloadAllZip = async () => {
+      try {
+        const zip = new JSZip();
+        for (const item of items) {
+          const res = await fetch(item.url);
+          const blob = await res.blob();
+          zip.file(item.name || "file", blob);
+        }
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `files-${entry.id}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error("ZIP download failed", e);
+      }
+    };
+
+    return (
+      <div className="group relative flex items-start justify-end gap-2 mb-4">
+        {/* Action buttons on the left */}
+        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 pt-2">
+          {items.length > 1 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-9 px-2 bg-white/90 hover:bg-white dark:bg-gray-800/90 dark:hover:bg-gray-800 border-2 border-primary/20 hover:border-primary/40 shadow-lg hover:shadow-xl transition-all duration-200"
+              onClick={handleDownloadAllZip}
+              title="Download all"
+            >
+              <Download className="h-4 w-4 text-primary" />
+            </Button>
+          )}
+        </div>
+
+        {/* Message bubble */}
+        <div className="relative max-w-[85%] sm:max-w-[70%]">
+          <div className="relative bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-br-none p-3 shadow-sm hover:shadow-md transition-all duration-200 border border-border/10">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                <span>📄</span>
+                <span>{items.length > 1 ? "Files" : "File"}</span>
+              </div>
+              <div className="divide-y rounded-md border">
+                {items.map((it) => (
+                  <div
+                    key={it.url}
+                    className="flex items-center justify-between p-2"
+                  >
+                    <div className="min-w-0">
+                      <div
+                        className="text-sm font-medium truncate max-w-[220px] sm:max-w-[360px]"
+                        title={it.name}
+                      >
+                        {it.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatBytes(it.size)} • {it.type || "file"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 px-2"
+                        onClick={() => downloadFileUrl(it.url, it.name)}
+                        title="Download"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {items.length > 1 && (
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleDownloadAllZip}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download all as ZIP
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className="absolute bottom-0 right-0 w-0 h-0 border-l-[12px] border-l-gray-100 dark:border-l-gray-800 border-b-[12px] border-b-transparent"></div>
+          </div>
           <div className="flex justify-end mt-1 px-1">
             <span className="text-xs text-muted-foreground/70">
               {formatTime(entry.created_at)}

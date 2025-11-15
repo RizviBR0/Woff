@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Plus, Send } from "lucide-react";
+import { Plus, Send, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -21,6 +22,7 @@ import { compressImageAdaptive } from "@/lib/image-compression";
 import { cn } from "@/lib/utils";
 import { type Entry } from "./entry-card";
 import { DrawingCanvas } from "./drawing-canvas";
+import { supabaseBrowser } from "@/lib/supabase-browser";
 
 interface ComposerProps {
   spaceId: string;
@@ -36,6 +38,7 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const multiFileInputRef = useRef<HTMLInputElement>(null);
+  const anyFileInputRef = useRef<HTMLInputElement>(null);
   const lastUploadSignatureRef = useRef<string>("");
   const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB per image
 
@@ -47,6 +50,37 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
   const [uploadProcessed, setUploadProcessed] = useState(0);
   const [uploadTotal, setUploadTotal] = useState(0);
   const [uploadMessage, setUploadMessage] = useState<string>("");
+
+  // ----- Generic file upload state -----
+  type PendingFile = {
+    id: string;
+    file: File;
+    name: string;
+    size: number;
+    type: string;
+    progress: number; // 0-100
+    status: "pending" | "uploading" | "done" | "error";
+  };
+  const [fileModalOpen, setFileModalOpen] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [fileUploading, setFileUploading] = useState(false);
+  // Caps are configurable to match plan limits
+  const MAX_FILE_BYTES =
+    parseInt(process.env.NEXT_PUBLIC_MAX_FILE_UPLOAD_BYTES || "") ||
+    100 * 1024 * 1024;
+  const COMBINED_CAP_BYTES =
+    parseInt(process.env.NEXT_PUBLIC_MAX_FILE_COMBINED_BYTES || "") ||
+    100 * 1024 * 1024;
+
+  const totalFileSize = pendingFiles.reduce((sum, f) => sum + f.size, 0);
+  const hasOversizeFile = pendingFiles.some((f) => f.size > MAX_FILE_BYTES);
+  const overCombinedLimit = totalFileSize > COMBINED_CAP_BYTES;
+
+  const formatBytes = (bytes: number) => {
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(mb < 1 ? 2 : 1)} MB`;
+  };
+  const combinedCapLabel = (COMBINED_CAP_BYTES / (1024 * 1024)).toFixed(1);
 
   // Adaptive compression wrapper returning only dataUrl for legacy usage
   const getCompressedDataUrl = async (file: File) => {
@@ -124,6 +158,14 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
     setPopoverOpen(false);
     if (fileInputRef.current) {
       fileInputRef.current.click();
+    }
+  };
+
+  const handleFileUploadClick = () => {
+    setPopoverOpen(false);
+    if (anyFileInputRef.current) {
+      anyFileInputRef.current.value = "";
+      anyFileInputRef.current.click();
     }
   };
 
@@ -369,6 +411,141 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
     }
   };
 
+  const handleGenericFilesSelected = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const items = Array.from(files).map((f, i) => ({
+      id: `${Date.now()}-${i}-${f.name}`,
+      file: f,
+      name: f.name,
+      size: f.size,
+      type: f.type || "application/octet-stream",
+      progress: 0,
+      status: "pending" as const,
+    }));
+    setPendingFiles(items);
+    setFileModalOpen(true);
+  };
+
+  const removePendingFile = (id: string) => {
+    setPendingFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const uploadSingleFile = async (pf: PendingFile) => {
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const path = `spaces/${spaceId}/files/${unique}-${pf.name}`;
+    const { data, error } = await supabaseBrowser.storage
+      .from("files")
+      .upload(path, pf.file, { cacheControl: "3600", upsert: false });
+    if (error) throw error;
+    const { data: urlData } = supabaseBrowser.storage
+      .from("files")
+      .getPublicUrl(data.path);
+    return {
+      name: pf.name,
+      size: pf.size,
+      type: pf.type,
+      url: urlData.publicUrl,
+    };
+  };
+
+  const retryFile = async (id: string) => {
+    const pf = pendingFiles.find((f) => f.id === id);
+    if (!pf || fileUploading) return;
+    try {
+      setPendingFiles((prev) =>
+        prev.map((f) =>
+          f.id === id ? { ...f, status: "uploading", progress: 20 } : f
+        )
+      );
+      const uploaded = await uploadSingleFile(pf);
+      setPendingFiles((prev) =>
+        prev.map((f) =>
+          f.id === id ? { ...f, status: "done", progress: 100 } : f
+        )
+      );
+      // Immediately create an entry for this retried file
+      const meta = { type: "files", items: [uploaded] } as const;
+      const entry = await createEntry(spaceId, "file", "FILE_ENTRY", meta);
+      onNewEntry(entry);
+      toast.success(`Uploaded ${pf.name}`);
+      // Remove it from the modal list
+      setPendingFiles((prev) => prev.filter((f) => f.id !== id));
+      if (pendingFiles.filter((f) => f.id !== id).length === 0) {
+        setFileModalOpen(false);
+      }
+    } catch (e: any) {
+      setPendingFiles((prev) =>
+        prev.map((f) =>
+          f.id === id ? { ...f, status: "error", progress: 100 } : f
+        )
+      );
+      toast.error(`Retry failed for ${pf?.name || "file"}`);
+    }
+  };
+
+  const handleFileUpload = async () => {
+    if (
+      pendingFiles.length === 0 ||
+      hasOversizeFile ||
+      overCombinedLimit ||
+      fileUploading
+    )
+      return;
+
+    try {
+      setFileUploading(true);
+      setPendingFiles((prev) =>
+        prev.map((f) => ({ ...f, status: "uploading", progress: 10 }))
+      );
+      toast.message(`Uploading ${pendingFiles.length} file(s)...`);
+
+      const uploaded: {
+        name: string;
+        size: number;
+        type: string;
+        url: string;
+      }[] = [];
+      for (let i = 0; i < pendingFiles.length; i++) {
+        const pf = pendingFiles[i];
+        try {
+          setPendingFiles((prev) =>
+            prev.map((f) => (f.id === pf.id ? { ...f, progress: 40 } : f))
+          );
+          const res = await uploadSingleFile(pf);
+          uploaded.push(res);
+          setPendingFiles((prev) =>
+            prev.map((f) =>
+              f.id === pf.id ? { ...f, progress: 100, status: "done" } : f
+            )
+          );
+        } catch (e) {
+          console.error("Unexpected upload failure", e);
+          setPendingFiles((prev) =>
+            prev.map((f) =>
+              f.id === pf.id ? { ...f, progress: 100, status: "error" } : f
+            )
+          );
+        }
+      }
+
+      if (uploaded.length > 0) {
+        const meta = { type: "files", items: uploaded } as const;
+        const entry = await createEntry(spaceId, "file", "FILE_ENTRY", meta);
+        onNewEntry(entry);
+        toast.success(`Uploaded ${uploaded.length} file(s) successfully`);
+        // Keep failed items (if any) in the list for retry; remove the ones done
+        setPendingFiles((prev) => prev.filter((f) => f.status !== "done"));
+        if (pendingFiles.filter((f) => f.status !== "done").length === 0) {
+          setFileModalOpen(false);
+        } else {
+          toast.message("Some files failed. You can retry or cancel.");
+        }
+      }
+    } finally {
+      setFileUploading(false);
+    }
+  };
+
   // Shared upload/compression dialog UI
   const uploadDialog = (
     <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
@@ -493,6 +670,11 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
                   <PopoverContent
                     className="w-56 p-3 rounded-2xl border-2 shadow-xl shadow-black/10 dark:shadow-black/50"
                     side="top"
+                    align="start"
+                    sideOffset={8}
+                    alignOffset={-8}
+                    avoidCollisions={true}
+                    collisionPadding={16}
                   >
                     <div className="space-y-2">
                       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 pb-1">
@@ -510,7 +692,10 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
                           </div>
                         </div>
                       </button>
-                      <button className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm hover:bg-accent/80 transition-colors group">
+                      <button
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm hover:bg-accent/80 transition-colors group"
+                        onClick={handleFileUploadClick}
+                      >
                         <span className="text-lg">📄</span>
                         <div className="text-left">
                           <div className="font-medium">File Upload</div>
@@ -578,42 +763,42 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
             </div>
 
             {/* Shortcut Badges */}
-            <div className="flex items-center justify-center gap-3 mt-8 px-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-8 px-2 max-w-full">
               <button
                 onClick={handleNewNote}
-                className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-all duration-200 border border-blue-200/60 dark:border-blue-800/60 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm hover:shadow-lg hover:shadow-blue-500/20 hover:-translate-y-1 backdrop-blur-sm"
+                className="group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-all duration-200 border border-blue-200/60 dark:border-blue-800/60 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm hover:shadow-lg hover:shadow-blue-500/20 hover:-translate-y-1 backdrop-blur-sm"
               >
-                <span className="text-base group-hover:scale-110 transition-transform duration-200">
+                <span className="text-sm sm:text-base group-hover:scale-110 transition-transform duration-200">
                   📝
                 </span>
-                <span>Create note</span>
+                <span className="whitespace-nowrap">Create note</span>
               </button>
               <button
                 onClick={handlePhoto}
-                className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-medium bg-green-50 dark:bg-green-950/30 hover:bg-green-100 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300 transition-all duration-200 border border-green-200/60 dark:border-green-800/60 hover:border-green-300 dark:hover:border-green-700 shadow-sm hover:shadow-lg hover:shadow-green-500/20 hover:-translate-y-1 backdrop-blur-sm"
+                className="group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-green-50 dark:bg-green-950/30 hover:bg-green-100 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300 transition-all duration-200 border border-green-200/60 dark:border-green-800/60 hover:border-green-300 dark:hover:border-green-700 shadow-sm hover:shadow-lg hover:shadow-green-500/20 hover:-translate-y-1 backdrop-blur-sm"
               >
-                <span className="text-base group-hover:scale-110 transition-transform duration-200">
+                <span className="text-sm sm:text-base group-hover:scale-110 transition-transform duration-200">
                   📷
                 </span>
-                <span>Photo</span>
+                <span className="whitespace-nowrap">Photo</span>
               </button>
               <button
                 onClick={handleImages}
-                className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-medium bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-all duration-200 border border-blue-200/60 dark:border-blue-800/60 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm hover:shadow-lg hover:shadow-blue-500/20 hover:-translate-y-1 backdrop-blur-sm"
+                className="group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-all duration-200 border border-blue-200/60 dark:border-blue-800/60 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm hover:shadow-lg hover:shadow-blue-500/20 hover:-translate-y-1 backdrop-blur-sm"
               >
-                <span className="text-base group-hover:scale-110 transition-transform duration-200">
+                <span className="text-sm sm:text-base group-hover:scale-110 transition-transform duration-200">
                   🖼️
                 </span>
-                <span>Images</span>
+                <span className="whitespace-nowrap">Images</span>
               </button>
               <button
                 onClick={handleDrawing}
-                className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-medium bg-purple-50 dark:bg-purple-950/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 transition-all duration-200 border border-purple-200/60 dark:border-purple-800/60 hover:border-purple-300 dark:hover:border-purple-700 shadow-sm hover:shadow-lg hover:shadow-purple-500/20 hover:-translate-y-1 backdrop-blur-sm"
+                className="group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-purple-50 dark:bg-purple-950/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 transition-all duration-200 border border-purple-200/60 dark:border-purple-800/60 hover:border-purple-300 dark:hover:border-purple-700 shadow-sm hover:shadow-lg hover:shadow-purple-500/20 hover:-translate-y-1 backdrop-blur-sm"
               >
-                <span className="text-base group-hover:scale-110 transition-transform duration-200">
+                <span className="text-sm sm:text-base group-hover:scale-110 transition-transform duration-200">
                   ✏️
                 </span>
-                <span>Draw</span>
+                <span className="whitespace-nowrap">Draw</span>
               </button>
             </div>
           </div>
@@ -641,7 +826,123 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
             onChange={handleMultiplePhotos}
             className="hidden"
           />
+          {/* Hidden input for any files */}
+          <input
+            ref={anyFileInputRef}
+            type="file"
+            multiple
+            onChange={(e) => handleGenericFilesSelected(e.target.files)}
+            className="hidden"
+          />
           {uploadDialog}
+          {/* File upload modal */}
+          <Dialog open={fileModalOpen} onOpenChange={setFileModalOpen}>
+            <DialogContent className="sm:max-w-lg w-full max-h-[85vh] overflow-hidden">
+              <DialogHeader>
+                <DialogTitle>Upload files</DialogTitle>
+                <DialogDescription>
+                  Max 100MB per file and combined per upload.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-3 min-h-0">
+                {pendingFiles.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    No files selected.
+                  </div>
+                ) : (
+                  <div className="flex-1 min-h-[96px] max-h-[50vh] overflow-auto divide-y rounded-md border">
+                    {pendingFiles.map((pf) => (
+                      <div
+                        key={pf.id}
+                        className="flex items-center justify-between p-2"
+                      >
+                        <div className="min-w-0">
+                          <div
+                            className="text-sm font-medium truncate max-w-[220px] sm:max-w-[360px]"
+                            title={pf.name}
+                          >
+                            {pf.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatBytes(pf.size)} • {pf.type || "file"}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {pf.status !== "pending" && (
+                            <div className="text-xs text-muted-foreground w-12 text-right">
+                              {pf.progress}%
+                            </div>
+                          )}
+                          {pf.status === "error" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="h-7 px-2"
+                              onClick={() => retryFile(pf.id)}
+                            >
+                              Retry
+                            </Button>
+                          )}
+                          <button
+                            className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-accent disabled:opacity-50"
+                            onClick={() => removePendingFile(pf.id)}
+                            title="Remove"
+                            disabled={fileUploading}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="text-sm flex items-center justify-between">
+                  <div
+                    className={
+                      hasOversizeFile ? "text-red-600" : "text-muted-foreground"
+                    }
+                  >
+                    Combined: {formatBytes(totalFileSize)} / {combinedCapLabel}{" "}
+                    MB
+                  </div>
+                  {overCombinedLimit && (
+                    <div className="text-red-600">Over combined limit</div>
+                  )}
+                </div>
+
+                {hasOversizeFile && (
+                  <div className="text-xs text-red-600">
+                    One or more files exceed 100MB.
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setFileModalOpen(false)}
+                    disabled={fileUploading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleFileUpload}
+                    disabled={
+                      fileUploading ||
+                      pendingFiles.length === 0 ||
+                      hasOversizeFile ||
+                      overCombinedLimit
+                    }
+                  >
+                    {fileUploading ? "Uploading..." : "Upload"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </form>
       </div>
     );
@@ -672,6 +973,11 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
           <PopoverContent
             className="w-52 p-2 rounded-2xl border-2 shadow-xl shadow-black/10 dark:shadow-black/50"
             side="top"
+            align="start"
+            sideOffset={8}
+            alignOffset={-8}
+            avoidCollisions={true}
+            collisionPadding={16}
           >
             <div className="space-y-1">
               <button
@@ -681,7 +987,10 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
                 <span className="text-base">📝</span>
                 <span className="font-medium">Rich Text Note</span>
               </button>
-              <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-accent/80 transition-colors group">
+              <button
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-accent/80 transition-colors group"
+                onClick={handleFileUploadClick}
+              >
                 <span className="text-base">📄</span>
                 <span className="font-medium">File Upload</span>
               </button>
@@ -774,7 +1083,120 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
         onChange={handleMultiplePhotos}
         className="hidden"
       />
+      {/* Hidden input for any files */}
+      <input
+        ref={anyFileInputRef}
+        type="file"
+        multiple
+        onChange={(e) => handleGenericFilesSelected(e.target.files)}
+        className="hidden"
+      />
       {uploadDialog}
+      {/* File upload modal for compact composer */}
+      <Dialog open={fileModalOpen} onOpenChange={setFileModalOpen}>
+        <DialogContent className="sm:max-w-lg w-full max-h-[85vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Upload files</DialogTitle>
+            <DialogDescription>
+              Max 100MB per file and combined per upload.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 min-h-0">
+            {pendingFiles.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                No files selected.
+              </div>
+            ) : (
+              <div className="flex-1 min-h-[96px] max-h-[50vh] overflow-auto divide-y rounded-md border">
+                {pendingFiles.map((pf) => (
+                  <div
+                    key={pf.id}
+                    className="flex items-center justify-between p-2"
+                  >
+                    <div className="min-w-0">
+                      <div
+                        className="text-sm font-medium truncate max-w-[220px] sm:max-w-[360px]"
+                        title={pf.name}
+                      >
+                        {pf.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatBytes(pf.size)} • {pf.type || "file"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {pf.status !== "pending" && (
+                        <div className="text-xs text-muted-foreground w-12 text-right">
+                          {pf.progress}%
+                        </div>
+                      )}
+                      {pf.status === "error" && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-7 px-2"
+                          onClick={() => retryFile(pf.id)}
+                        >
+                          Retry
+                        </Button>
+                      )}
+                      <button
+                        className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-accent disabled:opacity-50"
+                        onClick={() => removePendingFile(pf.id)}
+                        title="Remove"
+                        disabled={fileUploading}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="text-sm flex items-center justify-between">
+              <div
+                className={
+                  hasOversizeFile ? "text-red-600" : "text-muted-foreground"
+                }
+              >
+                Combined: {formatBytes(totalFileSize)} / {combinedCapLabel} MB
+              </div>
+              {overCombinedLimit && (
+                <div className="text-red-600">Over combined limit</div>
+              )}
+            </div>
+            {hasOversizeFile && (
+              <div className="text-xs text-red-600">
+                One or more files exceed 100MB.
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setFileModalOpen(false)}
+                disabled={fileUploading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleFileUpload}
+                disabled={
+                  fileUploading ||
+                  pendingFiles.length === 0 ||
+                  hasOversizeFile ||
+                  overCombinedLimit
+                }
+              >
+                {fileUploading ? "Uploading..." : "Upload"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
