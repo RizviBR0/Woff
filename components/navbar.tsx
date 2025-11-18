@@ -12,7 +12,6 @@ import {
   X,
   Info,
   Mail,
-  Github,
   ExternalLink,
   HelpCircle,
   FileText,
@@ -42,13 +41,6 @@ const navLinks = [
     href: "/blog",
     icon: FileText,
     description: "Product updates, tips, and news",
-  },
-  {
-    name: "GitHub",
-    href: "https://github.com/rizvibr0",
-    icon: Github,
-    external: true,
-    description: "View source code",
   },
 ];
 

@@ -311,17 +311,18 @@ export const EntryCard = memo(function EntryCard({
                   <span>🎨</span>
                   <span>Drawing</span>
                 </div>
-                <div className="relative">
-                  <NextImage
-                    src={dataUrl}
-                    alt="Hand drawn image"
-                    width={800}
-                    height={600}
-                    unoptimized
-                    className="max-w-full h-auto rounded-lg border border-border/20 cursor-pointer hover:opacity-90 transition-opacity"
-                    style={{ maxHeight: "300px" }}
-                    onClick={() => handleView(dataUrl)}
-                  />
+                <div className="mt-2 w-full max-w-xs">
+                  <div className="relative w-full aspect-square">
+                    <NextImage
+                      src={dataUrl}
+                      alt="Hand drawn image"
+                      fill
+                      unoptimized
+                      sizes="(max-width: 768px) 60vw, 260px"
+                      className="object-contain rounded-lg border border-border/20 cursor-pointer hover:opacity-90 transition-opacity bg-background"
+                      onClick={() => handleView(dataUrl)}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -351,10 +352,10 @@ export const EntryCard = memo(function EntryCard({
             </div>
           </div>
 
-          {/* Image view modal */}
+          {/* Image view modal (canvas sits below the app top bar) */}
           {showImageModal && currentImageUrl && (
             <div
-              className={`fixed inset-0 ${modalBgColor} z-50 flex items-center justify-center p-2 sm:p-4 transition-colors duration-300`}
+              className={`fixed inset-x-0 bottom-0 top-10 ${modalBgColor} z-[40] flex items-center justify-center transition-colors duration-300`}
               onClick={() => setShowImageModal(false)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
@@ -364,29 +365,21 @@ export const EntryCard = memo(function EntryCard({
               tabIndex={-1}
             >
               <div
-                className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center"
+                className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center px-2 sm:px-4 py-4"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div
-                  className="relative rounded-lg shadow-2xl"
-                  style={{
-                    minWidth: "50vw",
-                    minHeight: "50vh",
-                    maxWidth: "95vw",
-                    maxHeight: "95vh",
-                  }}
-                >
+                <div className="relative w-full h-full max-w-[95vw] max-h-[95vh] flex items-center justify-center">
                   <NextImage
                     src={currentImageUrl}
                     alt="Image - full view"
                     fill
                     unoptimized
                     sizes="(max-width: 768px) 95vw, 90vw"
-                    className="object-contain rounded-lg"
+                    className="object-contain rounded-lg shadow-2xl"
                   />
                 </div>
                 {/* Control buttons positioned at top right of viewport - adaptive colors */}
-                <div className="fixed top-4 right-4 flex gap-3 z-10">
+                <div className="fixed top-4 right-4 flex gap-3 z-50">
                   <Button
                     size="icon"
                     variant="secondary"
@@ -463,17 +456,18 @@ export const EntryCard = memo(function EntryCard({
                   <span>📷</span>
                   <span>Photo</span>
                 </div>
-                <div className="relative">
-                  <NextImage
-                    src={dataUrl}
-                    alt="Photo"
-                    width={800}
-                    height={600}
-                    unoptimized
-                    className="max-w-full h-auto rounded-lg border border-border/20 cursor-pointer hover:opacity-90 transition-opacity"
-                    style={{ maxHeight: "300px" }}
-                    onClick={() => handleView(dataUrl)}
-                  />
+                <div className="mt-2 w-full max-w-xs">
+                  <div className="relative w-full aspect-[4/3]">
+                    <NextImage
+                      src={dataUrl}
+                      alt="Photo"
+                      fill
+                      unoptimized
+                      sizes="(max-width: 768px) 60vw, 260px"
+                      className="object-contain rounded-lg border border-border/20 cursor-pointer hover:opacity-90 transition-opacity bg-background"
+                      onClick={() => handleView(dataUrl)}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -503,10 +497,10 @@ export const EntryCard = memo(function EntryCard({
             </div>
           </div>
 
-          {/* Image view modal - shared with drawings */}
+          {/* Image view modal for photos (canvas sits below the app top bar) */}
           {showImageModal && currentImageUrl && (
             <div
-              className={`fixed inset-0 ${modalBgColor} z-50 flex items-center justify-center p-2 sm:p-4 transition-colors duration-300`}
+              className={`fixed inset-x-0 bottom-0 top-10 ${modalBgColor} z-[40] flex items-center justify-center transition-colors duration-300`}
               onClick={() => setShowImageModal(false)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
@@ -516,29 +510,21 @@ export const EntryCard = memo(function EntryCard({
               tabIndex={-1}
             >
               <div
-                className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center"
+                className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center px-2 sm:px-4 py-4"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div
-                  className="relative rounded-lg shadow-2xl"
-                  style={{
-                    minWidth: "50vw",
-                    minHeight: "50vh",
-                    maxWidth: "95vw",
-                    maxHeight: "95vh",
-                  }}
-                >
+                <div className="relative w-full h-full max-w-[95vw] max-h-[95vh] flex items-center justify-center">
                   <NextImage
                     src={currentImageUrl}
                     alt="Image - full view"
                     fill
                     unoptimized
                     sizes="(max-width: 768px) 95vw, 90vw"
-                    className="object-contain rounded-lg"
+                    className="object-contain rounded-lg shadow-2xl"
                   />
                 </div>
                 {/* Control buttons positioned at top right of viewport - adaptive colors */}
-                <div className="fixed top-4 right-4 flex gap-3 z-10">
+                <div className="fixed top-4 right-4 flex gap-3 z-50">
                   <Button
                     size="icon"
                     variant="secondary"
@@ -737,8 +723,8 @@ export const EntryCard = memo(function EntryCard({
                   {hovering && (
                     <div className="absolute inset-0 bg-black/60 rounded flex items-center justify-center transition-all duration-200">
                       <div className="rounded-lg px-3 py-2 flex items-center gap-2 text-sm font-medium bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-gray-100 border border-border/30">
-                        <Download className="h-4 w-4" />
-                        Download All
+                        <Eye className="h-4 w-4" />
+                        View All
                       </div>
                     </div>
                   )}

@@ -16,6 +16,7 @@ import {
   Mail,
   Heart,
   Link,
+  Calendar,
 } from "lucide-react";
 
 const features = [
@@ -181,20 +182,26 @@ export function HomepageSections() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Button
+              size="lg"
+              className="rounded-full group"
               onClick={() =>
-                window.open("https://github.com/rizvibr0", "_blank")
+                (window.location.href = "mailto:sabbirh9990@gmail.com")
               }
+            >
+              <Mail className="w-4 h-4 mr-2" />
+              Contact Us
+              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+            </Button>
+            <Button
               variant="outline"
               size="lg"
               className="rounded-full group"
+              onClick={() =>
+                (window.location.href = "https://calendly.com/rizvibr0/30min")
+              }
             >
-              <Github className="w-4 h-4 mr-2" />
-              GitHub
-              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
-            <Button size="lg" className="rounded-full group">
-              <Mail className="w-4 h-4 mr-2" />
-              Contact Us
+              <Calendar className="w-4 h-4 mr-2" />
+              Schedule a Meeting
               <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
             </Button>
           </div>

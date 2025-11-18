@@ -2833,17 +2833,21 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
         {/* Passcode Entry Dialog */}
         <Dialog
           open={showPasscodeDialog}
-          onOpenChange={() => {
-            if (!isUnlocking) {
-              setShowPasscodeDialog(false);
-              setPasscodeError(""); // Clear errors when dialog is closed
-              setPasscodeInput(""); // Clear input as well
+          // Prevent accidental dismissal via overlay click or escape
+          onOpenChange={(open) => {
+            // Only allow explicit programmatic close (unlock or Go back)
+            if (open) {
+              setShowPasscodeDialog(true);
             }
           }}
         >
           <DialogPortal>
             <DialogOverlay className="bg-black/50 backdrop-blur-md" />
-            <DialogContent className="sm:max-w-md fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background/95 backdrop-blur-sm p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg">
+            <DialogContent
+              onInteractOutside={(e) => e.preventDefault()}
+              onEscapeKeyDown={(e) => e.preventDefault()}
+              className="sm:max-w-md fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background/95 backdrop-blur-sm p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg"
+            >
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Lock className="w-5 h-5" />
@@ -2893,11 +2897,13 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                   <Button
                     variant="outline"
                     onClick={() => {
-                      // If we have a note with space info, go to the room
+                      // Allow explicit dismissal via navigation
+                      setShowPasscodeDialog(false);
+                      setPasscodeError("");
+                      setPasscodeInput("");
                       if (note?.space_slug) {
                         router.push(`/${note.space_slug}`);
                       } else {
-                        // Otherwise, go back in history
                         router.back();
                       }
                     }}

@@ -1,8 +1,17 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Undo2, RotateCcw, Check, Palette } from "lucide-react";
+import {
+  X,
+  Undo2,
+  Redo2,
+  RotateCcw,
+  Check,
+  Palette,
+  Eraser,
+  Download,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,34 +34,123 @@ const COLORS = [
   "#800080", // Purple
 ];
 
-const BRUSH_SIZES = [2, 6, 12];
+const BRUSH_SIZES = [2, 4, 8, 12, 20];
+
+type Point = {
+  x: number;
+  y: number;
+};
+
+type Stroke = {
+  points: Point[];
+  color: string;
+  size: number;
+  mode: "pen" | "eraser";
+};
 
 export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentColor, setCurrentColor] = useState("#000000");
-  const [brushSize, setBrushSize] = useState(4);
-  const [paths, setPaths] = useState<ImageData[]>([]);
+  const [brushSize, setBrushSize] = useState(6);
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [redoStack, setRedoStack] = useState<Stroke[]>([]);
+  const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
+  const [isEraser, setIsEraser] = useState(false);
+  const [canvasInfo, setCanvasInfo] = useState<{ css: number; px: number }>({
+    css: 500,
+    px: 1500,
+  });
+
+  // Stop drawing globally when pointer is released anywhere,
+  // so we can resume cleanly on next press even if it happens
+  // outside the canvas.
+  useEffect(() => {
+    const handlePointerUp = () => {
+      setIsDrawing(false);
+      if (currentStroke) {
+        setStrokes((prev) => [...prev, currentStroke]);
+        setCurrentStroke(null);
+      }
+    };
+
+    window.addEventListener("mouseup", handlePointerUp);
+    window.addEventListener("touchend", handlePointerUp);
+    window.addEventListener("touchcancel", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("mouseup", handlePointerUp);
+      window.removeEventListener("touchend", handlePointerUp);
+      window.removeEventListener("touchcancel", handlePointerUp);
+    };
+  }, [currentStroke]);
+
+  // Resize and redraw in a vector-like way
+  const redraw = useCallback(
+    (ctx: CanvasRenderingContext2D, dpr: number, cssSize: number) => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, cssSize, cssSize);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, cssSize, cssSize);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.imageSmoothingEnabled = true;
+
+      const allStrokes = currentStroke ? [...strokes, currentStroke] : strokes;
+
+      allStrokes.forEach((stroke) => {
+        if (stroke.points.length < 2) return;
+        ctx.beginPath();
+        ctx.strokeStyle = stroke.mode === "eraser" ? "#ffffff" : stroke.color;
+        ctx.lineWidth = stroke.size;
+        for (let i = 0; i < stroke.points.length - 1; i++) {
+          const p0 = stroke.points[i];
+          const p1 = stroke.points[i + 1];
+          const midX = (p0.x + p1.x) / 2;
+          const midY = (p0.y + p1.y) / 2;
+          if (i === 0) {
+            ctx.moveTo(p0.x, p0.y);
+          }
+          ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+        }
+        ctx.stroke();
+      });
+    },
+    [strokes, currentStroke]
+  );
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const setup = () => {
+      const canvas = canvasRef.current;
+      const container = containerRef.current;
+      if (!canvas || !container) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+      const maxCss = Math.min(800, Math.floor(container.clientWidth || 500));
+      const cssSize = Math.max(360, maxCss);
+      const dpr = Math.max(2, Math.min(4, window.devicePixelRatio || 2));
+      const pxSize = Math.floor(cssSize * dpr);
 
-    // Set canvas size - 1:1 aspect ratio, larger size
-    canvas.width = 1000;
-    canvas.height = 1000;
+      canvas.width = pxSize;
+      canvas.height = pxSize;
+      canvas.style.width = `${cssSize}px`;
+      canvas.style.height = `${cssSize}px`;
+      setCanvasInfo({ css: cssSize, px: pxSize });
 
-    // Set initial canvas background to white
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+      redraw(ctx, dpr, cssSize);
+    };
 
-    // Configure drawing settings
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-  }, [isOpen]);
+    // Only initialize when the dialog is open and canvas is mounted
+    if (!isOpen) return;
+
+    setup();
+    const ro = new ResizeObserver(() => setup());
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [isOpen, redraw]);
 
   const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
@@ -60,89 +158,84 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
 
     const rect = canvas.getBoundingClientRect();
 
-    // Get the scale factor between canvas size and display size
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    // Store points in CSS coordinates (0..cssSize) so
+    // they line up with what the user sees; we already
+    // handle high-DPI via context scaling in redraw.
+    const getRelative = (clientX: number, clientY: number) => ({
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    });
 
     if ("touches" in e) {
-      // Touch event
       const touch = e.touches[0] || e.changedTouches[0];
-      return {
-        x: (touch.clientX - rect.left) * scaleX,
-        y: (touch.clientY - rect.top) * scaleY,
-      };
+      return getRelative(touch.clientX, touch.clientY);
     } else {
-      // Mouse event
-      return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY,
-      };
+      return getRelative(e.clientX, e.clientY);
     }
   };
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Save current state for undo
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    setPaths((prev) => [...prev, imageData]);
-
-    setIsDrawing(true);
     const { x, y } = getCoordinates(e);
-
-    ctx.strokeStyle = currentColor;
-    ctx.lineWidth = brushSize;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
+    const mode = isEraser ? "eraser" : "pen";
+    const stroke: Stroke = {
+      points: [{ x, y }],
+      color: currentColor,
+      size: brushSize,
+      mode,
+    };
+    setCurrentStroke(stroke);
+    setIsDrawing(true);
+    setRedoStack([]);
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return;
+    if (!currentStroke) return;
     e.preventDefault();
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    // For mouse, ignore moves when no button is pressed.
+    if ("buttons" in e && e.buttons === 0) {
+      return;
+    }
 
     const { x, y } = getCoordinates(e);
-
-    ctx.lineTo(x, y);
-    ctx.stroke();
+    setCurrentStroke((prev) =>
+      prev ? { ...prev, points: [...prev.points, { x, y }] } : prev
+    );
   };
 
   const stopDrawing = () => {
+    if (currentStroke) {
+      setStrokes((prev) => [...prev, currentStroke]);
+      setCurrentStroke(null);
+    }
     setIsDrawing(false);
   };
 
   const undo = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || paths.length === 0) return;
+    setStrokes((prev) => {
+      if (prev.length === 0) return prev;
+      const copy = [...prev];
+      const last = copy.pop()!;
+      setRedoStack((r) => [...r, last]);
+      return copy;
+    });
+  };
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const lastPath = paths[paths.length - 1];
-    ctx.putImageData(lastPath, 0, 0);
-    setPaths((prev) => prev.slice(0, -1));
+  const redo = () => {
+    setRedoStack((prev) => {
+      if (prev.length === 0) return prev;
+      const copy = [...prev];
+      const last = copy.pop()!;
+      setStrokes((s) => [...s, last]);
+      return copy;
+    });
   };
 
   const clear = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    setPaths([]);
+    setStrokes([]);
+    setRedoStack([]);
+    setCurrentStroke(null);
   };
 
   const handleSave = () => {
@@ -152,6 +245,16 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
     const dataUrl = canvas.toDataURL("image/png");
     onSave(dataUrl);
     onClose();
+  };
+
+  const handleDownload = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const url = canvas.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `drawing-${Date.now()}.png`;
+    a.click();
   };
 
   return (
@@ -165,22 +268,22 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
         </DialogHeader>
 
         <div className="p-4 overflow-auto">
-          {/* Main Layout: Canvas Left, Controls Right */}
-          <div className="flex gap-4 items-start justify-center">
+          {/* Main Layout: responsive column on small screens, row on desktop */}
+          <div className="flex flex-col md:flex-row gap-4 items-start justify-center">
             {/* Drawing Canvas - Left Side */}
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0" ref={containerRef}>
               <div className="relative">
                 <canvas
                   ref={canvasRef}
                   className="border-2 border-border rounded-xl cursor-crosshair bg-white touch-none shadow-lg transition-all duration-200 hover:shadow-xl"
                   style={{
-                    width: "500px",
-                    height: "500px",
+                    width: `${canvasInfo.css}px`,
+                    height: `${canvasInfo.css}px`,
                   }}
                   onMouseDown={startDrawing}
                   onMouseMove={draw}
                   onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
+                  onMouseLeave={draw}
                   onTouchStart={startDrawing}
                   onTouchMove={draw}
                   onTouchEnd={stopDrawing}
@@ -191,115 +294,138 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
               {/* Canvas Info */}
               <div className="text-center mt-2">
                 <div className="text-xs text-muted-foreground">
-                  1000 × 1000px (1:1)
+                  {canvasInfo.px} × {canvasInfo.px}px ({canvasInfo.css}×
+                  {canvasInfo.css} CSS)
                 </div>
               </div>
             </div>
 
-            {/* Compact Controls Panel - Right Side */}
-            <div className="w-[180px] flex-shrink-0 space-y-3">
-              {/* Color Palette Section */}
-              <div className="bg-muted/30 rounded-lg p-2 border border-border/50">
-                <div className="flex items-center gap-1 mb-2">
-                  <Palette className="h-3 w-3 text-primary" />
-                  <span className="font-medium text-xs">Colors</span>
+            {/* Compact Controls Panel - Right/Bottom, simplified */}
+            <div className="w-full md:w-[200px] flex-shrink-0 space-y-3 md:max-h-[520px] md:overflow-y-auto">
+              <div className="bg-muted/30 rounded-lg p-2 border border-border/50 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    <Palette className="h-3 w-3 text-primary" />
+                    <span className="font-medium text-xs">Tools</span>
+                  </div>
+                  <Button
+                    variant={isEraser ? "default" : "outline"}
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setIsEraser((v) => !v)}
+                  >
+                    <Eraser className="h-3 w-3" />
+                  </Button>
                 </div>
-                <div className="grid grid-cols-3 gap-1">
-                  {COLORS.map((color) => (
-                    <button
-                      key={color}
-                      className={`w-7 h-7 rounded-md border transition-all ${
-                        currentColor === color
-                          ? "border-primary scale-105 shadow-md"
-                          : "border-border hover:scale-105"
-                      }`}
-                      style={{ backgroundColor: color }}
-                      onClick={() => setCurrentColor(color)}
-                    >
-                      {currentColor === color && (
-                        <div className="w-full h-full rounded-sm bg-white/30" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
-              {/* Brush Size Section */}
-              <div className="bg-muted/30 rounded-lg p-2 border border-border/50">
-                <div className="flex items-center gap-1 mb-2">
-                  <span className="font-medium text-xs">
-                    Size ({brushSize}px)
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-1">
-                  {BRUSH_SIZES.map((size) => (
-                    <button
-                      key={size}
-                      className={`w-7 h-7 rounded-md border transition-all flex items-center justify-center ${
-                        brushSize === size
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:border-primary/50"
-                      }`}
-                      onClick={() => setBrushSize(size)}
-                    >
-                      <div
-                        className="rounded-full bg-foreground"
-                        style={{
-                          width: Math.min(size * 0.4, 8),
-                          height: Math.min(size * 0.4, 8),
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    {COLORS.map((color) => (
+                      <button
+                        key={color}
+                        className={`w-5 h-5 rounded-full border transition-all ${
+                          currentColor === color
+                            ? "border-primary scale-110 shadow"
+                            : "border-border hover:scale-105"
+                        }`}
+                        style={{ backgroundColor: color }}
+                        onClick={() => {
+                          setCurrentColor(color);
+                          setIsEraser(false);
                         }}
                       />
-                    </button>
-                  ))}
+                    ))}
+                  </div>
+                  <input
+                    type="color"
+                    value={currentColor}
+                    onChange={(e) => {
+                      setCurrentColor(e.target.value);
+                      setIsEraser(false);
+                    }}
+                    className="w-8 h-8 rounded-md border border-border/50 cursor-pointer"
+                    aria-label="Pick custom color"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground w-12">
+                    Size
+                  </span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={32}
+                    value={brushSize}
+                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-[11px] tabular-nums w-8 text-right">
+                    {brushSize}
+                  </span>
                 </div>
               </div>
 
-              {/* Action Buttons Section */}
               <div className="bg-muted/30 rounded-lg p-2 border border-border/50">
-                <div className="space-y-1">
+                <div className="grid grid-cols-3 gap-2">
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
                     onClick={undo}
-                    disabled={paths.length === 0}
-                    className="w-full h-7 text-xs px-2"
+                    disabled={strokes.length === 0}
+                    className="h-8"
                   >
-                    <Undo2 className="h-3 w-3 mr-1" />
-                    Undo
+                    <Undo2 className="h-3 w-3" />
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm"
-                    onClick={clear}
-                    className="w-full h-7 text-xs px-2 hover:bg-destructive/10"
+                    size="icon"
+                    onClick={redo}
+                    disabled={redoStack.length === 0}
+                    className="h-8"
                   >
-                    <RotateCcw className="h-3 w-3 mr-1" />
-                    Clear
+                    <Redo2 className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={clear}
+                    className="h-8 hover:bg-destructive/10"
+                  >
+                    <RotateCcw className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
 
-              {/* Save Actions */}
-              <div className="bg-gradient-to-b from-primary/5 to-secondary/5 rounded-lg p-3 border border-primary/20">
-                <div className="space-y-2">
+              <div className="bg-gradient-to-b from-primary/5 to-secondary/5 rounded-lg p-2 border border-primary/20">
+                <div className="grid grid-cols-2 gap-2 mb-2">
                   <Button
                     onClick={handleSave}
                     size="sm"
-                    className="w-full h-9 text-sm font-medium"
+                    className="h-8 text-xs font-medium flex-1"
                   >
-                    <Check className="h-4 w-4 mr-2" />
-                    Save Drawing
+                    <Check className="h-3 w-3 mr-1" />
+                    Send
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={onClose}
-                    className="w-full h-8 text-xs"
+                    className="h-8 text-xs flex-1"
                   >
                     <X className="h-3 w-3 mr-1" />
-                    Cancel
+                    Close
                   </Button>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownload}
+                  className="w-full h-8 text-xs"
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  Download PNG
+                </Button>
               </div>
             </div>
           </div>
