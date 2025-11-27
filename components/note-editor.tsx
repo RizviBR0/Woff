@@ -28,9 +28,6 @@ import {
   Moon,
   Sun,
   Monitor,
-  Settings,
-  Lock,
-  Unlock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,10 +43,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogOverlay,
-  DialogPortal,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { SlashMenu } from "./slash-menu";
 import { updateNote, type Note } from "@/lib/actions";
@@ -80,13 +74,6 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastSavedContent, setLastSavedContent] = useState("");
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
-  const [showPasscodeDialog, setShowPasscodeDialog] = useState(false);
-  const [passcodeInput, setPasscodeInput] = useState("");
-  const [passcodeError, setPasscodeError] = useState("");
-  const [isUnlocking, setIsUnlocking] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
-  const [showLockSettings, setShowLockSettings] = useState(false);
-  const [tempPasscode, setTempPasscode] = useState("");
 
   const { theme, setTheme } = useTheme();
 
@@ -117,6 +104,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout>();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorInitializedRef = useRef(false); // Track if editor content was initialized
 
   // Load note from server (via API route to avoid client-side server action calls)
   useEffect(() => {
@@ -132,18 +120,6 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
           );
           setNote(fetchedNote);
           setLastSavedContent(fetchedNote.content);
-
-          // Set lock status for display purposes
-          setIsLocked(fetchedNote.is_locked || false);
-
-          // Check if note is locked and user needs to enter passcode
-          if (
-            fetchedNote.is_locked &&
-            fetchedNote.created_by_device_id !== getCookieValue("device_id")
-          ) {
-            setShowPasscodeDialog(true);
-            setPasscodeError(""); // Clear any previous errors
-          }
         } else {
           console.log("📝 Note not found in database, creating new note");
           // Create a new note that will be saved to database on first save
@@ -159,8 +135,6 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
             created_by_device_id: getCookieValue("device_id") || "mock-device",
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            is_locked: false,
-            passcode: undefined,
           };
           setNote(mockNote);
           setLastSavedContent(mockNote.content);
@@ -180,8 +154,6 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
           created_by_device_id: getCookieValue("device_id") || "mock-device",
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          is_locked: false,
-          passcode: undefined,
         };
         setNote(mockNote);
         setLastSavedContent(mockNote.content);
@@ -441,8 +413,19 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
           console.log("🔄 Autosave completed successfully");
           setLastSavedContent(noteToSave.content);
 
-          // Update local state with server response
-          setNote((prev) => (prev ? { ...prev, ...updatedNote } : null));
+          // Don't update note state from server response during autosave
+          // This prevents overwriting what the user is currently typing
+          // Only update non-content fields if needed
+          if (updatedNote.updated_at) {
+            setNote((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    updated_at: updatedNote.updated_at,
+                  }
+                : null
+            );
+          }
         }
 
         setSaveStatus("saved");
@@ -610,31 +593,29 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
     };
   }, []);
 
-  // Initialize editor content properly
+  // Initialize editor content properly - only on initial load
   useEffect(() => {
-    if (note && editorRef.current) {
-      // Only set content if it's different and editor is empty or different
-      const currentContent = editorRef.current.innerHTML;
-      if (currentContent !== note.content) {
-        editorRef.current.innerHTML = note.content || "";
+    if (note && editorRef.current && !editorInitializedRef.current) {
+      // Only initialize content once when note is first loaded
+      editorInitializedRef.current = true;
+      editorRef.current.innerHTML = note.content || "";
 
-        // If content is empty, focus the editor and position cursor properly
-        if (!note.content || note.content.trim() === "") {
-          editorRef.current.focus();
-          const range = document.createRange();
-          const sel = window.getSelection();
+      // If content is empty, focus the editor and position cursor properly
+      if (!note.content || note.content.trim() === "") {
+        editorRef.current.focus();
+        const range = document.createRange();
+        const sel = window.getSelection();
 
-          if (sel) {
-            range.selectNodeContents(editorRef.current);
-            range.collapse(true); // Collapse to start
-            sel.removeAllRanges();
-            sel.addRange(range);
-          }
+        if (sel) {
+          range.selectNodeContents(editorRef.current);
+          range.collapse(true); // Collapse to start
+          sel.removeAllRanges();
+          sel.addRange(range);
         }
-
-        // Calculate initial stats
-        calculateStats();
       }
+
+      // Calculate initial stats
+      calculateStats();
     }
   }, [note, calculateStats]);
 
@@ -785,7 +766,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
 
   // Handle title editing mode
   const startTitleEdit = () => {
-    if (!note || isLocked) return;
+    if (!note) return;
     setTempTitle(note.title);
     setIsEditingTitle(true);
 
@@ -867,52 +848,6 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
       console.log("📝 Note updated locally:", updated);
       return updated;
     });
-  };
-
-  // Handle passcode verification
-  const handlePasscodeSubmit = async () => {
-    if (!note) return;
-
-    setIsUnlocking(true);
-    setPasscodeError(""); // Clear previous errors
-
-    try {
-      const { verifyNotePasscode } = await import("@/lib/actions");
-      const isValid = await verifyNotePasscode(note.slug, passcodeInput);
-
-      if (isValid) {
-        setIsLocked(false);
-        setShowPasscodeDialog(false);
-        setPasscodeInput("");
-        setPasscodeError("");
-      } else {
-        // Show error - invalid passcode
-        setPasscodeError("Invalid passcode. Please try again.");
-      }
-    } catch (error) {
-      console.error("Failed to verify passcode:", error);
-      setPasscodeError("Failed to verify passcode. Please try again.");
-    } finally {
-      setIsUnlocking(false);
-    }
-  };
-
-  // Handle lock settings update
-  const handleLockUpdate = async (isLocked: boolean, passcode?: string) => {
-    if (!note) return;
-
-    try {
-      const updatedNote = await updateNote(note.slug, {
-        is_locked: isLocked,
-        passcode: isLocked ? passcode : undefined,
-      });
-
-      setNote((prev) => (prev ? { ...prev, ...updatedNote } : null));
-      setShowLockSettings(false);
-      setTempPasscode("");
-    } catch (error) {
-      console.error("Failed to update lock settings:", error);
-    }
   };
 
   // Check if current user is the creator
@@ -1461,16 +1396,25 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   // Handle slash menu
   const handleSlashMenu = (e: React.KeyboardEvent) => {
     if (e.key === "/") {
-      // Always open slash menu on "/"; position it after the char inserts
-      setTimeout(() => {
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          const r = sel.getRangeAt(0);
-          const rect = r.getBoundingClientRect();
+      // Prevent the "/" from being inserted
+      e.preventDefault();
+
+      // Get cursor position for menu placement
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const r = sel.getRangeAt(0);
+        const rect = r.getBoundingClientRect();
+
+        // If rect has no dimensions (e.g., empty editor), use editor position
+        if (rect.width === 0 && rect.height === 0 && editorRef.current) {
+          const editorRect = editorRef.current.getBoundingClientRect();
+          setSlashMenuPos({ x: editorRect.left + 40, y: editorRect.top + 60 });
+        } else {
           setSlashMenuPos({ x: rect.left, y: rect.bottom + 5 });
-          setShowSlashMenu(true);
         }
-      }, 0);
+
+        setShowSlashMenu(true);
+      }
     } else if (showSlashMenu && e.key === "Escape") {
       e.preventDefault();
       setShowSlashMenu(false);
@@ -1483,49 +1427,15 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
 
     setShowSlashMenu(false);
 
-    // Save the current selection
-    const selection = window.getSelection();
-    if (!selection || !selection.rangeCount) {
+    // Focus the editor to ensure we can execute commands
+    editorRef.current.focus();
+
+    // Get the current selection
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) {
       console.log("❌ No selection available for slash menu");
       return;
     }
-
-    const range = selection.getRangeAt(0);
-    let container = range.startContainer;
-
-    // Find and remove the "/" character
-    if (container.nodeType === Node.TEXT_NODE && container.textContent) {
-      const text = container.textContent;
-      const cursorPos = range.startOffset;
-      console.log(
-        "🔍 Looking for slash in text:",
-        text,
-        "at position:",
-        cursorPos
-      );
-
-      // Look backwards for the slash
-      for (let i = cursorPos - 1; i >= 0; i--) {
-        if (text[i] === "/") {
-          console.log("✂️ Found and removing slash at position:", i);
-          // Create a range to delete the slash
-          const deleteRange = document.createRange();
-          deleteRange.setStart(container, i);
-          deleteRange.setEnd(container, i + 1);
-          deleteRange.deleteContents();
-          break;
-        }
-        // Stop if we hit a space or newline
-        if (text[i] === " " || text[i] === "\n") {
-          console.log("⏹️ Stopped search at space/newline at position:", i);
-          break;
-        }
-      }
-    }
-
-    // Now handle the formatting based on command type
-    const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) return;
 
     if (command === "insertHorizontalRule") {
       console.log("📏 Inserting horizontal rule");
@@ -2120,15 +2030,8 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={startTitleEdit}
-                      className={`text-2xl font-bold px-2 py-1 rounded-lg transition-colors ${
-                        isLocked
-                          ? "cursor-not-allowed opacity-60"
-                          : "hover:bg-accent/20"
-                      }`}
-                      title={
-                        isLocked ? "Note is locked" : "Click to edit title"
-                      }
-                      disabled={isLocked}
+                      className="text-2xl font-bold px-2 py-1 rounded-lg transition-colors hover:bg-accent/20"
+                      title="Click to edit title"
                     >
                       {note.title || "Untitled Note"}
                     </button>
@@ -2149,12 +2052,11 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                         setTempTitle(e.target.value)
                       }
                       placeholder="Untitled Note"
-                      disabled={isLocked}
                       className={`border-0 bg-transparent text-2xl font-bold px-2 py-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-0 placeholder:text-muted-foreground/50 transition-all duration-200 rounded-lg ${
                         !tempTitle.trim()
                           ? "text-red-500 bg-red-50 dark:bg-red-900/20"
                           : ""
-                      } ${isLocked ? "cursor-not-allowed opacity-60" : ""}`}
+                      }`}
                       style={{ width: `${Math.max(tempTitle.length, 12)}ch` }}
                       autoFocus
                       onKeyDown={(e) => {
@@ -2225,9 +2127,6 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                     <span>Saved</span>
                   </div>
                 )}
-                {(note?.is_locked || isLocked) && (
-                  <Lock className="h-4 w-4 text-orange-500" />
-                )}
               </div>
 
               <Button
@@ -2255,7 +2154,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                     className="flex items-center justify-between"
                   >
                     <div className="flex items-center">
-                      <Settings className="h-4 w-4 mr-2" />
+                      <Save className="h-4 w-4 mr-2" />
                       Auto-save
                     </div>
                     <div
@@ -2270,22 +2169,6 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                       />
                     </div>
                   </DropdownMenuItem>
-                  {isCreator && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => setShowLockSettings(true)}
-                        className="flex items-center"
-                      >
-                        {note?.is_locked ? (
-                          <Unlock className="h-4 w-4 mr-2" />
-                        ) : (
-                          <Lock className="h-4 w-4 mr-2" />
-                        )}
-                        {note?.is_locked ? "Lock Settings" : "Lock Note"}
-                      </DropdownMenuItem>
-                    </>
-                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() =>
@@ -2499,7 +2382,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
             <div className="relative">
               <div
                 ref={editorRef}
-                contentEditable={!isLocked}
+                contentEditable
                 suppressContentEditableWarning
                 data-placeholder="Start writing your note..."
                 onInput={handleContentChange}
@@ -2680,17 +2563,17 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                 {/* Link Section */}
                 <div className="space-y-3">
                   <div>
-                    <label className="text-sm font-medium">Public Link</label>
+                    <label className="text-sm font-medium">Share Link</label>
                     <div className="flex items-center gap-2 mt-1">
                       <Input
-                        value={`https://woff.space/v/${note.public_code}`}
+                        value={`https://woff.space/n/${note.slug}`}
                         readOnly
                         className="flex-1"
                       />
                       <Button
                         onClick={() => {
                           navigator.clipboard.writeText(
-                            `https://woff.space/v/${note.public_code}`
+                            `https://woff.space/n/${note.slug}`
                           );
                         }}
                         variant="outline"
@@ -2699,33 +2582,9 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                         Copy
                       </Button>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Visibility</label>
-                    <div className="flex gap-2 mt-1">
-                      <Badge
-                        variant={
-                          note.visibility === "public" ? "default" : "outline"
-                        }
-                      >
-                        Public
-                      </Badge>
-                      <Badge
-                        variant={
-                          note.visibility === "unlisted" ? "default" : "outline"
-                        }
-                      >
-                        Unlisted
-                      </Badge>
-                      <Badge
-                        variant={
-                          note.visibility === "private" ? "default" : "outline"
-                        }
-                      >
-                        Private
-                      </Badge>
-                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Anyone with this link can view and edit this note
+                    </p>
                   </div>
                 </div>
 
@@ -2734,11 +2593,11 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                   <label className="text-sm font-medium">QR Code</label>
                   <div className="p-4 bg-white rounded-lg border-2 border-border/20">
                     <div
-                      id={`qr-code-${note.public_code}`}
+                      id={`qr-code-${note.slug}`}
                       className="w-32 h-32 flex items-center justify-center"
                       dangerouslySetInnerHTML={{
                         __html: generateQRCode(
-                          `https://woff.space/v/${note.public_code}`
+                          `https://woff.space/n/${note.slug}`
                         ),
                       }}
                     />
@@ -2829,144 +2688,6 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
             </div>
           </DialogContent>
         </Dialog>
-
-        {/* Passcode Entry Dialog */}
-        <Dialog
-          open={showPasscodeDialog}
-          // Prevent accidental dismissal via overlay click or escape
-          onOpenChange={(open) => {
-            // Only allow explicit programmatic close (unlock or Go back)
-            if (open) {
-              setShowPasscodeDialog(true);
-            }
-          }}
-        >
-          <DialogPortal>
-            <DialogOverlay className="bg-black/50 backdrop-blur-md" />
-            <DialogContent
-              onInteractOutside={(e) => e.preventDefault()}
-              onEscapeKeyDown={(e) => e.preventDefault()}
-              className="sm:max-w-md fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background/95 backdrop-blur-sm p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg"
-            >
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Lock className="w-5 h-5" />
-                  Protected Note
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  This note is protected with a passcode. Enter the passcode to
-                  access it.
-                </p>
-                <Input
-                  type="password"
-                  placeholder="Enter 4-digit passcode"
-                  value={passcodeInput}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-                    setPasscodeInput(value);
-                    if (passcodeError) {
-                      setPasscodeError(""); // Clear error when user starts typing
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && passcodeInput.length === 4) {
-                      handlePasscodeSubmit();
-                    }
-                  }}
-                  disabled={isUnlocking}
-                  maxLength={4}
-                  className="text-center text-lg tracking-widest"
-                />
-                {passcodeError && (
-                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
-                    <p className="text-sm text-destructive text-center">
-                      {passcodeError}
-                    </p>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handlePasscodeSubmit}
-                    disabled={passcodeInput.length !== 4 || isUnlocking}
-                    className="flex-1"
-                  >
-                    {isUnlocking ? "Verifying..." : "Unlock"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      // Allow explicit dismissal via navigation
-                      setShowPasscodeDialog(false);
-                      setPasscodeError("");
-                      setPasscodeInput("");
-                      if (note?.space_slug) {
-                        router.push(`/${note.space_slug}`);
-                      } else {
-                        router.back();
-                      }
-                    }}
-                    disabled={isUnlocking}
-                  >
-                    Go back
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </DialogPortal>
-        </Dialog>
-
-        {/* Lock Settings Dialog - Only for creators */}
-        {isCreator && (
-          <Dialog open={showLockSettings} onOpenChange={setShowLockSettings}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
-                  Lock Settings
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    {note?.is_locked ? "Update Passcode" : "Set Passcode"}
-                  </label>
-                  <Input
-                    type="password"
-                    placeholder="Enter 4-digit passcode"
-                    value={tempPasscode}
-                    onChange={(e) => {
-                      const value = e.target.value
-                        .replace(/\D/g, "")
-                        .slice(0, 4);
-                      setTempPasscode(value);
-                    }}
-                    maxLength={4}
-                    className="text-center text-lg tracking-widest"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleLockUpdate(true, tempPasscode)}
-                    disabled={tempPasscode.length !== 4}
-                    className="flex-1"
-                  >
-                    {note?.is_locked ? "Update Lock" : "Lock Note"}
-                  </Button>
-                  {note?.is_locked && (
-                    <Button
-                      variant="outline"
-                      onClick={() => handleLockUpdate(false)}
-                    >
-                      Remove Lock
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
       </div>
     </>
   );

@@ -515,3 +515,21 @@ export async function updateSpaceActivity(spaceId: string): Promise<void> {
     .update({ last_activity_at: new Date().toISOString() })
     .eq("id", spaceId);
 }
+
+// Ensure device ID cookie exists and return it
+export async function ensureDeviceId(): Promise<string> {
+  const cookieStore = await cookies();
+  let deviceId = cookieStore.get("device_id")?.value;
+
+  if (!deviceId) {
+    deviceId = generateDeviceId();
+    cookieStore.set("device_id", deviceId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+    });
+  }
+
+  return deviceId;
+}

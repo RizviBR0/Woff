@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { SpaceContainer } from "@/components/space-container";
 import { cookies } from "next/headers";
-import { generateDeviceId } from "@/lib/slug";
 import { updateSpaceActivity } from "@/lib/actions";
 
 interface SpacePageProps {
@@ -48,18 +47,9 @@ export default async function SpacePage({ params }: SpacePageProps) {
 
   const entries = await getEntries(space.id);
 
-  // Ensure we have a device id cookie available for identity in UI
+  // Get device id from cookie (set by middleware)
   const cookieStore = await cookies();
-  let deviceId = cookieStore.get("device_id")?.value;
-  if (!deviceId) {
-    deviceId = generateDeviceId();
-    cookieStore.set("device_id", deviceId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 365,
-    });
-  }
+  const deviceId = cookieStore.get("device_id")?.value || "";
 
   return (
     <SpaceContainer

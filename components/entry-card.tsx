@@ -10,8 +10,15 @@ import {
   ExternalLink,
   Edit,
   Lock,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import JSZip from "jszip";
 import { useState, useEffect, memo } from "react";
 import { PhotoGallery } from "./photo-gallery";
@@ -914,6 +921,95 @@ export const EntryCard = memo(function EntryCard({
       const publicCode = noteData[1];
       const noteTitle = noteData[2] || "Untitled Note";
 
+      // Download note as PDF
+      const downloadNotePDF = async () => {
+        try {
+          // Fetch note content
+          const res = await fetch(`/api/notes/${noteSlug}`);
+          if (!res.ok) throw new Error("Failed to fetch note");
+          const note = await res.json();
+
+          // Dynamic import jsPDF
+          const { jsPDF } = await import("jspdf");
+          const doc = new jsPDF();
+
+          // Add title
+          doc.setFontSize(20);
+          doc.setFont("helvetica", "bold");
+          doc.text(note.title || noteTitle, 20, 20);
+
+          // Convert HTML content to plain text
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = note.content || "";
+          const textContent = tempDiv.textContent || tempDiv.innerText || "";
+
+          // Add content with word wrapping
+          doc.setFontSize(12);
+          doc.setFont("helvetica", "normal");
+          const lines = doc.splitTextToSize(textContent, 170);
+          doc.text(lines, 20, 35);
+
+          // Save PDF
+          doc.save(`${note.title || noteTitle}.pdf`);
+        } catch (error) {
+          console.error("Failed to download PDF:", error);
+        }
+      };
+
+      // Download note as Markdown
+      const downloadNoteMarkdown = async () => {
+        try {
+          // Fetch note content
+          const res = await fetch(`/api/notes/${noteSlug}`);
+          if (!res.ok) throw new Error("Failed to fetch note");
+          const note = await res.json();
+
+          // Convert HTML to Markdown (simplified)
+          const content = note.content || "";
+          const markdown = content
+            .replace(/<h1[^>]*>(.*?)<\/h1>/gi, "# $1\n\n")
+            .replace(/<h2[^>]*>(.*?)<\/h2>/gi, "## $1\n\n")
+            .replace(/<h3[^>]*>(.*?)<\/h3>/gi, "### $1\n\n")
+            .replace(/<h4[^>]*>(.*?)<\/h4>/gi, "#### $1\n\n")
+            .replace(/<p[^>]*>(.*?)<\/p>/gi, "$1\n\n")
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<li[^>]*>(.*?)<\/li>/gi, "- $1\n")
+            .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, "> $1\n\n")
+            .replace(
+              /<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gi,
+              "```\n$1\n```\n\n"
+            )
+            .replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`")
+            .replace(/<strong[^>]*>(.*?)<\/strong>/gi, "**$1**")
+            .replace(/<b[^>]*>(.*?)<\/b>/gi, "**$1**")
+            .replace(/<em[^>]*>(.*?)<\/em>/gi, "*$1*")
+            .replace(/<i[^>]*>(.*?)<\/i>/gi, "*$1*")
+            .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
+            .replace(/<hr\s*\/?>/gi, "---\n\n")
+            .replace(/<[^>]*>/g, "") // Remove remaining HTML tags
+            .replace(/&nbsp;/g, " ")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/\n{3,}/g, "\n\n"); // Clean up extra newlines
+
+          const fullMarkdown = `# ${note.title || noteTitle}\n\n${markdown}`;
+
+          // Download as .md file
+          const blob = new Blob([fullMarkdown], { type: "text/markdown" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${note.title || noteTitle}.md`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error("Failed to download Markdown:", error);
+        }
+      };
+
       return (
         <div
           id={`entry-${entry.id}`}
@@ -996,6 +1092,29 @@ export const EntryCard = memo(function EntryCard({
                 <ExternalLink className="h-3 w-3 mr-1" />
                 Open
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                  >
+                    <Download className="h-3 w-3 mr-1" />
+                    Download
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-40">
+                  <DropdownMenuItem onClick={downloadNotePDF}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Download PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={downloadNoteMarkdown}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Download MD
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
