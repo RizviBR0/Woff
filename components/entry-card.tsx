@@ -5,6 +5,7 @@ import {
   Download,
   X,
   Copy,
+  Check,
   FileText,
   ExternalLink,
   Edit,
@@ -26,6 +27,10 @@ export interface Entry {
   meta: any;
   created_by_device_id: string | null;
   created_at: string;
+  // Optimistic UI fields
+  isLoading?: boolean;
+  uploadProgress?: number;
+  uploadMessage?: string;
 }
 
 interface EntryCardProps {
@@ -45,6 +50,7 @@ export const EntryCard = memo(function EntryCard({
   const [noteLoaded, setNoteLoaded] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
   const [hovering, setHovering] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const isMine =
     !!entry.created_by_device_id &&
@@ -86,6 +92,32 @@ export const EntryCard = memo(function EntryCard({
       {firstLetter}
     </div>
   );
+
+  // Loading overlay component for optimistic UI
+  const loadingOverlay = entry.isLoading ? (
+    <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] rounded-lg flex items-center justify-center z-10">
+      <div className="flex flex-col items-center gap-2">
+        <div className="relative">
+          {/* Animated spinner */}
+          <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </div>
+        {entry.uploadMessage && (
+          <span className="text-xs text-muted-foreground font-medium">
+            {entry.uploadMessage}
+          </span>
+        )}
+        {typeof entry.uploadProgress === "number" &&
+          entry.uploadProgress > 0 && (
+            <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300 rounded-full"
+                style={{ width: `${entry.uploadProgress}%` }}
+              />
+            </div>
+          )}
+      </div>
+    </div>
+  ) : null;
 
   // Handle keyboard events for modal
   useEffect(() => {
@@ -238,7 +270,8 @@ export const EntryCard = memo(function EntryCard({
   const handleCopyText = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      // Optional: Add toast notification here if you have a toast system
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error("Failed to copy text:", error);
       // Fallback for older browsers
@@ -253,6 +286,8 @@ export const EntryCard = memo(function EntryCard({
         textArea.select();
         document.execCommand("copy");
         textArea.remove();
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
       } catch (fallbackError) {
         console.error("Fallback copy failed:", fallbackError);
       }
@@ -277,6 +312,110 @@ export const EntryCard = memo(function EntryCard({
     }
   };
 
+  // Handle placeholder/loading entries from optimistic UI
+  if (entry.isLoading && entry.id.startsWith("placeholder-")) {
+    const meta = entry.meta || {};
+    const metaType = meta.type || "";
+
+    // Determine icon and label based on meta type
+    let icon = "📤";
+    let label = "Uploading...";
+    let previewContent = null;
+
+    if (metaType === "photo" || metaType === "drawing") {
+      icon = metaType === "drawing" ? "🎨" : "📷";
+      label = metaType === "drawing" ? "Drawing" : "Photo";
+      if (meta.previewUrl) {
+        previewContent = (
+          <div className="mt-2 w-full max-w-xs">
+            <div className="relative w-full aspect-[4/3]">
+              <NextImage
+                src={meta.previewUrl}
+                alt="Preview"
+                fill
+                unoptimized
+                sizes="(max-width: 768px) 60vw, 260px"
+                className="object-contain rounded-lg border border-border/20 bg-background opacity-60"
+              />
+            </div>
+          </div>
+        );
+      }
+    } else if (metaType === "photos") {
+      icon = "🖼️";
+      label = `${meta.count || "Multiple"} Photos`;
+      if (meta.previewUrls && meta.previewUrls.length > 0) {
+        previewContent = (
+          <div className="mt-2 flex gap-1 flex-wrap max-w-xs">
+            {meta.previewUrls.slice(0, 4).map((url: string, i: number) => (
+              <div key={i} className="relative w-16 h-16">
+                <NextImage
+                  src={url}
+                  alt={`Preview ${i + 1}`}
+                  fill
+                  unoptimized
+                  className="object-cover rounded border border-border/20 opacity-60"
+                />
+              </div>
+            ))}
+            {meta.previewUrls.length > 4 && (
+              <div className="w-16 h-16 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
+                +{meta.previewUrls.length - 4}
+              </div>
+            )}
+          </div>
+        );
+      }
+    } else if (metaType === "files") {
+      icon = "📄";
+      const items = meta.items || [];
+      label =
+        items.length > 1 ? `${items.length} Files` : items[0]?.name || "File";
+    } else if (metaType === "note") {
+      icon = "📝";
+      label = "Note";
+    }
+
+    return (
+      <div
+        id={`entry-${entry.id}`}
+        className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+      >
+        {/* Loading overlay */}
+        {loadingOverlay}
+
+        {/* Avatar */}
+        {avatar}
+
+        {/* Message content */}
+        <div className="flex-1 min-w-0">
+          {/* Header: Name and Time */}
+          <div className="flex items-baseline gap-2 mb-1">
+            <span
+              className={`font-semibold text-sm ${
+                isMine ? "text-blue-600 dark:text-blue-400" : "text-foreground"
+              }`}
+            >
+              {nameLabel}
+            </span>
+            <span className="text-xs text-muted-foreground/60">
+              {formatTime(entry.created_at)}
+            </span>
+          </div>
+
+          {/* Content type indicator */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>{icon}</span>
+              <span>{label}</span>
+            </div>
+            {previewContent}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (entry.kind === "text" && entry.text) {
     // Check if this is a drawing
     if (entry.text.startsWith("DRAWING:")) {
@@ -287,6 +426,9 @@ export const EntryCard = memo(function EntryCard({
             id={`entry-${entry.id}`}
             className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
           >
+            {/* Loading overlay for optimistic UI */}
+            {loadingOverlay}
+
             {/* Avatar */}
             {avatar}
 
@@ -427,6 +569,9 @@ export const EntryCard = memo(function EntryCard({
             id={`entry-${entry.id}`}
             className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
           >
+            {/* Loading overlay for optimistic UI */}
+            {loadingOverlay}
+
             {/* Avatar */}
             {avatar}
 
@@ -635,6 +780,9 @@ export const EntryCard = memo(function EntryCard({
             id={`entry-${entry.id}`}
             className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
           >
+            {/* Loading overlay for optimistic UI */}
+            {loadingOverlay}
+
             {/* Avatar */}
             {avatar}
 
@@ -771,6 +919,9 @@ export const EntryCard = memo(function EntryCard({
           id={`entry-${entry.id}`}
           className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
         >
+          {/* Loading overlay for optimistic UI */}
+          {loadingOverlay}
+
           {/* Avatar */}
           {avatar}
 
@@ -857,6 +1008,9 @@ export const EntryCard = memo(function EntryCard({
         id={`entry-${entry.id}`}
         className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
       >
+        {/* Loading overlay for optimistic UI */}
+        {loadingOverlay}
+
         {/* Avatar */}
         {avatar}
 
@@ -886,11 +1040,24 @@ export const EntryCard = memo(function EntryCard({
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-xs"
+              className={`h-7 px-2 text-xs transition-all duration-200 ${
+                copied
+                  ? "bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-950/20 dark:text-green-400"
+                  : ""
+              }`}
               onClick={() => handleCopyText(entry.text || "")}
             >
-              <Copy className="h-3 w-3 mr-1" />
-              Copy
+              {copied ? (
+                <>
+                  <Check className="h-3 w-3 mr-1" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3 w-3 mr-1" />
+                  Copy
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -934,6 +1101,9 @@ export const EntryCard = memo(function EntryCard({
         id={`entry-${entry.id}`}
         className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
       >
+        {/* Loading overlay for optimistic UI */}
+        {loadingOverlay}
+
         {/* Avatar */}
         {avatar}
 
@@ -1017,6 +1187,9 @@ export const EntryCard = memo(function EntryCard({
       id={`entry-${entry.id}`}
       className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
     >
+      {/* Loading overlay for optimistic UI */}
+      {loadingOverlay}
+
       {/* Avatar */}
       {avatar}
 

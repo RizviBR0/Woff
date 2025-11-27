@@ -12,6 +12,7 @@ export interface Space {
   visibility: "public" | "unlisted" | "private";
   allow_public_post: boolean;
   created_at: string;
+  last_activity_at: string;
 }
 
 export async function createSpace(): Promise<Space> {
@@ -503,4 +504,14 @@ export async function validateRoomCode(roomCode: string): Promise<boolean> {
     console.error("Error validating room code:", error);
     return false;
   }
+}
+
+// Update space last activity timestamp
+export async function updateSpaceActivity(spaceId: string): Promise<void> {
+  const supabase = await createServerSupabaseClient();
+
+  await supabase
+    .from("spaces")
+    .update({ last_activity_at: new Date().toISOString() })
+    .eq("id", spaceId);
 }

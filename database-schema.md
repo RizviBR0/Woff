@@ -16,7 +16,8 @@ CREATE TABLE spaces (
   creator_device_id TEXT,
   visibility TEXT DEFAULT 'unlisted' CHECK (visibility IN ('public', 'unlisted', 'private')),
   allow_public_post BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  last_activity_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Entries table
@@ -163,11 +164,83 @@ CREATE POLICY "Allow users to read their own sessions" ON device_sessions
 -- Add useful indexes
 CREATE INDEX idx_spaces_slug ON spaces(slug);
 CREATE INDEX idx_spaces_creator_device_id ON spaces(creator_device_id);
+CREATE INDEX idx_spaces_last_activity_at ON spaces(last_activity_at);
 CREATE INDEX idx_entries_space_id ON entries(space_id);
 CREATE INDEX idx_entries_created_at ON entries(created_at);
 CREATE INDEX idx_assets_entry_id ON assets(entry_id);
 CREATE INDEX idx_views_space_id ON views(space_id);
 CREATE INDEX idx_views_created_at ON views(created_at);
+```
+
+## Auto-Cleanup (Inactive Spaces)
+
+Spaces are automatically deleted after 7 days of inactivity. The following functions and triggers handle this:
+
+```sql
+-- Trigger function to update space activity when entries are added
+CREATE OR REPLACE FUNCTION update_space_last_activity()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE spaces
+  SET last_activity_at = NOW()
+  WHERE id = NEW.space_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create trigger on entries table
+CREATE TRIGGER trigger_update_space_activity
+AFTER INSERT ON entries
+FOR EACH ROW
+EXECUTE FUNCTION update_space_last_activity();
+
+-- Function to delete inactive spaces
+CREATE OR REPLACE FUNCTION cleanup_inactive_spaces(days_inactive INTEGER DEFAULT 7)
+RETURNS INTEGER AS $$
+DECLARE
+  deleted_count INTEGER;
+BEGIN
+  WITH deleted AS (
+    DELETE FROM spaces
+    WHERE last_activity_at < NOW() - (days_inactive || ' days')::INTERVAL
+    RETURNING id
+  )
+  SELECT COUNT(*) INTO deleted_count FROM deleted;
+
+  RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Schedule cleanup to run daily at 3:00 AM UTC (requires pg_cron extension)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+SELECT cron.schedule(
+  'cleanup-inactive-spaces',
+  '0 3 * * *',
+  $$SELECT cleanup_inactive_spaces(7)$$
+);
+
+-- Table to log deleted storage keys for cleanup
+CREATE TABLE IF NOT EXISTS deleted_storage_keys (
+  id BIGSERIAL PRIMARY KEY,
+  bucket_key TEXT NOT NULL,
+  deleted_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Trigger to log storage keys before asset deletion
+CREATE OR REPLACE FUNCTION log_deleted_assets()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO deleted_storage_keys (bucket_key)
+  VALUES (OLD.bucket_key);
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER trigger_log_deleted_assets
+BEFORE DELETE ON assets
+FOR EACH ROW
+EXECUTE FUNCTION log_deleted_assets();
 ```
 
 ## Realtime

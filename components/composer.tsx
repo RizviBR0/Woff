@@ -27,10 +27,22 @@ import { supabaseBrowser } from "@/lib/supabase-browser";
 interface ComposerProps {
   spaceId: string;
   onNewEntry: (entry: Entry) => void;
+  onUpdateEntry?: (entryId: string, updates: Partial<Entry>) => void;
+  onReplaceEntry?: (placeholderId: string, realEntry: Entry) => void;
+  onRemoveEntry?: (entryId: string) => void;
+  currentDeviceId?: string | null;
   centered: boolean;
 }
 
-export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
+export function Composer({
+  spaceId,
+  onNewEntry,
+  onUpdateEntry,
+  onReplaceEntry,
+  onRemoveEntry,
+  currentDeviceId,
+  centered,
+}: ComposerProps) {
   const [text, setText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -75,6 +87,29 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
   const totalFileSize = pendingFiles.reduce((sum, f) => sum + f.size, 0);
   const hasOversizeFile = pendingFiles.some((f) => f.size > MAX_FILE_BYTES);
   const overCombinedLimit = totalFileSize > COMBINED_CAP_BYTES;
+
+  // Helper to create a placeholder entry for optimistic UI
+  const createPlaceholderEntry = (
+    kind: Entry["kind"],
+    meta: any,
+    message?: string
+  ): Entry => {
+    const placeholderId = `placeholder-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    return {
+      id: placeholderId,
+      space_id: spaceId,
+      kind,
+      text: null,
+      meta,
+      created_by_device_id: currentDeviceId || null,
+      created_at: new Date().toISOString(),
+      isLoading: true,
+      uploadProgress: 0,
+      uploadMessage: message || "Uploading...",
+    };
+  };
 
   const formatBytes = (bytes: number) => {
     const mb = bytes / (1024 * 1024);
@@ -133,15 +168,28 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
   };
 
   const handleDrawingSave = async (dataUrl: string) => {
+    // Create placeholder entry immediately for optimistic UI
+    const placeholder = createPlaceholderEntry(
+      "text",
+      { type: "drawing", previewUrl: dataUrl },
+      "Saving drawing..."
+    );
+    onNewEntry(placeholder);
+    setDrawingOpen(false);
+
     try {
       setIsSubmitting(true);
       // Store the drawing as a text entry with the data URL
-      // In a real app, you'd upload the image to storage and create an image entry
       const entry = await createEntry(spaceId, "text", `DRAWING:${dataUrl}`);
-      onNewEntry(entry);
-      setDrawingOpen(false);
+      // Replace placeholder with real entry
+      onReplaceEntry?.(placeholder.id, entry);
     } catch (error) {
       console.error("Failed to save drawing:", error);
+      onUpdateEntry?.(placeholder.id, {
+        isLoading: false,
+        uploadMessage: "Failed to save drawing",
+      });
+      setTimeout(() => onRemoveEntry?.(placeholder.id), 3000);
     } finally {
       setIsSubmitting(false);
     }
@@ -171,14 +219,21 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
 
   const handleNewNote = async () => {
     setPopoverOpen(false);
+
+    // Generate a random note slug and public code
+    const noteSlug = Math.random().toString(36).substring(2, 8);
+    const publicCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+
+    // Create placeholder entry immediately for optimistic UI
+    const placeholder = createPlaceholderEntry(
+      "text",
+      { type: "note", noteSlug, publicCode },
+      "Creating note..."
+    );
+    onNewEntry(placeholder);
+
     try {
       setIsSubmitting(true);
-      // Generate a random note slug and public code
-      const noteSlug = Math.random().toString(36).substring(2, 8);
-      const publicCode = Math.random()
-        .toString(36)
-        .substring(2, 7)
-        .toUpperCase();
 
       // Create a chat entry for the note
       const entry = await createEntry(
@@ -186,17 +241,23 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
         "text",
         `NOTE:${noteSlug}:${publicCode}:Untitled Note`
       );
-      onNewEntry(entry);
+
+      // Replace placeholder with real entry
+      onReplaceEntry?.(placeholder.id, entry);
 
       // Navigate to the note editor
       window.location.href = `/n/${noteSlug}`;
     } catch (error) {
       console.error("Failed to create note entry:", error);
+      onUpdateEntry?.(placeholder.id, {
+        isLoading: false,
+        uploadMessage: "Failed to create note",
+      });
+      setTimeout(() => onRemoveEntry?.(placeholder.id), 3000);
     } finally {
       setIsSubmitting(false);
     }
   };
-
   const handleImageCapture = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -221,38 +282,62 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
       return;
     }
 
+    // Create a temporary preview URL for optimistic UI
+    const tempPreviewUrl = URL.createObjectURL(file);
+
+    // Create placeholder entry immediately for optimistic UI
+    const placeholder = createPlaceholderEntry(
+      "text",
+      { type: "photo", previewUrl: tempPreviewUrl },
+      "Preparing photo..."
+    );
+    onNewEntry(placeholder);
+
     try {
       setIsSubmitting(true);
-      setUploadOpen(true);
-      setUploadStage("Compressing");
-      setUploadTotal(1);
-      setUploadProcessed(0);
-      setUploadMessage("");
+
+      // Update progress: Compressing
+      onUpdateEntry?.(placeholder.id, {
+        uploadProgress: 20,
+        uploadMessage: "Optimizing photo...",
+      });
 
       // Adaptive compression only if above threshold
       const compressed = await getCompressedDataUrl(file);
-      setUploadProcessed(1);
+
+      // Update progress: Uploading
+      onUpdateEntry?.(placeholder.id, {
+        uploadProgress: 60,
+        uploadMessage: "Uploading...",
+      });
 
       try {
-        setUploadStage("Uploading");
         const entry = await createEntry(spaceId, "text", `PHOTO:${compressed}`);
-        onNewEntry(entry);
-        setUploadStage("Done");
-        setUploadMessage("Photo uploaded successfully");
-        setTimeout(() => setUploadOpen(false), 600);
+
+        // Replace placeholder with real entry
+        onReplaceEntry?.(placeholder.id, entry);
+
+        // Clean up temp URL
+        URL.revokeObjectURL(tempPreviewUrl);
       } catch (error: any) {
         console.error("Failed to save photo:", error);
-        setUploadStage("Error");
-        setUploadMessage(
-          "Could not upload the photo. Try a smaller image or different one."
-        );
+        // Update placeholder to show error
+        onUpdateEntry?.(placeholder.id, {
+          isLoading: false,
+          uploadMessage: "Upload failed. Please try again.",
+        });
+        // Remove after a delay so user can see the error
+        setTimeout(() => onRemoveEntry?.(placeholder.id), 3000);
       } finally {
         setIsSubmitting(false);
       }
     } catch (error) {
       console.error("Failed to process image:", error);
-      setUploadStage("Error");
-      setUploadMessage("Failed to process image");
+      onUpdateEntry?.(placeholder.id, {
+        isLoading: false,
+        uploadMessage: "Failed to process image",
+      });
+      setTimeout(() => onRemoveEntry?.(placeholder.id), 3000);
       setIsSubmitting(false);
     }
 
@@ -302,14 +387,30 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
     }
     lastUploadSignatureRef.current = signature;
 
+    // Create temporary preview URLs for optimistic UI
+    const previewUrls = imageFiles.map((f) => URL.createObjectURL(f));
+
+    // Create placeholder entry immediately for optimistic UI
+    const placeholder = createPlaceholderEntry(
+      "text",
+      { type: "photos", previewUrls, count: imageFiles.length },
+      `Preparing ${imageFiles.length} photo${
+        imageFiles.length > 1 ? "s" : ""
+      }...`
+    );
+    onNewEntry(placeholder);
+
     setIsSubmitting(true);
-    setUploadOpen(true);
-    setUploadStage("Compressing");
-    setUploadTotal(imageFiles.length);
-    setUploadProcessed(0);
-    setUploadMessage("");
 
     try {
+      // Update progress: Compressing
+      onUpdateEntry?.(placeholder.id, {
+        uploadProgress: 10,
+        uploadMessage: `Optimizing ${imageFiles.length} photo${
+          imageFiles.length > 1 ? "s" : ""
+        }...`,
+      });
+
       // Compress each image sequentially to update progress
       const successes: string[] = [];
       let failedCount = 0;
@@ -320,27 +421,34 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
           successes.push(dataUrl);
         } catch (e) {
           failedCount++;
-        } finally {
-          setUploadProcessed(i + 1);
         }
+        // Update progress based on compression
+        const progress = 10 + Math.round(((i + 1) / imageFiles.length) * 50);
+        onUpdateEntry?.(placeholder.id, {
+          uploadProgress: progress,
+          uploadMessage: `Optimizing ${i + 1}/${imageFiles.length}...`,
+        });
       }
 
       if (failedCount > 0) {
-        setUploadMessage(
-          `${failedCount} image(s) failed to process and were skipped`
-        );
+        onUpdateEntry?.(placeholder.id, {
+          uploadMessage: `${failedCount} image(s) failed to process`,
+        });
       }
 
       if (successes.length === 0) {
-        setUploadStage("Error");
-        setUploadMessage(
-          "No images could be processed. Try smaller or different images."
-        );
+        onUpdateEntry?.(placeholder.id, {
+          isLoading: false,
+          uploadMessage:
+            "No images could be processed. Try smaller or different images.",
+        });
+        setTimeout(() => onRemoveEntry?.(placeholder.id), 3000);
+        // Clean up preview URLs
+        previewUrls.forEach((url) => URL.revokeObjectURL(url));
         return;
       }
 
       // Chunking logic to avoid oversized server action payloads
-      // Keep each batch safely under the configured 5 MB limit
       const MAX_GROUP_CHARS = 4.5 * 1024 * 1024; // ~4.5MB headroom for JSON overhead
       const groups: string[][] = [];
       let current: string[] = [];
@@ -348,7 +456,6 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
 
       for (const img of successes) {
         const imgLen = img.length;
-        // If adding this image exceeds threshold, push current group
         if (current.length > 0 && currentLen + imgLen > MAX_GROUP_CHARS) {
           groups.push(current);
           current = [];
@@ -359,8 +466,14 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
       }
       if (current.length > 0) groups.push(current);
 
-      setUploadStage("Uploading");
+      onUpdateEntry?.(placeholder.id, {
+        uploadProgress: 70,
+        uploadMessage: `Uploading...`,
+      });
+
       let createdCount = 0;
+      let firstEntry: Entry | null = null;
+
       for (let gi = 0; gi < groups.length; gi++) {
         const group = groups[gi];
         try {
@@ -374,34 +487,40 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
               `PHOTOS:${JSON.stringify(group)}`
             );
           }
-          onNewEntry(entry);
+
+          if (gi === 0) {
+            // Replace placeholder with the first real entry
+            firstEntry = entry;
+            onReplaceEntry?.(placeholder.id, entry);
+          } else {
+            // Additional entries get added normally
+            onNewEntry(entry);
+          }
           createdCount += group.length;
-          setUploadMessage(
-            `Uploaded group ${gi + 1}/${groups.length} (${createdCount}/${
-              successes.length
-            } images)`
-          );
+
+          const progress = 70 + Math.round(((gi + 1) / groups.length) * 30);
+          if (gi === 0 && firstEntry) {
+            // Update the newly replaced entry (it's no longer loading)
+          }
         } catch (groupErr: any) {
           console.error("Group upload failed", groupErr);
-          setUploadMessage(
-            `A group failed to upload. Uploaded ${createdCount}/${successes.length}.`
-          );
         }
       }
 
-      setUploadStage("Done");
-      setUploadMessage(
-        successes.length === 1
-          ? "Photo uploaded successfully"
-          : `Uploaded ${createdCount} image(s) in ${groups.length} batch(es)`
-      );
-      setTimeout(() => setUploadOpen(false), 1000);
+      // Clean up preview URLs
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+
+      // If no entries were created, remove the placeholder
+      if (createdCount === 0) {
+        onRemoveEntry?.(placeholder.id);
+      }
     } catch (error) {
       console.error("Failed to process photos:", error);
-      setUploadStage("Error");
-      setUploadMessage(
-        "We couldn't process your images right now. Please try again."
-      );
+      onUpdateEntry?.(placeholder.id, {
+        isLoading: false,
+        uploadMessage: "We couldn't process your images. Please try again.",
+      });
+      setTimeout(() => onRemoveEntry?.(placeholder.id), 3000);
     } finally {
       setIsSubmitting(false);
       // Reset the file input
@@ -491,12 +610,32 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
     )
       return;
 
+    // Create placeholder entry immediately for optimistic UI
+    const fileNames = pendingFiles.map((f) => f.name);
+    const placeholder = createPlaceholderEntry(
+      "file",
+      {
+        type: "files",
+        items: pendingFiles.map((f) => ({
+          name: f.name,
+          size: f.size,
+          type: f.type,
+          url: "",
+        })),
+      },
+      `Uploading ${pendingFiles.length} file${
+        pendingFiles.length > 1 ? "s" : ""
+      }...`
+    );
+    onNewEntry(placeholder);
+
+    // Close modal immediately for better UX
+    setFileModalOpen(false);
+    const filesToUpload = [...pendingFiles];
+    setPendingFiles([]);
+
     try {
       setFileUploading(true);
-      setPendingFiles((prev) =>
-        prev.map((f) => ({ ...f, status: "uploading", progress: 10 }))
-      );
-      toast.message(`Uploading ${pendingFiles.length} file(s)...`);
 
       const uploaded: {
         name: string;
@@ -505,47 +644,53 @@ export function Composer({ spaceId, onNewEntry, centered }: ComposerProps) {
         url: string;
       }[] = [];
       const failedIds: string[] = [];
-      for (let i = 0; i < pendingFiles.length; i++) {
-        const pf = pendingFiles[i];
+
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const pf = filesToUpload[i];
         try {
-          setPendingFiles((prev) =>
-            prev.map((f) => (f.id === pf.id ? { ...f, progress: 40 } : f))
-          );
+          const progress = Math.round((i / filesToUpload.length) * 80) + 10;
+          onUpdateEntry?.(placeholder.id, {
+            uploadProgress: progress,
+            uploadMessage: `Uploading ${pf.name}... (${i + 1}/${
+              filesToUpload.length
+            })`,
+          });
+
           const res = await uploadSingleFile(pf);
           uploaded.push(res);
-          setPendingFiles((prev) =>
-            prev.map((f) =>
-              f.id === pf.id ? { ...f, progress: 100, status: "done" } : f
-            )
-          );
         } catch (e) {
           console.error("Unexpected upload failure", e);
           failedIds.push(pf.id);
-          setPendingFiles((prev) =>
-            prev.map((f) =>
-              f.id === pf.id ? { ...f, progress: 100, status: "error" } : f
-            )
-          );
         }
       }
 
       if (uploaded.length > 0) {
         const meta = { type: "files", items: uploaded } as const;
         const entry = await createEntry(spaceId, "file", "FILE_ENTRY", meta);
-        onNewEntry(entry);
-        toast.success(`Uploaded ${uploaded.length} file(s) successfully`);
-        if (failedIds.length === 0) {
-          // All good: close modal and reset list
-          setPendingFiles([]);
-          setFileModalOpen(false);
-        } else {
-          // Keep only failed ones for retry
-          setPendingFiles((prev) =>
-            prev.filter((f) => failedIds.includes(f.id))
+
+        // Replace placeholder with real entry
+        onReplaceEntry?.(placeholder.id, entry);
+
+        if (failedIds.length > 0) {
+          toast.message(
+            `${uploaded.length} file(s) uploaded, ${failedIds.length} failed`
           );
-          toast.message("Some files failed. You can retry or cancel.");
         }
+      } else {
+        // All failed - show error on placeholder then remove
+        onUpdateEntry?.(placeholder.id, {
+          isLoading: false,
+          uploadMessage: "All uploads failed. Please try again.",
+        });
+        setTimeout(() => onRemoveEntry?.(placeholder.id), 3000);
       }
+    } catch (error) {
+      console.error("File upload error:", error);
+      onUpdateEntry?.(placeholder.id, {
+        isLoading: false,
+        uploadMessage: "Upload failed. Please try again.",
+      });
+      setTimeout(() => onRemoveEntry?.(placeholder.id), 3000);
     } finally {
       setFileUploading(false);
     }

@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { SpaceContainer } from "@/components/space-container";
 import { cookies } from "next/headers";
 import { generateDeviceId } from "@/lib/slug";
+import { updateSpaceActivity } from "@/lib/actions";
 
 interface SpacePageProps {
   params: Promise<{
@@ -41,6 +42,9 @@ export default async function SpacePage({ params }: SpacePageProps) {
   if (!space) {
     notFound();
   }
+
+  // Update last activity timestamp when space is viewed
+  await updateSpaceActivity(space.id);
 
   const entries = await getEntries(space.id);
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Copy,
   Check,
@@ -10,8 +11,10 @@ import {
   X,
   QrCode,
   PanelRight,
+  Clock,
 } from "lucide-react";
 import { Space } from "@/lib/actions";
+import { getDaysUntilExpiry } from "@/lib/utils";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
 import { ActivitySidebar } from "./activity-sidebar";
@@ -49,6 +52,14 @@ export function SpaceContainer({
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Calculate days until space expires
+  const daysUntilExpiry = useMemo(() => {
+    if (space.last_activity_at) {
+      return getDaysUntilExpiry(space.last_activity_at);
+    }
+    return 7; // Default to 7 days if no last_activity_at
+  }, [space.last_activity_at]);
 
   // Function to scroll to bottom smoothly
   const scrollToBottom = useCallback(() => {
@@ -159,6 +170,41 @@ export function SpaceContainer({
     [scrollToBottom, addEntryIfNotExists]
   );
 
+  // Function to update an existing entry (used for optimistic UI)
+  const handleUpdateEntry = useCallback(
+    (entryId: string, updates: Partial<Entry>) => {
+      console.log("📝 Local: Updating entry", entryId, updates);
+      setEntries((prev) =>
+        prev.map((entry) =>
+          entry.id === entryId ? { ...entry, ...updates } : entry
+        )
+      );
+    },
+    []
+  );
+
+  // Function to replace a placeholder entry with the real one
+  const handleReplaceEntry = useCallback(
+    (placeholderId: string, realEntry: Entry) => {
+      console.log(
+        "📝 Local: Replacing placeholder",
+        placeholderId,
+        "with",
+        realEntry.id
+      );
+      setEntries((prev) =>
+        prev.map((entry) => (entry.id === placeholderId ? realEntry : entry))
+      );
+    },
+    []
+  );
+
+  // Function to remove an entry (used for failed uploads)
+  const handleRemoveEntry = useCallback((entryId: string) => {
+    console.log("📝 Local: Removing entry", entryId);
+    setEntries((prev) => prev.filter((entry) => entry.id !== entryId));
+  }, []);
+
   const handleCopy = async () => {
     try {
       const shareUrl = `${window.location.origin}/${space.slug}`;
@@ -231,7 +277,7 @@ export function SpaceContainer({
           </div>
 
           {/* Center copy button */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div className="flex flex-row items-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <Button
               onClick={handleCopy}
               variant="ghost"
@@ -256,6 +302,35 @@ export function SpaceContainer({
                 </>
               )}
             </Button>
+            {/* Expiry indicator */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className={`flex items-center gap-1 h-6 text-[10px] px-2 py-0.5 rounded-full transition-colors ${
+                    daysUntilExpiry <= 2
+                      ? "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400"
+                      : daysUntilExpiry <= 4
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
+                      : "bg-muted text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  <Clock className="h-3 w-3" />
+                  <span>{daysUntilExpiry}d</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-3" align="center">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    Space expires in {daysUntilExpiry} day
+                    {daysUntilExpiry !== 1 ? "s" : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Spaces are automatically deleted after 2 days of inactivity.
+                    Any activity (viewing or posting) resets this timer.
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="flex items-center gap-2">
@@ -327,6 +402,10 @@ export function SpaceContainer({
               <Composer
                 spaceId={space.id}
                 onNewEntry={handleNewEntry}
+                onUpdateEntry={handleUpdateEntry}
+                onReplaceEntry={handleReplaceEntry}
+                onRemoveEntry={handleRemoveEntry}
+                currentDeviceId={currentDeviceId}
                 centered={true}
               />
               <div className="mt-4 text-center text-sm text-muted-foreground">
@@ -356,6 +435,10 @@ export function SpaceContainer({
                   <Composer
                     spaceId={space.id}
                     onNewEntry={handleNewEntry}
+                    onUpdateEntry={handleUpdateEntry}
+                    onReplaceEntry={handleReplaceEntry}
+                    onRemoveEntry={handleRemoveEntry}
+                    currentDeviceId={currentDeviceId}
                     centered={false}
                   />
                 </div>
@@ -389,10 +472,13 @@ export function SpaceContainer({
             <div className="flex justify-center">
               {qrCodeUrl ? (
                 <div className="p-4 bg-white dark:bg-gray-100 rounded-lg border-2 border-border shadow-sm">
-                  <img
+                  <Image
                     src={qrCodeUrl}
                     alt="QR Code for space"
+                    width={192}
+                    height={192}
                     className="w-48 h-48 block"
+                    unoptimized
                   />
                 </div>
               ) : (

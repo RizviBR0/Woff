@@ -12,6 +12,7 @@ import {
   File,
   StickyNote,
   Check,
+  Pen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -334,7 +335,7 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
           onMouseLeave={() => setHovering(false)}
         >
           <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0 border border-amber-200 dark:border-amber-800/50">
-            <StickyNote className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            <Pen className="h-5 w-5 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium truncate text-foreground">
