@@ -1,16 +1,18 @@
 import { customAlphabet } from "nanoid";
 
-// Simple alphabet without confusing characters (no underscores, hyphens, or similar symbols)
-// Excludes: 0, O, I, l, 1 to avoid confusion
+// Simple alphabet without confusing characters for device IDs
 const simpleAlphabet =
   "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
 
+// Numeric only for room codes (4 digits: 0000-9999)
+const numericAlphabet = "0123456789";
+
 // Create custom nanoid generators
-const generateSimpleId = customAlphabet(simpleAlphabet, 6);
+const generateNumericCode = customAlphabet(numericAlphabet, 4);
 const generateDeviceIdAlphabet = customAlphabet(simpleAlphabet, 21);
 
 export function generateShortSlug(): string {
-  return generateSimpleId(); // 6 characters using simple alphabet
+  return generateNumericCode(); // 4-digit numeric code (0000-9999)
 }
 
 export function generateDeviceId(): string {

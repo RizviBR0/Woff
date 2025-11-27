@@ -1,21 +1,40 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Users, Clipboard, QrCode } from "lucide-react";
 import QrScanner from "qr-scanner";
 
+const PIN_LENGTH = 4;
+
 export function JoinRoomSection() {
-  const [roomCode, setRoomCode] = useState("");
+  const [pinDigits, setPinDigits] = useState<string[]>(
+    Array(PIN_LENGTH).fill("")
+  );
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState("");
   const [isPasting, setIsPasting] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const qrScannerRef = useRef<QrScanner | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const roomCode = pinDigits.join("");
+
+  // Pre-fill PIN from URL query param (e.g., /?room=1234)
+  useEffect(() => {
+    const roomFromUrl = searchParams.get("room");
+    if (roomFromUrl && /^\d{4}$/.test(roomFromUrl)) {
+      const digits = roomFromUrl.split("");
+      setPinDigits(digits);
+      // Focus the last input
+      setTimeout(() => {
+        inputRefs.current[PIN_LENGTH - 1]?.focus();
+      }, 100);
+    }
+  }, [searchParams]);
 
   // Cleanup QR scanner on unmount
   useEffect(() => {
@@ -26,7 +45,7 @@ export function JoinRoomSection() {
     };
   }, []);
 
-  // Function to extract room code from various URL formats
+  // Function to extract 4-digit room code from various URL formats
   const extractRoomCode = (input: string): string => {
     let value = input.trim();
 
@@ -35,22 +54,37 @@ export function JoinRoomSection() {
       const url = new URL(value);
       const path = url.pathname || "/";
       if (path.startsWith("/r/")) {
-        return path.slice(3).split("/")[0];
+        const code = path.slice(3).split("/")[0];
+        return /^\d{4}$/.test(code) ? code : "";
       }
       // Root-level code: /CODE
       const seg = path.split("/").filter(Boolean)[0];
-      return seg || "";
+      return /^\d{4}$/.test(seg || "") ? seg : "";
     } catch {
       // Not a full URL; treat as path or code
       if (value.includes("/r/")) {
-        return value.split("/r/")[1].split("/")[0].split("?")[0];
+        const code = value.split("/r/")[1].split("/")[0].split("?")[0];
+        return /^\d{4}$/.test(code) ? code : "";
       }
       if (value.includes("/")) {
         const seg = value.split("/").filter(Boolean)[0];
-        return (seg || "").split("?")[0];
+        const code = (seg || "").split("?")[0];
+        return /^\d{4}$/.test(code) ? code : "";
       }
-      return value;
+      // Extract only digits and take first 4
+      const digits = value.replace(/\D/g, "").slice(0, 4);
+      return digits.length === 4 ? digits : "";
     }
+  };
+
+  // Set PIN from extracted code
+  const setCodeFromString = (code: string) => {
+    const digits = code.replace(/\D/g, "").slice(0, PIN_LENGTH).split("");
+    const newPinDigits = Array(PIN_LENGTH).fill("");
+    digits.forEach((d, i) => {
+      if (i < PIN_LENGTH) newPinDigits[i] = d;
+    });
+    setPinDigits(newPinDigits);
   };
 
   const handlePaste = async () => {
@@ -61,14 +95,14 @@ export function JoinRoomSection() {
       if (clipboardText.trim()) {
         const extractedCode = extractRoomCode(clipboardText);
 
-        if (extractedCode) {
+        if (extractedCode && extractedCode.length === 4) {
           // Validate the room code exists
           try {
             const { validateRoomCode } = await import("@/lib/actions");
             const isValid = await validateRoomCode(extractedCode);
 
             if (isValid) {
-              setRoomCode(extractedCode);
+              setCodeFromString(extractedCode);
               setError(""); // Clear any existing errors
             } else {
               setError("Room not found - please check the code");
@@ -78,7 +112,7 @@ export function JoinRoomSection() {
             setError("Error validating room code");
           }
         } else {
-          setError("No valid room code found in clipboard");
+          setError("No valid 4-digit room code found");
         }
       } else {
         setError("Clipboard is empty");
@@ -157,14 +191,14 @@ export function JoinRoomSection() {
         async (result) => {
           const extractedCode = extractRoomCode(result.data);
 
-          if (extractedCode) {
+          if (extractedCode && extractedCode.length === 4) {
             // Validate the room code exists
             try {
               const { validateRoomCode } = await import("@/lib/actions");
               const isValid = await validateRoomCode(extractedCode);
 
               if (isValid) {
-                setRoomCode(extractedCode);
+                setCodeFromString(extractedCode);
                 setError("");
                 qrScanner.stop();
                 safeRemoveOverlay(overlay);
@@ -225,15 +259,13 @@ export function JoinRoomSection() {
   };
 
   const handleJoinRoom = async () => {
-    if (!roomCode.trim()) {
-      setError("Please enter a room code");
+    if (roomCode.length !== PIN_LENGTH) {
+      setError("Please enter a 4-digit room code");
       return;
     }
 
-    const cleanCode = extractRoomCode(roomCode);
-
-    if (!cleanCode) {
-      setError("Invalid room code format");
+    if (!/^\d{4}$/.test(roomCode)) {
+      setError("Room code must be 4 digits");
       return;
     }
 
@@ -243,10 +275,10 @@ export function JoinRoomSection() {
     try {
       // Validate the room exists before navigating
       const { validateRoomCode } = await import("@/lib/actions");
-      const isValid = await validateRoomCode(cleanCode);
+      const isValid = await validateRoomCode(roomCode);
 
       if (isValid) {
-        router.push(`/${cleanCode}`);
+        router.push(`/${roomCode}`);
       } else {
         setError("Room not found - please check the code");
         setIsJoining(false);
@@ -258,77 +290,144 @@ export function JoinRoomSection() {
     }
   };
 
-  const handleInputChange = (value: string) => {
-    setRoomCode(value);
-    if (error) {
-      setError(""); // Clear error when user starts typing
+  const handlePinChange = (index: number, value: string) => {
+    // Only allow single digit
+    const digit = value.replace(/\D/g, "").slice(-1);
+
+    const newPinDigits = [...pinDigits];
+    newPinDigits[index] = digit;
+    setPinDigits(newPinDigits);
+
+    if (error) setError("");
+
+    // Auto-focus next input
+    if (digit && index < PIN_LENGTH - 1) {
+      inputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all digits entered
+    if (digit && index === PIN_LENGTH - 1) {
+      const fullCode = newPinDigits.join("");
+      if (fullCode.length === PIN_LENGTH) {
+        // Small delay to let state update
+        setTimeout(() => handleJoinRoom(), 100);
+      }
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
+  const handlePinKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (e.key === "Backspace" && !pinDigits[index] && index > 0) {
+      // Move to previous input on backspace if current is empty
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === "Enter") {
       handleJoinRoom();
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === "ArrowRight" && index < PIN_LENGTH - 1) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handlePinPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text");
+    const digits = pastedData.replace(/\D/g, "").slice(0, PIN_LENGTH);
+
+    if (digits.length > 0) {
+      const newPinDigits = Array(PIN_LENGTH).fill("");
+      digits.split("").forEach((d, i) => {
+        if (i < PIN_LENGTH) newPinDigits[i] = d;
+      });
+      setPinDigits(newPinDigits);
+
+      // Focus the next empty input or last input
+      const nextEmptyIndex = newPinDigits.findIndex((d) => !d);
+      const focusIndex =
+        nextEmptyIndex === -1 ? PIN_LENGTH - 1 : nextEmptyIndex;
+      inputRefs.current[focusIndex]?.focus();
+
+      if (error) setError("");
     }
   };
 
   return (
     <div className="w-full max-w-md mx-auto">
-      <div className="space-y-3">
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
-          <div className="relative flex-1">
-            <Input
-              placeholder="Room code"
-              value={roomCode}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyPress={handleKeyPress}
-              className="h-12 px-4 pr-20 text-center sm:text-left bg-background border-2 border-border hover:border-primary/50 focus:border-primary transition-colors rounded-xl shadow-sm"
-              disabled={isJoining || isPasting || isScanning}
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
-              <button
-                type="button"
-                onClick={handleQRScan}
+      <div className="space-y-4">
+        {/* PIN Input */}
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {pinDigits.map((digit, index) => (
+              <input
+                key={index}
+                ref={(el) => {
+                  inputRefs.current[index] = el;
+                }}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handlePinChange(index, e.target.value)}
+                onKeyDown={(e) => handlePinKeyDown(index, e)}
+                onPaste={handlePinPaste}
                 disabled={isJoining || isPasting || isScanning}
-                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Scan QR code"
-              >
-                <QrCode className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={handlePaste}
-                disabled={isJoining || isPasting || isScanning}
-                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Paste from clipboard"
-              >
-                <Clipboard className="h-4 w-4" />
-              </button>
-            </div>
+                className="w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl sm:text-3xl font-semibold bg-background border-2 border-border rounded-xl shadow-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-primary/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={`Digit ${index + 1}`}
+              />
+            ))}
           </div>
-          <Button
-            onClick={handleJoinRoom}
-            disabled={isJoining || isScanning || !roomCode.trim()}
-            className="h-12 px-6 min-w-[140px] rounded-xl font-medium shadow-sm hover:shadow-md transition-all duration-200"
-            size="lg"
-          >
-            {isJoining ? (
-              <>
-                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                Joining...
-              </>
-            ) : isScanning ? (
-              <>
-                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                Scanning...
-              </>
-            ) : (
-              <>
-                <Users className="w-4 h-4 mr-2" />
-                Join Room
-              </>
-            )}
-          </Button>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleQRScan}
+              disabled={isJoining || isPasting || isScanning}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Scan QR code"
+            >
+              <QrCode className="h-4 w-4" />
+              <span className="hidden sm:inline">Scan</span>
+            </button>
+            <button
+              type="button"
+              onClick={handlePaste}
+              disabled={isJoining || isPasting || isScanning}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Paste from clipboard"
+            >
+              <Clipboard className="h-4 w-4" />
+              <span className="hidden sm:inline">Paste</span>
+            </button>
+          </div>
         </div>
+
+        {/* Join Button */}
+        <Button
+          onClick={handleJoinRoom}
+          disabled={isJoining || isScanning || roomCode.length !== PIN_LENGTH}
+          className="max-w-[250px] w-full h-12 px-8 rounded-xl font-medium shadow-sm hover:shadow-md transition-all duration-200"
+          size="lg"
+        >
+          {isJoining ? (
+            <>
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+              Joining...
+            </>
+          ) : isScanning ? (
+            <>
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+              Scanning...
+            </>
+          ) : (
+            <>
+              <Users className="w-4 h-4 mr-2" />
+              Join Room
+            </>
+          )}
+        </Button>
 
         {error && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">

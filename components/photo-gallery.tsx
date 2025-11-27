@@ -102,7 +102,7 @@ export function PhotoGallery({
 
   return (
     <div
-      className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed top-[-25px] inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
@@ -115,18 +115,18 @@ export function PhotoGallery({
             <Button
               variant="secondary"
               size="icon"
-              className="absolute left-4 z-10 h-12 w-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20"
+              className="absolute left-4 z-10 h-10 w-10 md:h-11 md:w-11 rounded-full bg-black/80 hover:bg-black text-white shadow-2xl border border-black/40 backdrop-blur-md transition-transform duration-200 hover:scale-105"
               onClick={goToPrevious}
             >
-              <ChevronLeft className="h-6 w-6 text-white" />
+              <ChevronLeft className="h-6 w-6" />
             </Button>
             <Button
               variant="secondary"
               size="icon"
-              className="absolute right-4 z-10 h-12 w-12 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20"
+              className="absolute right-4 z-10 h-10 w-10 md:h-11 md:w-11 rounded-full bg-black/80 hover:bg-black text-white shadow-2xl border border-black/40 backdrop-blur-md transition-transform duration-200 hover:scale-105"
               onClick={goToNext}
             >
-              <ChevronRight className="h-6 w-6 text-white" />
+              <ChevronRight className="h-6 w-6" />
             </Button>
           </>
         )}

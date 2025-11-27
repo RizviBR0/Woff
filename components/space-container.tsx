@@ -1,10 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Copy, Check, Share, Settings, X, QrCode } from "lucide-react";
+import Link from "next/link";
+import {
+  Copy,
+  Check,
+  Share,
+  Settings,
+  X,
+  QrCode,
+  PanelRight,
+} from "lucide-react";
 import { Space } from "@/lib/actions";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
+import { ActivitySidebar } from "./activity-sidebar";
 import { ThemeToggle } from "./theme-toggle";
 import { Logo } from "./logo";
 import { createClientSupabaseClient } from "@/lib/supabase";
@@ -38,6 +48,7 @@ export function SpaceContainer({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Function to scroll to bottom smoothly
   const scrollToBottom = useCallback(() => {
@@ -210,7 +221,13 @@ export function SpaceContainer({
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-2">
-            <Logo width={80} height={24} />
+            <Link href={`/?room=${space.slug}`} title="Back to home">
+              <Logo
+                width={80}
+                height={24}
+                className="cursor-pointer hover:opacity-80 transition-opacity"
+              />
+            </Link>
           </div>
 
           {/* Center copy button */}
@@ -242,6 +259,21 @@ export function SpaceContainer({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Sidebar toggle (desktop only) */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden md:inline-flex h-8 w-8"
+              onClick={() => setSidebarOpen((open) => !open)}
+            >
+              <PanelRight
+                className={`h-4 w-4 transition-opacity ${
+                  sidebarOpen ? "opacity-100" : "opacity-40"
+                }`}
+              />
+              <span className="sr-only">Toggle sidebar</span>
+            </Button>
+
             <Button
               variant="ghost"
               size="icon"
@@ -303,8 +335,8 @@ export function SpaceContainer({
             </div>
           </div>
         ) : (
-          // Timeline view with entries and bottom composer
-          <div className="pb-20">
+          // Timeline view with entries, right sidebar, and bottom composer
+          <div className={`pb-20 ${sidebarOpen ? "md:mr-72 lg:mr-80" : ""}`}>
             <div className="mx-auto max-w-2xl space-y-6 py-8">
               {entries.map((entry) => (
                 <EntryCard
@@ -314,6 +346,8 @@ export function SpaceContainer({
                 />
               ))}
             </div>
+
+            <ActivitySidebar entries={entries} isOpen={sidebarOpen} />
 
             {/* Bottom composer */}
             <div className="fixed bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pb-safe">

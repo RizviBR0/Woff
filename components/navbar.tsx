@@ -23,24 +23,28 @@ const navLinks = [
     href: "#about",
     icon: Info,
     description: "Learn more about Woff",
+    external: false,
   },
   {
     name: "How it Works",
     href: "#how-it-works",
     icon: HelpCircle,
     description: "Quick guide to get started",
+    external: false,
   },
   {
     name: "Contact",
     href: "#contact",
     icon: Mail,
     description: "Get in touch with us",
+    external: false,
   },
   {
     name: "Blog",
     href: "/blog",
     icon: FileText,
     description: "Product updates, tips, and news",
+    external: false,
   },
 ];
 

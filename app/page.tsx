@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { CreateSpaceButton } from "@/components/create-space-button";
 import { JoinRoomSection } from "@/components/join-room-section";
 import { Logo } from "@/components/logo";
@@ -36,7 +37,9 @@ export default function HomePage() {
             </div>
 
             {/* Join Room Section */}
-            <JoinRoomSection />
+            <Suspense fallback={<div className="h-32" />}>
+              <JoinRoomSection />
+            </Suspense>
           </div>
         </div>
       </div>

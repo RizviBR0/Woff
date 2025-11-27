@@ -27,7 +27,7 @@ export function CreateSpaceButton() {
       onClick={handleCreateSpace}
       disabled={isCreating}
       size="lg"
-      className="h-12 px-8 min-w-[160px] rounded-xl font-medium shadow-sm hover:shadow-md transition-all duration-200 text-base"
+      className="max-w-[250px] w-full h-12 px-8 min-w-[160px] rounded-xl font-medium shadow-sm hover:shadow-md transition-all duration-200 text-base"
     >
       {isCreating ? (
         <>

@@ -283,7 +283,10 @@ export const EntryCard = memo(function EntryCard({
       const dataUrl = entry.text.replace("DRAWING:", "");
       return (
         <>
-          <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+          <div
+            id={`entry-${entry.id}`}
+            className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+          >
             {/* Avatar */}
             {avatar}
 
@@ -378,16 +381,12 @@ export const EntryCard = memo(function EntryCard({
                     className="object-contain rounded-lg shadow-2xl"
                   />
                 </div>
-                {/* Control buttons positioned at top right of viewport - adaptive colors */}
+                {/* Control buttons positioned at top right of viewport with guaranteed contrast */}
                 <div className="fixed top-4 right-4 flex gap-3 z-50">
                   <Button
                     size="icon"
                     variant="secondary"
-                    className={`h-12 w-12 shadow-2xl backdrop-blur-md hover:scale-105 transition-all duration-300 ${
-                      modalBgColor.includes("gray-100")
-                        ? "bg-black/80 hover:bg-black/90 text-white border border-black/30"
-                        : "bg-white/80 hover:bg-white/90 text-black border border-white/30"
-                    }`}
+                    className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300`}
                     onClick={(e) => {
                       e.stopPropagation();
                       const filename = entry.text?.startsWith("DRAWING:")
@@ -402,11 +401,7 @@ export const EntryCard = memo(function EntryCard({
                   <Button
                     size="icon"
                     variant="secondary"
-                    className={`h-12 w-12 shadow-2xl backdrop-blur-md hover:scale-105 transition-all duration-300 ${
-                      modalBgColor.includes("gray-100")
-                        ? "bg-black/80 hover:bg-black/90 text-white border border-black/30"
-                        : "bg-white/80 hover:bg-white/90 text-black border border-white/30"
-                    }`}
+                    className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300`}
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowImageModal(false);
@@ -428,7 +423,10 @@ export const EntryCard = memo(function EntryCard({
       const dataUrl = entry.text.replace("PHOTO:", "");
       return (
         <>
-          <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+          <div
+            id={`entry-${entry.id}`}
+            className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+          >
             {/* Avatar */}
             {avatar}
 
@@ -500,7 +498,7 @@ export const EntryCard = memo(function EntryCard({
           {/* Image view modal for photos (canvas sits below the app top bar) */}
           {showImageModal && currentImageUrl && (
             <div
-              className={`fixed inset-x-0 bottom-0 top-10 ${modalBgColor} z-[40] flex items-center justify-center transition-colors duration-300`}
+              className={`fixed inset-0 -top-[25px] ${modalBgColor} z-[40] flex items-center justify-center transition-colors duration-300`}
               onClick={() => setShowImageModal(false)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
@@ -523,16 +521,12 @@ export const EntryCard = memo(function EntryCard({
                     className="object-contain rounded-lg shadow-2xl"
                   />
                 </div>
-                {/* Control buttons positioned at top right of viewport - adaptive colors */}
+                {/* Control buttons positioned at top right of viewport with guaranteed contrast */}
                 <div className="fixed top-4 right-4 flex gap-3 z-50">
                   <Button
                     size="icon"
                     variant="secondary"
-                    className={`h-12 w-12 shadow-2xl backdrop-blur-md hover:scale-105 transition-all duration-300 ${
-                      modalBgColor.includes("gray-100")
-                        ? "bg-black/80 hover:bg-black/90 text-white border border-black/30"
-                        : "bg-white/80 hover:bg-white/90 text-black border border-white/30"
-                    }`}
+                    className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300`}
                     onClick={(e) => {
                       e.stopPropagation();
                       const filename = entry.text?.startsWith("DRAWING:")
@@ -549,11 +543,7 @@ export const EntryCard = memo(function EntryCard({
                   <Button
                     size="icon"
                     variant="secondary"
-                    className={`h-12 w-12 shadow-2xl backdrop-blur-md hover:scale-105 transition-all duration-300 ${
-                      modalBgColor.includes("gray-100")
-                        ? "bg-black/80 hover:bg-black/90 text-white border border-black/30"
-                        : "bg-white/80 hover:bg-white/90 text-black border border-white/30"
-                    }`}
+                    className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300`}
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowImageModal(false);
@@ -641,7 +631,10 @@ export const EntryCard = memo(function EntryCard({
 
       return (
         <>
-          <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+          <div
+            id={`entry-${entry.id}`}
+            className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+          >
             {/* Avatar */}
             {avatar}
 
@@ -774,7 +767,10 @@ export const EntryCard = memo(function EntryCard({
       const noteTitle = noteData[2] || "Untitled Note";
 
       return (
-        <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+        <div
+          id={`entry-${entry.id}`}
+          className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+        >
           {/* Avatar */}
           {avatar}
 
@@ -857,7 +853,10 @@ export const EntryCard = memo(function EntryCard({
 
     // Regular text message
     return (
-      <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+      <div
+        id={`entry-${entry.id}`}
+        className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+      >
         {/* Avatar */}
         {avatar}
 
@@ -931,7 +930,10 @@ export const EntryCard = memo(function EntryCard({
     };
 
     return (
-      <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+      <div
+        id={`entry-${entry.id}`}
+        className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+      >
         {/* Avatar */}
         {avatar}
 
@@ -1011,7 +1013,10 @@ export const EntryCard = memo(function EntryCard({
 
   // Message-style file attachments
   return (
-    <div className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors">
+    <div
+      id={`entry-${entry.id}`}
+      className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+    >
       {/* Avatar */}
       {avatar}
 
