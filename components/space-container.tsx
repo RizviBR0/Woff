@@ -51,7 +51,7 @@ export function SpaceContainer({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Calculate days until space expires
   const daysUntilExpiry = useMemo(() => {
@@ -77,7 +77,7 @@ export function SpaceContainer({
       if (exists) {
         console.log(
           `🔄 ${source}: Entry already exists, skipping duplicate`,
-          newEntry.id
+          newEntry.id,
         );
         return prev;
       }
@@ -86,7 +86,7 @@ export function SpaceContainer({
         `🔄 ${source}: Adding entry`,
         newEntry.id,
         "Current count:",
-        prev.length
+        prev.length,
       );
       const updated = [...prev, newEntry];
       console.log(`🔄 ${source}: New count:`, updated.length);
@@ -127,7 +127,7 @@ export function SpaceContainer({
             addEntryIfNotExists(newEntry, "Real-time");
             setHasPosted(true);
           }, 200); // Increased delay to prevent race conditions with local updates
-        }
+        },
       )
       .on(
         "postgres_changes",
@@ -143,10 +143,10 @@ export function SpaceContainer({
 
           setEntries((prev) =>
             prev.map((entry) =>
-              entry.id === updatedEntry.id ? updatedEntry : entry
-            )
+              entry.id === updatedEntry.id ? updatedEntry : entry,
+            ),
           );
-        }
+        },
       )
       .subscribe();
 
@@ -167,7 +167,7 @@ export function SpaceContainer({
         scrollToBottom();
       }, 100);
     },
-    [scrollToBottom, addEntryIfNotExists]
+    [scrollToBottom, addEntryIfNotExists],
   );
 
   // Function to update an existing entry (used for optimistic UI)
@@ -176,11 +176,11 @@ export function SpaceContainer({
       console.log("📝 Local: Updating entry", entryId, updates);
       setEntries((prev) =>
         prev.map((entry) =>
-          entry.id === entryId ? { ...entry, ...updates } : entry
-        )
+          entry.id === entryId ? { ...entry, ...updates } : entry,
+        ),
       );
     },
-    []
+    [],
   );
 
   // Function to replace a placeholder entry with the real one
@@ -190,13 +190,13 @@ export function SpaceContainer({
         "📝 Local: Replacing placeholder",
         placeholderId,
         "with",
-        realEntry.id
+        realEntry.id,
       );
       setEntries((prev) =>
-        prev.map((entry) => (entry.id === placeholderId ? realEntry : entry))
+        prev.map((entry) => (entry.id === placeholderId ? realEntry : entry)),
       );
     },
-    []
+    [],
   );
 
   // Function to remove an entry (used for failed uploads)
@@ -230,14 +230,14 @@ export function SpaceContainer({
     try {
       // Use a QR code API service (QR Server is free and reliable)
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&format=png&data=${encodeURIComponent(
-        url
+        url,
       )}`;
       setQrCodeUrl(qrUrl);
     } catch (error) {
       console.error("Failed to generate QR code:", error);
       // Fallback: still set the URL so the image tries to load
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&format=png&data=${encodeURIComponent(
-        url
+        url,
       )}`;
       setQrCodeUrl(qrUrl);
     }
@@ -310,8 +310,8 @@ export function SpaceContainer({
                     daysUntilExpiry <= 2
                       ? "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400"
                       : daysUntilExpiry <= 4
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
-                      : "bg-muted text-muted-foreground hover:bg-accent"
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
+                        : "bg-muted text-muted-foreground hover:bg-accent"
                   }`}
                 >
                   <Clock className="h-3 w-3" />

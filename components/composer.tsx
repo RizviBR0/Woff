@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import NextImage from "next/image";
 import { Plus, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ export function Composer({
     type: string;
     progress: number; // 0-100
     status: "pending" | "uploading" | "done" | "error";
+    previewUrl?: string;
   };
   const [fileModalOpen, setFileModalOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
@@ -92,7 +94,7 @@ export function Composer({
   const createPlaceholderEntry = (
     kind: Entry["kind"],
     meta: any,
-    message?: string
+    message?: string,
   ): Entry => {
     const placeholderId = `placeholder-${Date.now()}-${Math.random()
       .toString(36)
@@ -111,6 +113,74 @@ export function Composer({
     };
   };
 
+  const uploadSingleFile = async (pf: PendingFile) => {
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).slice(2, 8);
+    // Sanitize filename to avoid weird characters
+    const sanitizedName = pf.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const uniquePath = `${spaceId}/${timestamp}-${randomSuffix}-${sanitizedName}`;
+
+    // 1. Get signed upload URL
+    const { data: signData, error: signErr } = await supabaseBrowser.storage
+      .from("files") // Ensure you have this bucket or use 'wuff-files'
+      .createSignedUploadUrl(uniquePath);
+
+    if (signErr) throw signErr;
+    if (!signData) throw new Error("No signed upload URL");
+
+    const { token, path } = signData;
+
+    // 2. Upload file
+    const { data: uploadData, error: uploadErr } = await supabaseBrowser.storage
+      .from("files")
+      .uploadToSignedUrl(path, token, pf.file);
+
+    if (uploadErr) throw uploadErr;
+
+    // 3. Get public URL
+    const { data: publicData } = supabaseBrowser.storage
+      .from("files")
+      .getPublicUrl(path);
+
+    // Update status to done
+    setPendingFiles((prev) =>
+      prev.map((p) =>
+        p.id === pf.id ? { ...p, status: "done", progress: 100 } : p,
+      ),
+    );
+
+    return {
+      name: pf.name,
+      size: pf.size,
+      type: pf.type,
+      url: publicData.publicUrl,
+    };
+  };
+
+  const handleGenericFilesSelected = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const items = Array.from(files).map((f, i) => {
+      let previewUrl = undefined;
+      if (f.type.startsWith("image/")) {
+        previewUrl = URL.createObjectURL(f);
+      }
+      return {
+        id: `${Date.now()}-${i}-${f.name}`,
+        file: f,
+        name: f.name,
+        size: f.size,
+        type: f.type || "application/octet-stream",
+        progress: 0,
+        status: "pending" as const,
+        previewUrl,
+      };
+    });
+    setPendingFiles((prev) => [...prev, ...items]);
+    setFileModalOpen(true);
+    // Reset inputs
+    if (anyFileInputRef.current) anyFileInputRef.current.value = "";
+  };
+
   const formatBytes = (bytes: number) => {
     const mb = bytes / (1024 * 1024);
     return `${mb.toFixed(mb < 1 ? 2 : 1)} MB`;
@@ -127,8 +197,8 @@ export function Composer({
             result.finalBytes / 1024
           ).toFixed(0)}KB @ q=${result.qualityUsed.toFixed(2)}`
         : `Image ${(result.originalBytes / 1024).toFixed(
-            0
-          )}KB did not need compression`
+            0,
+          )}KB did not need compression`,
     );
     return result.dataUrl;
   };
@@ -172,7 +242,7 @@ export function Composer({
     const placeholder = createPlaceholderEntry(
       "text",
       { type: "drawing", previewUrl: dataUrl },
-      "Saving drawing..."
+      "Saving drawing...",
     );
     onNewEntry(placeholder);
     setDrawingOpen(false);
@@ -228,7 +298,7 @@ export function Composer({
     const placeholder = createPlaceholderEntry(
       "text",
       { type: "note", noteSlug, publicCode },
-      "Creating note..."
+      "Creating note...",
     );
     onNewEntry(placeholder);
 
@@ -239,7 +309,7 @@ export function Composer({
       const entry = await createEntry(
         spaceId,
         "text",
-        `NOTE:${noteSlug}:${publicCode}:Untitled Note`
+        `NOTE:${noteSlug}:${publicCode}:Untitled Note`,
       );
 
       // Replace placeholder with real entry
@@ -259,7 +329,7 @@ export function Composer({
     }
   };
   const handleImageCapture = async (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     if (isSubmitting) {
       return;
@@ -289,7 +359,7 @@ export function Composer({
     const placeholder = createPlaceholderEntry(
       "text",
       { type: "photo", previewUrl: tempPreviewUrl },
-      "Preparing photo..."
+      "Preparing photo...",
     );
     onNewEntry(placeholder);
 
@@ -346,7 +416,7 @@ export function Composer({
   };
 
   const handleMultiplePhotos = async (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     if (isSubmitting) {
       return;
@@ -357,15 +427,15 @@ export function Composer({
     const filesArr = Array.from(files);
     const nonImages = filesArr.filter((f) => !f.type.startsWith("image/"));
     const oversize = filesArr.filter(
-      (f) => f.type.startsWith("image/") && f.size > MAX_IMAGE_SIZE_BYTES
+      (f) => f.type.startsWith("image/") && f.size > MAX_IMAGE_SIZE_BYTES,
     );
     const imageFiles = filesArr.filter(
-      (f) => f.type.startsWith("image/") && f.size <= MAX_IMAGE_SIZE_BYTES
+      (f) => f.type.startsWith("image/") && f.size <= MAX_IMAGE_SIZE_BYTES,
     );
 
     if (nonImages.length > 0 && oversize.length > 0) {
       alert(
-        `${nonImages.length} non-image file(s) and ${oversize.length} over 10 MB were skipped`
+        `${nonImages.length} non-image file(s) and ${oversize.length} over 10 MB were skipped`,
       );
     } else if (nonImages.length > 0) {
       alert(`${nonImages.length} non-image file(s) were skipped`);
@@ -396,7 +466,7 @@ export function Composer({
       { type: "photos", previewUrls, count: imageFiles.length },
       `Preparing ${imageFiles.length} photo${
         imageFiles.length > 1 ? "s" : ""
-      }...`
+      }...`,
     );
     onNewEntry(placeholder);
 
@@ -484,7 +554,7 @@ export function Composer({
             entry = await createEntry(
               spaceId,
               "text",
-              `PHOTOS:${JSON.stringify(group)}`
+              `PHOTOS:${JSON.stringify(group)}`,
             );
           }
 
@@ -530,75 +600,22 @@ export function Composer({
     }
   };
 
-  const handleGenericFilesSelected = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const items = Array.from(files).map((f, i) => ({
-      id: `${Date.now()}-${i}-${f.name}`,
-      file: f,
-      name: f.name,
-      size: f.size,
-      type: f.type || "application/octet-stream",
-      progress: 0,
-      status: "pending" as const,
-    }));
-    setPendingFiles(items);
-    setFileModalOpen(true);
-  };
-
   const removePendingFile = (id: string) => {
-    setPendingFiles((prev) => prev.filter((f) => f.id !== id));
+    setPendingFiles((prev) => {
+      const file = prev.find((p) => p.id === id);
+      if (file?.previewUrl) {
+        URL.revokeObjectURL(file.previewUrl);
+      }
+      return prev.filter((p) => p.id !== id);
+    });
   };
 
-  const uploadSingleFile = async (pf: PendingFile) => {
-    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const path = `spaces/${spaceId}/files/${unique}-${pf.name}`;
-    const { data, error } = await supabaseBrowser.storage
-      .from("files")
-      .upload(path, pf.file, { cacheControl: "3600", upsert: false });
-    if (error) throw error;
-    const { data: urlData } = supabaseBrowser.storage
-      .from("files")
-      .getPublicUrl(data.path);
-    return {
-      name: pf.name,
-      size: pf.size,
-      type: pf.type,
-      url: urlData.publicUrl,
-    };
-  };
-
-  const retryFile = async (id: string) => {
-    const pf = pendingFiles.find((f) => f.id === id);
-    if (!pf || fileUploading) return;
-    try {
-      setPendingFiles((prev) =>
-        prev.map((f) =>
-          f.id === id ? { ...f, status: "uploading", progress: 20 } : f
-        )
-      );
-      const uploaded = await uploadSingleFile(pf);
-      setPendingFiles((prev) =>
-        prev.map((f) =>
-          f.id === id ? { ...f, status: "done", progress: 100 } : f
-        )
-      );
-      // Immediately create an entry for this retried file
-      const meta = { type: "files", items: [uploaded] } as const;
-      const entry = await createEntry(spaceId, "file", "FILE_ENTRY", meta);
-      onNewEntry(entry);
-      toast.success(`Uploaded ${pf.name}`);
-      // Remove it from the modal list and close if none left
-      const next = pendingFiles.filter((f) => f.id !== id);
-      setPendingFiles(next);
-      if (next.length === 0) setFileModalOpen(false);
-    } catch (e: any) {
-      setPendingFiles((prev) =>
-        prev.map((f) =>
-          f.id === id ? { ...f, status: "error", progress: 100 } : f
-        )
-      );
-      toast.error(`Retry failed for ${pf?.name || "file"}`);
-    }
+  const retryFile = (id: string) => {
+    setPendingFiles((prev) =>
+      prev.map((p) =>
+        p.id === id ? { ...p, status: "pending", progress: 0 } : p,
+      ),
+    );
   };
 
   const handleFileUpload = async () => {
@@ -611,27 +628,33 @@ export function Composer({
       return;
 
     // Create placeholder entry immediately for optimistic UI
-    const fileNames = pendingFiles.map((f) => f.name);
+    // For placeholder, use local preview URLs if available
+    const itemsForMeta = pendingFiles.map((f) => ({
+      name: f.name,
+      size: f.size,
+      type: f.type,
+      url: f.previewUrl || "", // Use local preview for placeholder
+    }));
+
     const placeholder = createPlaceholderEntry(
       "file",
       {
         type: "files",
-        items: pendingFiles.map((f) => ({
-          name: f.name,
-          size: f.size,
-          type: f.type,
-          url: "",
-        })),
+        items: itemsForMeta,
       },
       `Uploading ${pendingFiles.length} file${
         pendingFiles.length > 1 ? "s" : ""
-      }...`
+      }...`,
     );
     onNewEntry(placeholder);
 
     // Close modal immediately for better UX
     setFileModalOpen(false);
     const filesToUpload = [...pendingFiles];
+    // Don't clear pendingFiles yet? actually we do, but we need to revoke URLs later
+    // We can't revoke immediately if we use them for placeholder...
+    // But placeholder renders in EntryCard, which can handle blob URLs (if passed through).
+    // However, we are clearing pendingFiles state.
     setPendingFiles([]);
 
     try {
@@ -673,7 +696,7 @@ export function Composer({
 
         if (failedIds.length > 0) {
           toast.message(
-            `${uploaded.length} file(s) uploaded, ${failedIds.length} failed`
+            `${uploaded.length} file(s) uploaded, ${failedIds.length} failed`,
           );
         }
       } else {
@@ -693,6 +716,17 @@ export function Composer({
       setTimeout(() => onRemoveEntry?.(placeholder.id), 3000);
     } finally {
       setFileUploading(false);
+      // Clean up object URLs
+      filesToUpload.forEach((f) => {
+        if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+      });
+    }
+  };
+
+  const handleModalKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "BUTTON") {
+      e.preventDefault();
+      handleFileUpload();
     }
   };
 
@@ -744,20 +778,20 @@ export function Composer({
                 uploadStage === "Error"
                   ? "bg-red-500"
                   : uploadStage === "Done"
-                  ? "bg-green-500"
-                  : "bg-primary"
+                    ? "bg-green-500"
+                    : "bg-primary",
               )}
               style={{
                 width:
                   uploadStage === "Compressing" && uploadTotal > 0
                     ? `${Math.round((uploadProcessed / uploadTotal) * 100)}%`
                     : uploadStage === "Uploading"
-                    ? "100%"
-                    : uploadStage === "Done"
-                    ? "100%"
-                    : uploadStage === "Error"
-                    ? "100%"
-                    : "0%",
+                      ? "100%"
+                      : uploadStage === "Done"
+                        ? "100%"
+                        : uploadStage === "Error"
+                          ? "100%"
+                          : "0%",
               }}
             />
           </div>
@@ -769,6 +803,62 @@ export function Composer({
       </DialogContent>
     </Dialog>
   );
+
+  const processPastedFiles = (files: File[]) => {
+    const items = files.map((f, i) => {
+      let previewUrl = undefined;
+      if (f.type.startsWith("image/")) {
+        previewUrl = URL.createObjectURL(f);
+      }
+      return {
+        id: `${Date.now()}-${i}-${f.name || "image.png"}`,
+        file: f,
+        name:
+          f.name ||
+          `pasted-image-${Date.now()}-${Math.random().toString(36).slice(2, 9)}.png`,
+        size: f.size,
+        type: f.type || "application/octet-stream",
+        progress: 0,
+        status: "pending" as const,
+        previewUrl,
+      };
+    });
+    setPendingFiles((prev) => [...prev, ...items]);
+    setFileModalOpen(true);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (e.clipboardData.files.length > 0) {
+      e.preventDefault();
+      processPastedFiles(Array.from(e.clipboardData.files));
+    }
+  };
+
+  // Global paste handler for when input is not focused
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      // Skip if event target is our textarea (already handled by onPaste)
+      if (e.target === textareaRef.current) return;
+
+      // Skip if target is another input/textarea/contentEditable
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.clipboardData && e.clipboardData.files.length > 0) {
+        e.preventDefault();
+        processPastedFiles(Array.from(e.clipboardData.files));
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => window.removeEventListener("paste", handleGlobalPaste);
+  }, []);
 
   if (centered) {
     // Large centered composer for first post - Enhanced Design
@@ -792,6 +882,7 @@ export function Composer({
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 placeholder="What's on your mind?"
                 className="min-h-[140px] resize-none border-0 bg-transparent p-8 text-lg leading-relaxed placeholder:text-muted-foreground/70 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
                 disabled={isSubmitting}
@@ -987,7 +1078,10 @@ export function Composer({
           {uploadDialog}
           {/* File upload modal */}
           <Dialog open={fileModalOpen} onOpenChange={setFileModalOpen}>
-            <DialogContent className="sm:max-w-lg w-full max-h-[85vh] overflow-hidden">
+            <DialogContent
+              className="sm:max-w-lg w-full max-h-[85vh] overflow-hidden"
+              onKeyDown={handleModalKeyDown}
+            >
               <DialogHeader>
                 <DialogTitle>Upload files</DialogTitle>
                 <DialogDescription>
@@ -1006,18 +1100,42 @@ export function Composer({
                         key={pf.id}
                         className="flex items-center justify-between p-2"
                       >
-                        <div className="min-w-0">
-                          <div
-                            className="text-sm font-medium truncate max-w-[220px] sm:max-w-[360px]"
-                            title={pf.name}
-                          >
-                            {pf.name}
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          {/* Image preview or file icon */}
+                          <div className="relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border">
+                            {pf.file.type.startsWith("image/") &&
+                            pf.previewUrl ? (
+                              <NextImage
+                                src={pf.previewUrl}
+                                alt="Preview"
+                                fill
+                                unoptimized
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                                <span className="text-xs uppercase font-bold">
+                                  {pf.name.split(".").pop()?.slice(0, 3) ||
+                                    "FILE"}
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatBytes(pf.size)} • {pf.type || "file"}
+
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className="text-sm font-medium truncate max-w-[180px] sm:max-w-[300px]"
+                              title={pf.name}
+                            >
+                              {pf.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatBytes(pf.size)} • {pf.type || "file"}
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+
+                        <div className="flex items-center gap-2 pl-2">
                           {pf.status !== "pending" && (
                             <div className="text-xs text-muted-foreground w-12 text-right">
                               {pf.progress}%
@@ -1072,7 +1190,13 @@ export function Composer({
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={() => setFileModalOpen(false)}
+                    onClick={() => {
+                      setFileModalOpen(false);
+                      pendingFiles.forEach((f) => {
+                        if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+                      });
+                      setPendingFiles([]);
+                    }}
                     disabled={fileUploading}
                   >
                     Cancel
@@ -1177,6 +1301,7 @@ export function Composer({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder="Write something..."
           className="min-h-[32px] max-h-24 resize-none border-0 bg-transparent px-3 py-1.5 text-sm placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
           disabled={isSubmitting}
@@ -1244,7 +1369,10 @@ export function Composer({
       {uploadDialog}
       {/* File upload modal for compact composer */}
       <Dialog open={fileModalOpen} onOpenChange={setFileModalOpen}>
-        <DialogContent className="sm:max-w-lg w-full max-h-[85vh] overflow-hidden">
+        <DialogContent
+          className="sm:max-w-lg w-full max-h-[85vh] overflow-hidden"
+          onKeyDown={handleModalKeyDown}
+        >
           <DialogHeader>
             <DialogTitle>Upload files</DialogTitle>
             <DialogDescription>
@@ -1263,15 +1391,36 @@ export function Composer({
                     key={pf.id}
                     className="flex items-center justify-between p-2"
                   >
-                    <div className="min-w-0">
-                      <div
-                        className="text-sm font-medium truncate max-w-[220px] sm:max-w-[360px]"
-                        title={pf.name}
-                      >
-                        {pf.name}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {/* Image preview or file icon */}
+                      <div className="relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border">
+                        {pf.file.type.startsWith("image/") && pf.previewUrl ? (
+                          <NextImage
+                            src={pf.previewUrl}
+                            alt="Preview"
+                            fill
+                            unoptimized
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                            <span className="text-xs uppercase font-bold">
+                              {pf.name.split(".").pop()?.slice(0, 3) || "FILE"}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatBytes(pf.size)} • {pf.type || "file"}
+
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className="text-sm font-medium truncate max-w-[180px] sm:max-w-[300px]"
+                          title={pf.name}
+                        >
+                          {pf.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatBytes(pf.size)} • {pf.type || "file"}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1326,7 +1475,10 @@ export function Composer({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setFileModalOpen(false)}
+                onClick={() => {
+                  setFileModalOpen(false);
+                  setPendingFiles([]);
+                }}
                 disabled={fileUploading}
               >
                 Cancel

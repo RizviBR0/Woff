@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import JSZip from "jszip";
 import { useState, useEffect, memo } from "react";
 import { PhotoGallery } from "./photo-gallery";
@@ -126,10 +127,9 @@ export const EntryCard = memo(function EntryCard({
     </div>
   ) : null;
 
-  // Handle keyboard events for modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && showImageModal) {
+      if (e.key === "Escape") {
         setShowImageModal(false);
       }
     };
@@ -144,6 +144,47 @@ export const EntryCard = memo(function EntryCard({
       document.body.style.overflow = "unset";
     };
   }, [showImageModal]);
+
+  const imageModal = (
+    <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
+      <DialogContent className="max-w-5xl w-full p-0 overflow-hidden bg-transparent border-none shadow-none [&>button]:hidden">
+        <DialogTitle className="hidden">Preview</DialogTitle>
+        <div className="relative w-full h-[85vh] flex items-center justify-center group/modal">
+          <button
+            onClick={() => setShowImageModal(false)}
+            className="absolute top-4 right-4 z-50 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          {currentImageUrl && (
+            <NextImage
+              src={currentImageUrl}
+              alt="Preview"
+              fill
+              className="object-contain"
+              unoptimized
+              priority
+            />
+          )}
+
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="bg-black/50 hover:bg-black/70 text-white border-none"
+              onClick={() =>
+                downloadFileUrl(currentImageUrl, `image-${Date.now()}.png`)
+              }
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   // Check if note is locked (only for note entries)
   useEffect(() => {
@@ -306,15 +347,24 @@ export const EntryCard = memo(function EntryCard({
     return `${mb.toFixed(mb < 1 ? 2 : 1)} MB`;
   };
 
-  const downloadFileUrl = (url: string, name: string) => {
+  const downloadFileUrl = async (url: string, name: string) => {
     try {
+      // Fetch blob to ensure download works for cross-origin files
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
       const link = document.createElement("a");
-      link.href = url;
+      link.href = blobUrl;
       link.download = name;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
+      // Clean up
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
     } catch (e) {
+      console.error("Download failed, opening in new tab", e);
       window.open(url, "_blank");
     }
   };
@@ -684,8 +734,8 @@ export const EntryCard = memo(function EntryCard({
                       const filename = entry.text?.startsWith("DRAWING:")
                         ? `drawing-${entry.id}.png`
                         : entry.text?.startsWith("PHOTO:")
-                        ? `photo-${entry.id}.jpg`
-                        : `image-${entry.id}.png`;
+                          ? `photo-${entry.id}.jpg`
+                          : `image-${entry.id}.png`;
                       handleDownload(currentImageUrl, filename);
                     }}
                     title="Download image"
@@ -722,7 +772,7 @@ export const EntryCard = memo(function EntryCard({
           const parsed = JSON.parse(photosDataRaw);
           if (Array.isArray(parsed)) {
             photosData = parsed.filter(
-              (v) => typeof v === "string" && v.startsWith("data:image")
+              (v) => typeof v === "string" && v.startsWith("data:image"),
             );
           }
         } else {
@@ -753,10 +803,10 @@ export const EntryCard = memo(function EntryCard({
                 mimeType === "image/jpeg"
                   ? "jpg"
                   : mimeType === "image/png"
-                  ? "png"
-                  : mimeType === "image/gif"
-                  ? "gif"
-                  : "jpg";
+                    ? "png"
+                    : mimeType === "image/gif"
+                      ? "gif"
+                      : "jpg";
               zip.file(`photo-${index + 1}.${extension}`, base64Data, {
                 base64: true,
               });
@@ -977,7 +1027,7 @@ export const EntryCard = memo(function EntryCard({
             .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, "> $1\n\n")
             .replace(
               /<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gi,
-              "```\n$1\n```\n\n"
+              "```\n$1\n```\n\n",
             )
             .replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`")
             .replace(/<strong[^>]*>(.*?)<\/strong>/gi, "**$1**")
@@ -1215,6 +1265,18 @@ export const EntryCard = memo(function EntryCard({
       }
     };
 
+    // Helper to check if file is an image
+    const isImage = (type: string, name: string) => {
+      return (
+        type?.startsWith("image/") ||
+        /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(name)
+      );
+    };
+
+    const allImages =
+      items.length > 0 && items.every((it) => isImage(it.type, it.name));
+    const icon = allImages ? "🖼️" : "📄";
+
     return (
       <div
         id={`entry-${entry.id}`}
@@ -1245,40 +1307,118 @@ export const EntryCard = memo(function EntryCard({
           {/* Files content */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>📄</span>
-              <span>{items.length > 1 ? "Files" : "File"}</span>
+              <span>{icon}</span>
+              <span>
+                {items.length > 1
+                  ? allImages
+                    ? "Images"
+                    : "Files"
+                  : allImages
+                    ? "Image"
+                    : "File"}
+              </span>
             </div>
-            <div className="divide-y rounded-md border border-border/20 bg-background">
-              {items.map((it) => (
-                <div
-                  key={it.url}
-                  className="flex items-center justify-between p-2 hover:bg-accent/30 transition-colors"
-                >
-                  <div className="min-w-0">
-                    <div
-                      className="text-sm font-medium truncate max-w-[220px] sm:max-w-[360px]"
-                      title={it.name}
-                    >
-                      {it.name}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatBytes(it.size)} • {it.type || "file"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
+
+            {/* Display images as visual gallery if possible, otherwise list */}
+            {items.every((it) => isImage(it.type, it.name)) ? (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {items.map((it) => (
+                  <div
+                    key={it.url}
+                    className="relative aspect-square group/image"
+                  >
+                    <NextImage
+                      src={it.url}
+                      alt={it.name}
+                      fill
+                      unoptimized
+                      className="object-cover rounded-lg border border-border/20 cursor-pointer hover:opacity-90 transition-opacity bg-background"
+                      onClick={() => handleView(it.url)}
+                    />
                     <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 px-2"
-                      onClick={() => downloadFileUrl(it.url, it.name)}
+                      size="icon"
+                      variant="secondary"
+                      className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover/image:opacity-100 transition-opacity shadow-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        downloadFileUrl(it.url, it.name);
+                      }}
                       title="Download"
                     >
-                      <Download className="h-4 w-4" />
+                      <Download className="h-3 w-3" />
                     </Button>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="divide-y rounded-md border border-border/20 bg-background">
+                {items.map((it) => {
+                  const isImg = isImage(it.type, it.name);
+                  return (
+                    <div
+                      key={it.url}
+                      className="flex items-center justify-between p-2 hover:bg-accent/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {isImg ? (
+                          <div
+                            className="relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => handleView(it.url)}
+                          >
+                            <NextImage
+                              src={it.url}
+                              alt="Preview"
+                              fill
+                              unoptimized
+                              className="object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-10 w-10 flex items-center justify-center bg-muted rounded flex-shrink-0 text-muted-foreground border">
+                            <FileText className="h-5 w-5" />
+                          </div>
+                        )}
+
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className="text-sm font-medium truncate max-w-[180px] sm:max-w-[300px]"
+                            title={it.name}
+                          >
+                            {it.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatBytes(it.size)} • {it.type || "file"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pl-2">
+                        {isImg && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2"
+                            onClick={() => handleView(it.url)}
+                            title="View"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2"
+                          onClick={() => downloadFileUrl(it.url, it.name)}
+                          title="Download"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Action buttons */}
@@ -1296,6 +1436,7 @@ export const EntryCard = memo(function EntryCard({
             </div>
           )}
         </div>
+        {imageModal}
       </div>
     );
   }
@@ -1336,16 +1477,16 @@ export const EntryCard = memo(function EntryCard({
               entry.kind === "image"
                 ? "bg-gradient-to-br from-blue-400 to-blue-600"
                 : entry.kind === "pdf"
-                ? "bg-gradient-to-br from-red-400 to-red-600"
-                : "bg-gradient-to-br from-gray-400 to-gray-600"
+                  ? "bg-gradient-to-br from-red-400 to-red-600"
+                  : "bg-gradient-to-br from-gray-400 to-gray-600"
             }`}
           >
             <span className="text-white text-sm filter drop-shadow-sm">
               {entry.kind === "image"
                 ? "📷"
                 : entry.kind === "pdf"
-                ? "📄"
-                : "📁"}
+                  ? "📄"
+                  : "📁"}
             </span>
           </div>
 
@@ -1355,15 +1496,15 @@ export const EntryCard = memo(function EntryCard({
               {entry.kind === "image"
                 ? "Photo"
                 : entry.kind === "pdf"
-                ? "Document"
-                : "File"}
+                  ? "Document"
+                  : "File"}
             </div>
             <div className="text-xs text-muted-foreground/80 mt-0.5">
               {entry.kind === "image"
                 ? "Image attachment"
                 : entry.kind === "pdf"
-                ? "PDF document"
-                : "File attachment"}
+                  ? "PDF document"
+                  : "File attachment"}
             </div>
           </div>
 
@@ -1405,6 +1546,7 @@ export const EntryCard = memo(function EntryCard({
           </div>
         )}
       </div>
+      {imageModal}
     </div>
   );
 });
