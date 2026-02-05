@@ -13,6 +13,7 @@ export interface Space {
   allow_public_post: boolean;
   created_at: string;
   last_activity_at: string;
+  is_pro?: boolean;
 }
 
 export async function createSpace(): Promise<Space> {
@@ -98,7 +99,7 @@ export async function createEntry(
   spaceId: string,
   kind: "text" | "image" | "pdf" | "file",
   text?: string,
-  meta?: any
+  meta?: any,
 ): Promise<Entry> {
   // Get device ID from cookies
   const cookieStore = await cookies();
@@ -179,13 +180,13 @@ export interface Note {
 
 export async function createNoteEntry(
   spaceId: string,
-  title?: string
+  title?: string,
 ): Promise<{ noteSlug: string; publicCode: string; entryId: string }> {
   console.log(
     "💾 Creating note entry for space:",
     spaceId,
     "with title:",
-    title
+    title,
   );
 
   // Generate unique slug and public code
@@ -230,7 +231,7 @@ export async function updateNote(
     font_family: string;
     is_locked: boolean;
     passcode: string;
-  }>
+  }>,
 ): Promise<Note> {
   // Get or create device ID
   const cookieStore = await cookies();
@@ -263,7 +264,7 @@ export async function updateNote(
   if (!entries || entries.length === 0) {
     // Note doesn't exist in database, create a mock response
     throw new Error(
-      "Note not found in database - this appears to be a mock note"
+      "Note not found in database - this appears to be a mock note",
     );
   }
 
@@ -391,7 +392,7 @@ export async function getNote(noteSlug: string): Promise<Note | null> {
       spaces:space_id (
         slug
       )
-    `
+    `,
     )
     .eq("kind", "text")
     .like("text", `NOTE:${noteSlug}:%`);
@@ -426,7 +427,7 @@ export async function getNote(noteSlug: string): Promise<Note | null> {
 
 export async function verifyNotePasscode(
   noteSlug: string,
-  passcode: string
+  passcode: string,
 ): Promise<boolean> {
   const note = await getNote(noteSlug);
 
@@ -439,7 +440,7 @@ export async function verifyNotePasscode(
 
 export async function updateNoteEntry(
   entryId: string,
-  noteTitle: string
+  noteTitle: string,
 ): Promise<void> {
   // Get device ID from cookies
   const cookieStore = await cookies();
@@ -532,4 +533,23 @@ export async function ensureDeviceId(): Promise<string> {
   }
 
   return deviceId;
+}
+
+export async function getPlanStatus(): Promise<{
+  isPro: boolean;
+  deviceId: string;
+}> {
+  const deviceId = await ensureDeviceId();
+  const supabase = await createServerSupabaseClient();
+
+  const { data } = await supabase
+    .from("device_sessions")
+    .select("is_pro")
+    .eq("device_id", deviceId)
+    .single();
+
+  return {
+    isPro: data?.is_pro || false,
+    deviceId,
+  };
 }

@@ -13,7 +13,13 @@ import {
   PanelRight,
   Clock,
 } from "lucide-react";
-import { Space } from "@/lib/actions";
+import {
+  Space,
+  createEntry,
+  updateSpaceActivity,
+  createNoteEntry,
+  updateNoteEntry,
+} from "@/lib/actions";
 import { getDaysUntilExpiry } from "@/lib/utils";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
@@ -52,6 +58,9 @@ export function SpaceContainer({
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Use space prop for pro status
+  const isPro = space.is_pro || false;
 
   // Calculate days until space expires
   const daysUntilExpiry = useMemo(() => {
@@ -303,34 +312,37 @@ export function SpaceContainer({
               )}
             </Button>
             {/* Expiry indicator */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className={`flex items-center gap-1 h-6 text-[10px] px-2 py-0.5 rounded-full transition-colors ${
-                    daysUntilExpiry <= 2
-                      ? "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400"
-                      : daysUntilExpiry <= 4
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
-                        : "bg-muted text-muted-foreground hover:bg-accent"
-                  }`}
-                >
-                  <Clock className="h-3 w-3" />
-                  <span>{daysUntilExpiry}d</span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 p-3" align="center">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">
-                    Space expires in {daysUntilExpiry} day
-                    {daysUntilExpiry !== 1 ? "s" : ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Spaces are automatically deleted after 2 days of inactivity.
-                    Any activity (viewing or posting) resets this timer.
-                  </p>
-                </div>
-              </PopoverContent>
-            </Popover>
+            {!isPro && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    className={`flex items-center gap-1 h-6 text-[10px] px-2 py-0.5 rounded-full transition-colors ${
+                      daysUntilExpiry <= 2
+                        ? "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400"
+                        : daysUntilExpiry <= 4
+                          ? "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
+                          : "bg-muted text-muted-foreground hover:bg-accent"
+                    }`}
+                  >
+                    <Clock className="h-3 w-3" />
+                    <span>{daysUntilExpiry}d</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-3" align="center">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">
+                      Space expires in {daysUntilExpiry} day
+                      {daysUntilExpiry !== 1 ? "s" : ""}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Spaces are automatically deleted after 2 days of
+                      inactivity. Any activity (viewing or posting) resets this
+                      timer.
+                    </p>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -373,6 +385,19 @@ export function SpaceContainer({
                     <p className="text-sm text-muted-foreground">
                       Customize your experience
                     </p>
+                  </div>
+
+                  <div className="p-3 bg-muted/50 rounded-lg flex items-center justify-between">
+                    <div className="text-sm font-medium">Plan</div>
+                    <div
+                      className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        isPro
+                          ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                      }`}
+                    >
+                      {isPro ? "PRO" : "FREE"}
+                    </div>
                   </div>
 
                   <div className="space-y-3">
