@@ -43,7 +43,7 @@ export async function createSpace(): Promise<Space> {
       .from("spaces")
       .select("slug")
       .eq("slug", slug)
-      .single();
+      .maybeSingle();
 
     if (!existing) break;
 
@@ -252,9 +252,10 @@ export async function updateNote(
   // Find the entry with this note slug
   const { data: entries, error: fetchError } = await supabase
     .from("entries")
-    .select("*")
+    .select("id, space_id, text, meta, created_by_device_id, created_at")
     .eq("kind", "text")
-    .like("text", `NOTE:${noteSlug}:%`);
+    .like("text", `NOTE:${noteSlug}:%`)
+    .limit(1);
 
   if (fetchError) {
     console.error("Database error:", fetchError);

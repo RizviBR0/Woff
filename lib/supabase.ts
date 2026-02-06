@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -7,9 +7,22 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // Client-side Supabase client for real-time and client operations
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Client-side Supabase client (same as above, but explicit for clarity)
+// Singleton instance for client-side Supabase client
+let clientSupabaseInstance: SupabaseClient | null = null;
+
+// Client-side Supabase client with singleton pattern to avoid creating multiple instances
 export const createClientSupabaseClient = () => {
-  return createClient(supabaseUrl, supabaseAnonKey);
+  if (clientSupabaseInstance) {
+    return clientSupabaseInstance;
+  }
+  clientSupabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    realtime: {
+      params: {
+        eventsPerSecond: 10, // Rate limit realtime events
+      },
+    },
+  });
+  return clientSupabaseInstance;
 };
 
 // Server-side Supabase client with device ID context

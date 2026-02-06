@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import JSZip from "jszip";
+// JSZip is dynamically imported when needed to reduce bundle size
 import { useState, useEffect, memo } from "react";
 import { PhotoGallery } from "./photo-gallery";
 import { displayNameForDevice } from "@/lib/display-name";
@@ -1245,6 +1245,7 @@ export const EntryCard = memo(function EntryCard({
 
     const handleDownloadAllZip = async () => {
       try {
+        const JSZip = (await import("jszip")).default;
         const zip = new JSZip();
         for (const item of items) {
           const res = await fetch(item.url);

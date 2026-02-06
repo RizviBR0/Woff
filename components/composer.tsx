@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import NextImage from "next/image";
-import { Plus, Send, X } from "lucide-react";
+import { Plus, Send, X, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,6 +55,11 @@ export function Composer({
   const lastUploadSignatureRef = useRef<string>("");
   const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB per image
 
+  // Preview state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [previewBg, setPreviewBg] = useState("bg-black/90");
+
   // Upload/compress modal state
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadStage, setUploadStage] = useState<
@@ -63,6 +68,59 @@ export function Composer({
   const [uploadProcessed, setUploadProcessed] = useState(0);
   const [uploadTotal, setUploadTotal] = useState(0);
   const [uploadMessage, setUploadMessage] = useState<string>("");
+
+  const analyzeImageBrightness = (dataUrl: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(false);
+            return;
+          }
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          let totalBrightness = 0;
+          let pixelCount = 0;
+          for (let i = 0; i < data.length; i += 40) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const a = data[i + 3];
+            if (a > 0) {
+              const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+              totalBrightness += brightness;
+              pixelCount++;
+            }
+          }
+          const averageBrightness =
+            pixelCount > 0 ? totalBrightness / pixelCount : 0;
+          resolve(averageBrightness > 128);
+        } catch (error) {
+          resolve(false);
+        }
+      };
+      img.onerror = () => resolve(false);
+      img.src = dataUrl;
+    });
+  };
+
+  const handlePreview = async (url: string) => {
+    setPreviewUrl(url);
+    setPreviewOpen(true);
+    try {
+      const isBright = await analyzeImageBrightness(url);
+      setPreviewBg(isBright ? "bg-gray-800/95" : "bg-gray-100/95");
+    } catch {
+      setPreviewBg("bg-black/90");
+    }
+  };
 
   // ----- Generic file upload state -----
   type PendingFile = {
@@ -1102,7 +1160,22 @@ export function Composer({
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           {/* Image preview or file icon */}
-                          <div className="relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border">
+                          <div
+                            className={cn(
+                              "relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border",
+                              pf.file.type.startsWith("image/") &&
+                                pf.previewUrl &&
+                                "cursor-zoom-in hover:opacity-90 transition-opacity",
+                            )}
+                            onClick={() => {
+                              if (
+                                pf.file.type.startsWith("image/") &&
+                                pf.previewUrl
+                              ) {
+                                handlePreview(pf.previewUrl);
+                              }
+                            }}
+                          >
                             {pf.file.type.startsWith("image/") &&
                             pf.previewUrl ? (
                               <NextImage
@@ -1217,6 +1290,66 @@ export function Composer({
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Full screen image preview modal */}
+          {previewOpen && previewUrl && (
+            <div
+              className={`fixed inset-0 ${previewBg} z-[60] flex items-center justify-center transition-colors duration-300`}
+              onClick={() => setPreviewOpen(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setPreviewOpen(false);
+              }}
+              tabIndex={-1}
+            >
+              <div
+                className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center px-2 sm:px-4 py-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="relative w-full h-full max-w-[95vw] max-h-[95vh] flex items-center justify-center">
+                  <NextImage
+                    src={previewUrl}
+                    alt="Image - full view"
+                    fill
+                    unoptimized
+                    sizes="(max-width: 768px) 95vw, 90vw"
+                    className="object-contain rounded-lg shadow-2xl"
+                  />
+                </div>
+                {/* Control buttons */}
+                <div className="fixed top-4 right-4 flex gap-3 z-50">
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    className="h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const link = document.createElement("a");
+                      link.href = previewUrl;
+                      link.download = "preview.png";
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    title="Download image"
+                  >
+                    <Download className="h-6 w-6" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    className="h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewOpen(false);
+                    }}
+                    title="Close (Esc)"
+                  >
+                    <X className="h-6 w-6" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </form>
       </div>
     );
@@ -1393,7 +1526,22 @@ export function Composer({
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       {/* Image preview or file icon */}
-                      <div className="relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border">
+                      <div
+                        className={cn(
+                          "relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border",
+                          pf.file.type.startsWith("image/") &&
+                            pf.previewUrl &&
+                            "cursor-zoom-in hover:opacity-90 transition-opacity",
+                        )}
+                        onClick={() => {
+                          if (
+                            pf.file.type.startsWith("image/") &&
+                            pf.previewUrl
+                          ) {
+                            handlePreview(pf.previewUrl);
+                          }
+                        }}
+                      >
                         {pf.file.type.startsWith("image/") && pf.previewUrl ? (
                           <NextImage
                             src={pf.previewUrl}
@@ -1499,6 +1647,67 @@ export function Composer({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Full screen image preview modal */}
+      {previewOpen && previewUrl && (
+        <div
+          className={`fixed inset-0 -top-[25px] ${previewBg} z-[60] flex items-center justify-center transition-colors duration-300`}
+          onClick={() => setPreviewOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setPreviewOpen(false);
+          }}
+          tabIndex={-1}
+        >
+          <div
+            className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center px-2 sm:px-4 py-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative w-full h-full max-w-[95vw] max-h-[95vh] flex items-center justify-center">
+              <NextImage
+                src={previewUrl}
+                alt="Image - full view"
+                fill
+                unoptimized
+                sizes="(max-width: 768px) 95vw, 90vw"
+                className="object-contain rounded-lg shadow-2xl"
+              />
+            </div>
+            {/* Control buttons */}
+            <div className="fixed top-4 right-4 flex gap-3 z-50">
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // For local blobs, we can just download
+                  const link = document.createElement("a");
+                  link.href = previewUrl;
+                  link.download = "preview.png";
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                title="Download image"
+              >
+                <Download className="h-6 w-6" />
+              </Button>
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPreviewOpen(false);
+                }}
+                title="Close (Esc)"
+              >
+                <X className="h-6 w-6" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
