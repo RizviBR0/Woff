@@ -61,28 +61,26 @@ export function Navbar() {
       {/* Navbar */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-16 relative">
             {/* Logo */}
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 relative z-10">
               <Link href="/" className="flex items-center">
                 <Logo width={120} height={36} className="w-24 h-auto" />
               </Link>
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:block">
-              <div className="ml-10 flex items-center space-x-1">
+            <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+              <div className="flex items-center gap-1 bg-background/50 backdrop-blur-md border border-border/50 px-2 py-1.5 rounded-full shadow-sm">
                 {navLinks.map((link) => {
-                  const IconComponent = link.icon;
                   return (
                     <Link
                       key={link.name}
                       href={link.href}
                       target={link.external ? "_blank" : undefined}
                       rel={link.external ? "noopener noreferrer" : undefined}
-                      className="group flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all duration-200"
+                      className="group flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200"
                     >
-                      <IconComponent className="w-4 h-4" />
                       <span>{link.name}</span>
                       {link.external && (
                         <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -94,7 +92,7 @@ export function Navbar() {
             </div>
 
             {/* Theme Toggle & Mobile Menu */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 relative z-10">
               <Button
                 variant="ghost"
                 size="sm"

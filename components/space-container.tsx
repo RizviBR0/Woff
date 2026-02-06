@@ -12,14 +12,11 @@ import {
   QrCode,
   PanelRight,
   Clock,
+  Trash2,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
-import {
-  Space,
-  createEntry,
-  updateSpaceActivity,
-  createNoteEntry,
-  updateNoteEntry,
-} from "@/lib/actions";
+import { Space, deleteSpace } from "@/lib/actions";
 import { getDaysUntilExpiry } from "@/lib/utils";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
@@ -38,7 +35,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import { useRouter } from "next/navigation";
 
 interface SpaceContainerProps {
   space: Space;
@@ -58,6 +58,13 @@ export function SpaceContainer({
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const router = useRouter();
+
+  // Check if current user is the creator
+  const isCreator =
+    currentDeviceId && space.creator_device_id === currentDeviceId;
 
   // Use space prop for pro status
   const isPro = space.is_pro || false;
@@ -235,6 +242,20 @@ export function SpaceContainer({
     }
   };
 
+  const handleDeleteSpace = async () => {
+    if (!isCreator) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteSpace(space.id);
+      router.push("/");
+    } catch (error) {
+      console.error("Failed to delete space:", error);
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+    }
+  };
+
   const generateQRCode = async (url: string) => {
     try {
       // Use a QR code API service (QR Server is free and reliable)
@@ -283,6 +304,11 @@ export function SpaceContainer({
                 className="cursor-pointer hover:opacity-80 transition-opacity"
               />
             </Link>
+            {isPro && (
+              <span className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 dark:from-purple-500/20 dark:to-pink-500/20 text-purple-600 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wider">
+                PRO
+              </span>
+            )}
           </div>
 
           {/* Center copy button */}
@@ -353,11 +379,7 @@ export function SpaceContainer({
               className="hidden md:inline-flex h-8 w-8"
               onClick={() => setSidebarOpen((open) => !open)}
             >
-              <PanelRight
-                className={`h-4 w-4 transition-opacity ${
-                  sidebarOpen ? "opacity-100" : "opacity-40"
-                }`}
-              />
+              <PanelRight className="h-4 w-4" />
               <span className="sr-only">Toggle sidebar</span>
             </Button>
 
@@ -411,6 +433,26 @@ export function SpaceContainer({
                       <ThemeToggle />
                     </div>
                   </div>
+
+                  {isCreator && (
+                    <>
+                      <div className="h-px bg-border my-2" />
+                      <div className="pt-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 px-2"
+                          onClick={() => {
+                            setSettingsOpen(false);
+                            setDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Space
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </PopoverContent>
             </Popover>
@@ -560,6 +602,50 @@ export function SpaceContainer({
               </p>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Space
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this space? This action cannot be
+              undone and all content will be permanently lost.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteSpace}
+              disabled={isDeleting}
+              className="gap-2"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4" />
+                  Delete Space
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -553,3 +553,46 @@ export async function getPlanStatus(): Promise<{
     deviceId,
   };
 }
+
+export async function deleteSpace(spaceId: string): Promise<void> {
+  const deviceId = await ensureDeviceId();
+  const supabase = await createServerSupabaseClient();
+
+  // Verify ownership
+  const { data: space, error: fetchError } = await supabase
+    .from("spaces")
+    .select("creator_device_id")
+    .eq("id", spaceId)
+    .single();
+
+  if (fetchError || !space) {
+    throw new Error("Space not found or validation failed");
+  }
+
+  if (space.creator_device_id !== deviceId) {
+    throw new Error("Unauthorized to delete this space");
+  }
+
+  // Delete entries first to ensure we don't hit foreign key constraints
+  // if ON DELETE CASCADE is not set up
+  const { error: deleteEntriesError } = await supabase
+    .from("entries")
+    .delete()
+    .eq("space_id", spaceId);
+
+  if (deleteEntriesError) {
+    console.error("Failed to delete entries:", deleteEntriesError);
+    // Continue anyway as the space delete might still work if cascade is on,
+    // or we want to surface the specific space delete error
+  }
+
+  // Delete the space
+  const { error: deleteError } = await supabase
+    .from("spaces")
+    .delete()
+    .eq("id", spaceId);
+
+  if (deleteError) {
+    throw new Error(`Failed to delete space: ${deleteError.message}`);
+  }
+}
