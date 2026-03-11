@@ -16,7 +16,7 @@ const NoteEditorLoading = () => (
 
 // Loading fallback for drawing canvas
 const DrawingCanvasLoading = () => (
-  <div className="w-full aspect-video bg-muted/30 rounded-lg flex items-center justify-center">
+  <div className="fixed inset-0 z-50 bg-background flex items-center justify-center">
     <div className="text-muted-foreground text-sm">Loading canvas...</div>
   </div>
 );

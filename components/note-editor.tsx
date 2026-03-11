@@ -46,7 +46,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { SlashMenu } from "./slash-menu";
-import { updateNote, type Note } from "@/lib/actions";
+import { updateNote, createSpace, createNoteEntry, type Note } from "@/lib/actions";
 import { compressImageAdaptive } from "@/lib/image-compression";
 
 interface NoteEditorProps {
@@ -296,13 +296,11 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
 
           // Step 1: Create space
           console.log("💾 Step 1: Creating new space...");
-          const { createSpace } = await import("@/lib/actions");
           const newSpace = await createSpace();
           console.log("💾 ✅ Space created:", newSpace);
 
           // Step 2: Create note entry
           console.log("💾 Step 2: Creating note entry...");
-          const { createNoteEntry } = await import("@/lib/actions");
           const noteResult = await createNoteEntry(newSpace.id, note.title);
           console.log("💾 ✅ Note entry created:", noteResult);
 

@@ -2,8 +2,7 @@
 const nextConfig = {
   experimental: {
     serverActions: {
-      allowedOrigins: ["localhost:3000"],
-      // Increase body size limit to support multi-image uploads
+      allowedOrigins: ["localhost:3000", "http://localhost:3000"],
       bodySizeLimit: "5mb",
     },
     // Enable optimized package imports for smaller bundles

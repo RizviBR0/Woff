@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Users, Clipboard, QrCode } from "lucide-react";
 import QrScanner from "qr-scanner";
+import { validateRoomCode } from "@/lib/actions";
 
 const PIN_LENGTH = 4;
 
@@ -98,7 +99,6 @@ export function JoinRoomSection() {
         if (extractedCode && extractedCode.length === 4) {
           // Validate the room code exists
           try {
-            const { validateRoomCode } = await import("@/lib/actions");
             const isValid = await validateRoomCode(extractedCode);
 
             if (isValid) {
@@ -194,7 +194,6 @@ export function JoinRoomSection() {
           if (extractedCode && extractedCode.length === 4) {
             // Validate the room code exists
             try {
-              const { validateRoomCode } = await import("@/lib/actions");
               const isValid = await validateRoomCode(extractedCode);
 
               if (isValid) {
@@ -274,7 +273,6 @@ export function JoinRoomSection() {
 
     try {
       // Validate the room exists before navigating
-      const { validateRoomCode } = await import("@/lib/actions");
       const isValid = await validateRoomCode(roomCode);
 
       if (isValid) {
