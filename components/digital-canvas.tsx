@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import {
   Undo2,
@@ -287,10 +288,10 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed top-0 left-0 right-0 bottom-0 z-[9999] bg-background flex flex-col overflow-hidden"
-      style={{ margin: 0, padding: 0 }}
+      className="fixed inset-0 z-[9999] bg-background flex flex-col overflow-hidden"
+      style={{ margin: 0, padding: 0, width: '100vw', height: '100vh', top: 0, left: 0 }}
     >
       {/* Top Bar */}
       <div className="h-11 sm:h-12 flex items-center justify-between px-2 sm:px-4 border-b border-border bg-background shrink-0">
@@ -486,7 +487,8 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
           <div><kbd className="font-mono">Esc</kbd> Close</div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

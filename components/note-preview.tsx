@@ -52,7 +52,7 @@ export function NotePreview({
             });
           }
         } catch (error) {
-          console.error("Error loading note:", error);
+          /* console.error("Error loading note:", error); */
         } finally {
           setIsLoading(false);
         }

@@ -16,7 +16,7 @@ export async function GET(_req: Request, context: any) {
 
     return NextResponse.json(note, { status: 200 });
   } catch (err) {
-    console.error("/api/notes/[slug] error:", err);
+    /* console.error("/api/notes/[slug] error:", err); */
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

@@ -96,7 +96,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
     if (!autoSaveEnabled && autoSaveTimeoutRef.current) {
       clearTimeout(autoSaveTimeoutRef.current);
       autoSaveTimeoutRef.current = undefined;
-      console.log("🔄 Autosave disabled - cleared pending autosave");
+      /* console.log("🔄 Autosave disabled - cleared pending autosave"); */
     }
   }, [autoSaveEnabled]);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -114,14 +114,14 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
         const res = await fetch(`/api/notes/${noteSlug}`);
         const fetchedNote = res.ok ? ((await res.json()) as Note) : null;
         if (fetchedNote) {
-          console.log(
+          /* console.log(
             "📝 Loaded existing note from database:",
             fetchedNote.title
-          );
+          ); */
           setNote(fetchedNote);
           setLastSavedContent(fetchedNote.content);
         } else {
-          console.log("📝 Note not found in database, creating new note");
+          /* console.log("📝 Note not found in database, creating new note"); */
           // Create a new note that will be saved to database on first save
           const mockNote: Note = {
             id: `mock-${noteSlug}`,
@@ -140,7 +140,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
           setLastSavedContent(mockNote.content);
         }
       } catch (error) {
-        console.error("Failed to load note:", error);
+        /* console.error("Failed to load note:", error); */
         // Create new note on error too
         const mockNote: Note = {
           id: `mock-${noteSlug}`,
@@ -251,7 +251,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
           selection.addRange(range);
         }
       } catch (error) {
-        console.warn("Failed to restore cursor position:", error);
+        /* console.warn("Failed to restore cursor position:", error); */
       }
     },
     []
@@ -272,11 +272,11 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   // Manual save function
   const saveNote = useCallback(async () => {
     if (!note) {
-      console.log("💾 No note to save");
+      /* console.log("💾 No note to save"); */
       return;
     }
 
-    console.log("💾 Manual save triggered for:", note.title);
+    /* console.log("💾 Manual save triggered for:", note.title); */
     setSaveStatus("saving");
     setIsSaving(true);
 
@@ -289,33 +289,33 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
     try {
       if (note.id.startsWith("mock-")) {
         // This is a new note that needs to be created in the database
-        console.log("💾 Creating new note in database...");
+        /* console.log("💾 Creating new note in database..."); */
 
         try {
-          console.log("💾 Starting new note creation process...");
+          /* console.log("💾 Starting new note creation process..."); */
 
           // Step 1: Create space
-          console.log("💾 Step 1: Creating new space...");
+          /* console.log("💾 Step 1: Creating new space..."); */
           const newSpace = await createSpace();
-          console.log("💾 ✅ Space created:", newSpace);
+          /* console.log("💾 ✅ Space created:", newSpace); */
 
           // Step 2: Create note entry
-          console.log("💾 Step 2: Creating note entry...");
+          /* console.log("💾 Step 2: Creating note entry..."); */
           const noteResult = await createNoteEntry(newSpace.id, note.title);
-          console.log("💾 ✅ Note entry created:", noteResult);
+          /* console.log("💾 ✅ Note entry created:", noteResult); */
 
           // Step 3: Update note with content
-          console.log("💾 Step 3: Updating note with content...");
+          /* console.log("💾 Step 3: Updating note with content..."); */
           const updatedNote = await updateNote(noteResult.noteSlug, {
             title: note.title,
             content: note.content,
             visibility: note.visibility,
             font_family: note.font_family,
           });
-          console.log("💾 ✅ Note updated with content:", updatedNote);
+          /* console.log("💾 ✅ Note updated with content:", updatedNote); */
 
           // Step 4: Update local state
-          console.log("💾 Step 4: Updating local state...");
+          /* console.log("💾 Step 4: Updating local state..."); */
           setNote({
             ...updatedNote,
             public_code: noteResult.publicCode,
@@ -323,25 +323,25 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
           });
 
           // Step 5: Update URL
-          console.log("💾 Step 5: Updating URL...");
+          /* console.log("💾 Step 5: Updating URL..."); */
           const newUrl = `/n/${noteResult.noteSlug}`;
           if (window.location.pathname !== newUrl) {
             window.history.replaceState({}, "", newUrl);
-            console.log("💾 ✅ URL updated to:", newUrl);
+            /* console.log("💾 ✅ URL updated to:", newUrl); */
           }
 
-          console.log("💾 🎉 Note creation completed successfully!");
+          /* console.log("💾 🎉 Note creation completed successfully!"); */
         } catch (createError) {
-          console.error("💾 ❌ Error in note creation process:", createError);
-          console.error(
+          /* console.error("💾 ❌ Error in note creation process:", createError); */
+          /* console.error(
             "💾 Error stack:",
             createError instanceof Error ? createError.stack : createError
-          );
+          ); */
           throw createError;
         }
       } else {
         // This is an existing note, just update it
-        console.log("💾 Updating existing note...");
+        /* console.log("💾 Updating existing note..."); */
         const updatedNote = await updateNote(note.slug, {
           title: note.title,
           content: note.content,
@@ -349,11 +349,11 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
           font_family: note.font_family,
         });
 
-        console.log("💾 Note updated successfully");
+        /* console.log("💾 Note updated successfully"); */
         setNote(updatedNote);
       }
 
-      console.log("💾 Save completed successfully");
+      /* console.log("💾 Save completed successfully"); */
       setSaveStatus("saved");
 
       // Update lastSavedContent to prevent unnecessary autosaves
@@ -364,11 +364,11 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
         setSaveStatus("saved");
       }, 2000);
     } catch (error) {
-      console.error("💾 Failed to save note:", error);
+      /* console.error("💾 Failed to save note:", error); */
       setSaveStatus("error");
 
       // Show error message to user
-      console.error("Save error details:", error);
+      /* console.error("Save error details:", error); */
     } finally {
       setIsSaving(false);
     }
@@ -385,7 +385,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
         return; // No changes to save or autosave disabled
       }
 
-      console.log("🔄 Autosave triggered for:", noteToSave.title);
+      /* console.log("🔄 Autosave triggered for:", noteToSave.title); */
       setIsAutoSaving(true);
 
       // Save cursor position before autosave
@@ -394,13 +394,13 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
       try {
         if (noteToSave.id.startsWith("mock-")) {
           // For mock notes, we'll save them when user manually saves
-          console.log(
+          /* console.log(
             "🔄 Mock note - autosave skipped, will save on manual save"
-          );
+          ); */
           setLastSavedContent(noteToSave.content);
         } else {
           // Update existing note
-          console.log("🔄 Autosaving to database...");
+          /* console.log("🔄 Autosaving to database..."); */
           const updatedNote = await updateNote(noteToSave.slug, {
             title: noteToSave.title,
             content: noteToSave.content,
@@ -408,7 +408,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
             font_family: noteToSave.font_family,
           });
 
-          console.log("🔄 Autosave completed successfully");
+          /* console.log("🔄 Autosave completed successfully"); */
           setLastSavedContent(noteToSave.content);
 
           // Don't update note state from server response during autosave
@@ -428,7 +428,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
 
         setSaveStatus("saved");
       } catch (error) {
-        console.error("🔄 Autosave failed:", error);
+        /* console.error("🔄 Autosave failed:", error); */
         setSaveStatus("error");
       } finally {
         setIsAutoSaving(false);
@@ -514,7 +514,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
     if (!editorRef.current || !note) return;
 
     const newContent = editorRef.current.innerHTML;
-    console.log("📝 Content changing, new length:", newContent.length);
+    /* console.log("📝 Content changing, new length:", newContent.length); */
 
     // Update local state immediately
     setNote((prev) => {
@@ -533,7 +533,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
       // Set up autosave with debouncing (2 seconds after user stops typing) - only if enabled
       if (autoSaveEnabled) {
         autoSaveTimeoutRef.current = setTimeout(() => {
-          console.log("🔄 Triggering autosave after content change");
+          /* console.log("🔄 Triggering autosave after content change"); */
           autoSave(updated);
         }, 2000);
       }
@@ -780,7 +780,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   const confirmTitleEdit = async () => {
     if (!note || !tempTitle.trim()) return;
 
-    console.log("📝 Title confirmed, saving:", tempTitle);
+    /* console.log("📝 Title confirmed, saving:", tempTitle); */
     setIsSavingTitle(true);
 
     // Update local state immediately for responsive UI
@@ -791,7 +791,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
         title: tempTitle.trim(),
         updated_at: new Date().toISOString(),
       };
-      console.log("📝 Note title updated locally:", updated);
+      /* console.log("📝 Note title updated locally:", updated); */
       return updated;
     });
 
@@ -801,24 +801,24 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
     // Save to database in background
     try {
       if (note.id.startsWith("mock-")) {
-        console.log("📝 Mock note - title will be saved on next full save");
+        /* console.log("📝 Mock note - title will be saved on next full save"); */
         // For mock notes, just wait a bit to show the saving state
         await new Promise((resolve) => setTimeout(resolve, 500));
       } else {
-        console.log("📝 Saving title to database...");
+        /* console.log("📝 Saving title to database..."); */
         const updatedNote = await updateNote(note.slug, {
           title: tempTitle.trim(),
           content: note.content,
           visibility: note.visibility,
           font_family: note.font_family,
         });
-        console.log("📝 Title saved to database successfully");
+        /* console.log("📝 Title saved to database successfully"); */
 
         // Update state with server response
         setNote((prev) => (prev ? { ...prev, ...updatedNote } : null));
       }
     } catch (error) {
-      console.error("📝 Failed to save title to database:", error);
+      /* console.error("📝 Failed to save title to database:", error); */
       // Could show a toast notification here for user feedback
     } finally {
       setIsSavingTitle(false);
@@ -826,14 +826,14 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   };
 
   const cancelTitleEdit = () => {
-    console.log("📝 Title edit cancelled");
+    /* console.log("📝 Title edit cancelled"); */
     setIsEditingTitle(false);
     setTempTitle("");
   };
 
   // Handle title changes (legacy for direct input)
   const handleTitleChange = (newTitle: string) => {
-    console.log("📝 Title changing to:", newTitle);
+    /* console.log("📝 Title changing to:", newTitle); */
     if (!note) return;
 
     setNote((prev) => {
@@ -843,7 +843,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
         title: newTitle,
         updated_at: new Date().toISOString(),
       };
-      console.log("📝 Note updated locally:", updated);
+      /* console.log("📝 Note updated locally:", updated); */
       return updated;
     });
   };
@@ -1183,7 +1183,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
               document.execCommand(command, false, value);
             }
           } catch (error) {
-            console.warn("execCommand failed:", error);
+            /* console.warn("execCommand failed:", error); */
             // Fallback for modern browsers
             if (
               command === "bold" ||
@@ -1249,7 +1249,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
           }
         } else {
           // If no text is selected, don't apply formatting to prevent it from affecting the entire context
-          console.log("No text selected for inline formatting");
+          /* console.log("No text selected for inline formatting"); */
         }
       }
     }
@@ -1420,7 +1420,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   };
 
   const handleSlashMenuSelect = (command: string, value?: string) => {
-    console.log("🔽 Slash menu select:", { command, value });
+    /* console.log("🔽 Slash menu select:", { command, value }); */
     if (!editorRef.current) return;
 
     setShowSlashMenu(false);
@@ -1431,12 +1431,12 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
     // Get the current selection
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) {
-      console.log("❌ No selection available for slash menu");
+      /* console.log("❌ No selection available for slash menu"); */
       return;
     }
 
     if (command === "insertHorizontalRule") {
-      console.log("📏 Inserting horizontal rule");
+      /* console.log("📏 Inserting horizontal rule"); */
       // Special handling for horizontal rule
       const range = sel.getRangeAt(0);
       const hr = document.createElement("hr");
@@ -1455,7 +1455,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
       sel.removeAllRanges();
       sel.addRange(newRange);
     } else if (command === "formatBlock" && value) {
-      console.log("📝 Format block:", value);
+      /* console.log("📝 Format block:", value); */
       // Handle block formatting (headings, quotes, code blocks)
       const range = sel.getRangeAt(0);
       let currentNode = range.startContainer;
@@ -1560,7 +1560,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
       command === "insertUnorderedList" ||
       command === "insertOrderedList"
     ) {
-      console.log("📋 Creating list:", command);
+      /* console.log("📋 Creating list:", command); */
       // Handle lists from slash menu
       const listType = command === "insertUnorderedList" ? "ul" : "ol";
       const range = sel.getRangeAt(0);
@@ -1639,12 +1639,12 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
         }, 10);
       }
     } else {
-      console.log(
+      /* console.log(
         "❓ Unknown slash menu command:",
         command,
         "with value:",
         value
-      );
+      ); */
     }
 
     // Update content
@@ -1895,7 +1895,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
       // Trigger content change to save
       handleContentChange();
     } catch (error) {
-      console.error("Error processing image:", error);
+      /* console.error("Error processing image:", error); */
       // Replace skeleton with error state
       imageContainer.innerHTML = `
         <div class="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">

@@ -91,21 +91,21 @@ export function SpaceContainer({
     setEntries((prev) => {
       const exists = prev.some((entry) => entry.id === newEntry.id);
       if (exists) {
-        console.log(
+        /* console.log(
           `🔄 ${source}: Entry already exists, skipping duplicate`,
           newEntry.id,
-        );
+        ); */
         return prev;
       }
 
-      console.log(
+      /* console.log(
         `🔄 ${source}: Adding entry`,
         newEntry.id,
         "Current count:",
         prev.length,
-      );
+      ); */
       const updated = [...prev, newEntry];
-      console.log(`🔄 ${source}: New count:`, updated.length);
+      /* console.log(`🔄 ${source}: New count:`, updated.length); */
       return updated;
     });
   }, []);
@@ -135,7 +135,7 @@ export function SpaceContainer({
           filter: `space_id=eq.${space.id}`,
         },
         (payload) => {
-          console.log("🔄 Real-time: New entry received", payload);
+          /* console.log("🔄 Real-time: New entry received", payload); */
           const newEntry = payload.new as Entry;
 
           // Add a longer delay to let local updates settle first
@@ -154,7 +154,7 @@ export function SpaceContainer({
           filter: `space_id=eq.${space.id}`,
         },
         (payload) => {
-          console.log("🔄 Real-time: Entry updated", payload);
+          /* console.log("🔄 Real-time: Entry updated", payload); */
           const updatedEntry = payload.new as Entry;
 
           setEntries((prev) =>
@@ -167,14 +167,14 @@ export function SpaceContainer({
       .subscribe();
 
     return () => {
-      console.log("🔄 Real-time: Unsubscribing from channel");
+      /* console.log("🔄 Real-time: Unsubscribing from channel"); */
       supabase.removeChannel(channel);
     };
   }, [space.id, addEntryIfNotExists]);
 
   const handleNewEntry = useCallback(
     (entry: Entry) => {
-      console.log("📝 Local: Received new entry", entry.id);
+      /* console.log("📝 Local: Received new entry", entry.id); */
       addEntryIfNotExists(entry, "Local");
       setHasPosted(true);
 
@@ -189,7 +189,7 @@ export function SpaceContainer({
   // Function to update an existing entry (used for optimistic UI)
   const handleUpdateEntry = useCallback(
     (entryId: string, updates: Partial<Entry>) => {
-      console.log("📝 Local: Updating entry", entryId, updates);
+      /* console.log("📝 Local: Updating entry", entryId, updates); */
       setEntries((prev) =>
         prev.map((entry) =>
           entry.id === entryId ? { ...entry, ...updates } : entry,
@@ -202,12 +202,12 @@ export function SpaceContainer({
   // Function to replace a placeholder entry with the real one
   const handleReplaceEntry = useCallback(
     (placeholderId: string, realEntry: Entry) => {
-      console.log(
+      /* console.log(
         "📝 Local: Replacing placeholder",
         placeholderId,
         "with",
         realEntry.id,
-      );
+      ); */
       setEntries((prev) =>
         prev.map((entry) => (entry.id === placeholderId ? realEntry : entry)),
       );
@@ -217,7 +217,7 @@ export function SpaceContainer({
 
   // Function to remove an entry (used for failed uploads)
   const handleRemoveEntry = useCallback((entryId: string) => {
-    console.log("📝 Local: Removing entry", entryId);
+    /* console.log("📝 Local: Removing entry", entryId); */
     setEntries((prev) => prev.filter((entry) => entry.id !== entryId));
   }, []);
 
@@ -228,7 +228,7 @@ export function SpaceContainer({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error("Failed to copy:", error);
+      /* console.error("Failed to copy:", error); */
       // Fallback for older browsers
       const shareUrl = `${window.location.origin}/${space.slug}`;
       const textArea = document.createElement("textarea");
@@ -250,7 +250,7 @@ export function SpaceContainer({
       await deleteSpace(space.id);
       router.push("/");
     } catch (error) {
-      console.error("Failed to delete space:", error);
+      /* console.error("Failed to delete space:", error); */
       setIsDeleting(false);
       setDeleteDialogOpen(false);
     }
@@ -264,7 +264,7 @@ export function SpaceContainer({
       )}`;
       setQrCodeUrl(qrUrl);
     } catch (error) {
-      console.error("Failed to generate QR code:", error);
+      /* console.error("Failed to generate QR code:", error); */
       // Fallback: still set the URL so the image tries to load
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&format=png&data=${encodeURIComponent(
         url,
@@ -287,7 +287,7 @@ export function SpaceContainer({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error("Failed to copy:", error);
+      /* console.error("Failed to copy:", error); */
     }
   };
 
@@ -484,9 +484,9 @@ export function SpaceContainer({
           // Timeline view with entries, right sidebar, and bottom composer
           <div className={`pb-20 ${sidebarOpen ? "md:mr-72 lg:mr-80" : ""}`}>
             <div className="mx-auto max-w-2xl space-y-6 py-8">
-              {entries.map((entry) => (
+              {entries.map((entry, index) => (
                 <EntryCard
-                  key={entry.id}
+                  key={`${entry.id}-${index}`}
                   entry={entry}
                   currentDeviceId={currentDeviceId || null}
                 />

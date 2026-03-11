@@ -31,7 +31,7 @@ export const DynamicNoteEditor = dynamic(
 );
 
 export const DynamicDrawingCanvas = dynamic(
-  () => import("@/components/drawing-canvas").then((mod) => mod.DrawingCanvas),
+  () => import("@/components/digital-canvas").then((mod) => mod.DrawingCanvas),
   {
     loading: DrawingCanvasLoading,
     ssr: false,

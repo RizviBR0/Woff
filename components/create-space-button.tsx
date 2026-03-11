@@ -17,7 +17,7 @@ export function CreateSpaceButton() {
       const space = await createSpace();
       router.push(`/${space.slug}`);
     } catch (error) {
-      console.error("Failed to create space:", error);
+      /* console.error("Failed to create space:", error); */
       setIsCreating(false);
     }
   };

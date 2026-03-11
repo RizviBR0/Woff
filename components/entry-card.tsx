@@ -22,7 +22,7 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 // JSZip is dynamically imported when needed to reduce bundle size
 import { useState, useEffect, memo } from "react";
-import { PhotoGallery } from "./photo-gallery";
+import { GlobalImageViewer } from "./global-image-viewer";
 import { displayNameForDevice } from "@/lib/display-name";
 import NextImage from "next/image";
 
@@ -50,15 +50,14 @@ export const EntryCard = memo(function EntryCard({
   entry,
   currentDeviceId = null,
 }: EntryCardProps) {
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [currentImageUrl, setCurrentImageUrl] = useState<string>("");
-  const [modalBgColor, setModalBgColor] = useState<string>("bg-black/90");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isNoteLocked, setIsNoteLocked] = useState(false);
   const [noteLoaded, setNoteLoaded] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [galleryIndex, setGalleryIndex] = useState(0);
   const [hovering, setHovering] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showAllFiles, setShowAllFiles] = useState(false);
 
   const isMine =
     !!entry.created_by_device_id &&
@@ -102,19 +101,25 @@ export const EntryCard = memo(function EntryCard({
   );
 
   // Loading overlay component for optimistic UI
-  const loadingOverlay = entry.isLoading ? (
-    <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] rounded-lg flex items-center justify-center z-10">
+  const loadingOverlay = entry.id.startsWith("placeholder-") ? (
+    <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] rounded-lg flex items-center justify-center z-10 transition-all">
       <div className="flex flex-col items-center gap-2">
         <div className="relative">
-          {/* Animated spinner */}
-          <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          {/* Animated spinner or error icon */}
+          {entry.isLoading ? (
+            <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10">
+              <span className="text-destructive font-bold text-lg">!</span>
+            </div>
+          )}
         </div>
         {entry.uploadMessage && (
-          <span className="text-xs text-muted-foreground font-medium">
+          <span className={`text-xs font-medium ${entry.isLoading ? "text-muted-foreground" : "text-destructive"}`}>
             {entry.uploadMessage}
           </span>
         )}
-        {typeof entry.uploadProgress === "number" &&
+        {entry.isLoading && typeof entry.uploadProgress === "number" &&
           entry.uploadProgress > 0 && (
             <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
               <div
@@ -126,65 +131,6 @@ export const EntryCard = memo(function EntryCard({
       </div>
     </div>
   ) : null;
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setShowImageModal(false);
-      }
-    };
-
-    if (showImageModal) {
-      document.addEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "hidden"; // Prevent scrolling
-    }
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "unset";
-    };
-  }, [showImageModal]);
-
-  const imageModal = (
-    <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
-      <DialogContent className="max-w-5xl w-full p-0 overflow-hidden bg-transparent border-none shadow-none [&>button]:hidden">
-        <DialogTitle className="hidden">Preview</DialogTitle>
-        <div className="relative w-full h-[85vh] flex items-center justify-center group/modal">
-          <button
-            onClick={() => setShowImageModal(false)}
-            className="absolute top-4 right-4 z-50 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
-          >
-            <X className="h-6 w-6" />
-          </button>
-
-          {currentImageUrl && (
-            <NextImage
-              src={currentImageUrl}
-              alt="Preview"
-              fill
-              className="object-contain"
-              unoptimized
-              priority
-            />
-          )}
-
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="bg-black/50 hover:bg-black/70 text-white border-none"
-              onClick={() =>
-                downloadFileUrl(currentImageUrl, `image-${Date.now()}.png`)
-              }
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
 
   // Check if note is locked (only for note entries)
   useEffect(() => {
@@ -203,7 +149,7 @@ export const EntryCard = memo(function EntryCard({
           }
           setNoteLoaded(true);
         } catch (error) {
-          console.error("Failed to check note lock status:", error);
+          /* console.error("Failed to check note lock status:", error); */
           setNoteLoaded(true);
         }
       }
@@ -235,84 +181,22 @@ export const EntryCard = memo(function EntryCard({
       link.click();
       document.body.removeChild(link);
     } catch (error) {
-      console.error("Download failed:", error);
+      /* console.error("Download failed:", error); */
       // Fallback: open in new tab if download fails
       window.open(dataUrl, "_blank");
     }
   };
 
-  const analyzeImageBrightness = (dataUrl: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-
-      img.onload = () => {
-        try {
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-
-          if (!ctx) {
-            resolve(false); // Default to dark background
-            return;
-          }
-
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
-
-          let totalBrightness = 0;
-          let pixelCount = 0;
-
-          // Sample every 10th pixel for performance
-          for (let i = 0; i < data.length; i += 40) {
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
-            const a = data[i + 3];
-
-            if (a > 0) {
-              // Only consider non-transparent pixels
-              // Calculate brightness using luminance formula
-              const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-              totalBrightness += brightness;
-              pixelCount++;
-            }
-          }
-
-          const averageBrightness = totalBrightness / pixelCount;
-          resolve(averageBrightness > 128); // Return true if image is bright
-        } catch (error) {
-          console.error("Error analyzing image brightness:", error);
-          resolve(false); // Default to dark background on error
-        }
-      };
-
-      img.onerror = () => {
-        resolve(false); // Default to dark background on error
-      };
-
-      img.src = dataUrl;
-    });
+  const handleView = (dataUrl: string) => {
+    setGalleryImages([dataUrl]);
+    setGalleryIndex(0);
+    setShowGallery(true);
   };
 
-  const handleView = async (dataUrl: string) => {
-    setCurrentImageUrl(dataUrl);
-    setIsAnalyzing(true);
-    setShowImageModal(true);
-
-    // Analyze image brightness to determine background
-    try {
-      const isBright = await analyzeImageBrightness(dataUrl);
-      setModalBgColor(isBright ? "bg-gray-800/95" : "bg-gray-100/95");
-    } catch (error) {
-      console.error("Failed to analyze image:", error);
-      setModalBgColor("bg-black/90"); // Default fallback
-    } finally {
-      setIsAnalyzing(false);
-    }
+  const handleViewMultiple = (images: string[], index: number = 0) => {
+    setGalleryImages(images);
+    setGalleryIndex(index);
+    setShowGallery(true);
   };
 
   const handleCopyText = async (text: string) => {
@@ -321,7 +205,7 @@ export const EntryCard = memo(function EntryCard({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error("Failed to copy text:", error);
+      /* console.error("Failed to copy text:", error); */
       // Fallback for older browsers
       try {
         const textArea = document.createElement("textarea");
@@ -337,7 +221,7 @@ export const EntryCard = memo(function EntryCard({
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch (fallbackError) {
-        console.error("Fallback copy failed:", fallbackError);
+        /* console.error("Fallback copy failed:", fallbackError); */
       }
     }
   };
@@ -364,13 +248,28 @@ export const EntryCard = memo(function EntryCard({
       // Clean up
       setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
     } catch (e) {
-      console.error("Download failed, opening in new tab", e);
+      /* console.error("Download failed, opening in new tab", e); */
       window.open(url, "_blank");
     }
   };
 
+  const globalViewerModal = (
+    <GlobalImageViewer 
+      images={galleryImages} 
+      initialIndex={galleryIndex} 
+      isOpen={showGallery} 
+      onClose={() => setShowGallery(false)} 
+      getDownloadFilename={(index) => {
+        if (entry.text?.startsWith("DRAWING:")) return `drawing-${entry.id}.png`;
+        if (entry.text?.startsWith("PHOTO:")) return `photo-${entry.id}.jpg`;
+        if (entry.text?.startsWith("PHOTOS:")) return `photo-${index + 1}-${entry.id}.jpg`;
+        return `image-${entry.id}`;
+      }}
+    />
+  );
+
   // Handle placeholder/loading entries from optimistic UI
-  if (entry.isLoading && entry.id.startsWith("placeholder-")) {
+  if (entry.id.startsWith("placeholder-")) {
     const meta = entry.meta || {};
     const metaType = meta.type || "";
 
@@ -384,15 +283,13 @@ export const EntryCard = memo(function EntryCard({
       label = metaType === "drawing" ? "Drawing" : "Photo";
       if (meta.previewUrl) {
         previewContent = (
-          <div className="mt-2 w-full max-w-xs">
-            <div className="relative w-full aspect-[4/3]">
-              <NextImage
+          <div className="mt-2 w-full flex">
+            <div className="relative max-w-full rounded-2xl overflow-hidden border border-border/30 shadow-sm bg-muted/10 flex items-center justify-center p-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 src={meta.previewUrl}
                 alt="Preview"
-                fill
-                unoptimized
-                sizes="(max-width: 768px) 60vw, 260px"
-                className="object-contain rounded-lg border border-border/20 bg-background opacity-60"
+                className="max-w-full max-h-[200px] object-contain opacity-50 blur-[2px] rounded-xl"
               />
             </div>
           </div>
@@ -403,21 +300,21 @@ export const EntryCard = memo(function EntryCard({
       label = `${meta.count || "Multiple"} Photos`;
       if (meta.previewUrls && meta.previewUrls.length > 0) {
         previewContent = (
-          <div className="mt-2 flex gap-1 flex-wrap max-w-xs">
+          <div className="mt-2 flex gap-1.5 flex-wrap max-w-sm">
             {meta.previewUrls.slice(0, 4).map((url: string, i: number) => (
-              <div key={i} className="relative w-16 h-16">
-                <NextImage
+              <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-border/20 shadow-sm opacity-60">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={url}
                   alt={`Preview ${i + 1}`}
-                  fill
-                  unoptimized
-                  className="object-cover rounded border border-border/20 opacity-60"
+                  className="w-full h-full object-cover blur-[1px]"
                 />
               </div>
             ))}
             {meta.previewUrls.length > 4 && (
-              <div className="w-16 h-16 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
-                +{meta.previewUrls.length - 4}
+              <div className="w-16 h-16 bg-muted rounded-xl border border-border/20 shadow-sm flex flex-col items-center justify-center text-muted-foreground">
+                <span className="font-bold text-sm">+{meta.previewUrls.length - 4}</span>
+                <span className="text-[10px] font-medium leading-none">more</span>
               </div>
             )}
           </div>
@@ -513,15 +410,13 @@ export const EntryCard = memo(function EntryCard({
                   <span>🎨</span>
                   <span>Drawing</span>
                 </div>
-                <div className="mt-2 w-full max-w-xs">
-                  <div className="relative w-full aspect-square">
-                    <NextImage
+                <div className="mt-2 w-full flex">
+                  <div className="relative max-w-full rounded-2xl overflow-hidden border border-border/30 shadow-sm cursor-pointer hover:shadow-md hover:ring-2 hover:ring-primary/20 transition-all bg-white dark:bg-neutral-900 group flex items-center justify-center p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                       src={dataUrl}
                       alt="Hand drawn image"
-                      fill
-                      unoptimized
-                      sizes="(max-width: 768px) 60vw, 260px"
-                      className="object-contain rounded-lg border border-border/20 cursor-pointer hover:opacity-90 transition-opacity bg-background"
+                      className="max-w-full max-h-[350px] md:max-h-[450px] object-contain group-hover:opacity-90 transition-opacity rounded-xl"
                       onClick={() => handleView(dataUrl)}
                     />
                   </div>
@@ -553,66 +448,7 @@ export const EntryCard = memo(function EntryCard({
               </div>
             </div>
           </div>
-
-          {/* Image view modal (canvas sits below the app top bar) */}
-          {showImageModal && currentImageUrl && (
-            <div
-              className={`fixed inset-x-0 bottom-0 top-10 ${modalBgColor} z-[40] flex items-center justify-center transition-colors duration-300`}
-              onClick={() => setShowImageModal(false)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setShowImageModal(false);
-                }
-              }}
-              tabIndex={-1}
-            >
-              <div
-                className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center px-2 sm:px-4 py-4"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="relative w-full h-full max-w-[95vw] max-h-[95vh] flex items-center justify-center">
-                  <NextImage
-                    src={currentImageUrl}
-                    alt="Image - full view"
-                    fill
-                    unoptimized
-                    sizes="(max-width: 768px) 95vw, 90vw"
-                    className="object-contain rounded-lg shadow-2xl"
-                  />
-                </div>
-                {/* Control buttons positioned at top right of viewport with guaranteed contrast */}
-                <div className="fixed top-4 right-4 flex gap-3 z-50">
-                  <Button
-                    size="icon"
-                    variant="secondary"
-                    className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const filename = entry.text?.startsWith("DRAWING:")
-                        ? `drawing-${entry.id}.png`
-                        : `image-${entry.id}.png`;
-                      handleDownload(currentImageUrl, filename);
-                    }}
-                    title="Download image"
-                  >
-                    <Download className="h-6 w-6" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="secondary"
-                    className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowImageModal(false);
-                    }}
-                    title="Close (Esc)"
-                  >
-                    <X className="h-6 w-6" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
+          {globalViewerModal}
         </>
       );
     }
@@ -656,15 +492,13 @@ export const EntryCard = memo(function EntryCard({
                   <span>📷</span>
                   <span>Photo</span>
                 </div>
-                <div className="mt-2 w-full max-w-xs">
-                  <div className="relative w-full aspect-[4/3]">
-                    <NextImage
+                <div className="mt-2 w-full flex">
+                  <div className="relative max-w-full rounded-2xl overflow-hidden border border-border/30 shadow-sm cursor-pointer hover:shadow-md hover:ring-2 hover:ring-primary/20 hover:opacity-[0.98] transition-all bg-muted/10 group flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                       src={dataUrl}
                       alt="Photo"
-                      fill
-                      unoptimized
-                      sizes="(max-width: 768px) 60vw, 260px"
-                      className="object-contain rounded-lg border border-border/20 cursor-pointer hover:opacity-90 transition-opacity bg-background"
+                      className="max-w-full max-h-[350px] md:max-h-[500px] object-contain rounded-2xl group-hover:scale-[1.01] transition-transform duration-300"
                       onClick={() => handleView(dataUrl)}
                     />
                   </div>
@@ -696,68 +530,7 @@ export const EntryCard = memo(function EntryCard({
               </div>
             </div>
           </div>
-
-          {/* Image view modal for photos (canvas sits below the app top bar) */}
-          {showImageModal && currentImageUrl && (
-            <div
-              className={`fixed inset-0 -top-[25px] ${modalBgColor} z-[40] flex items-center justify-center transition-colors duration-300`}
-              onClick={() => setShowImageModal(false)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setShowImageModal(false);
-                }
-              }}
-              tabIndex={-1}
-            >
-              <div
-                className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center px-2 sm:px-4 py-4"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="relative w-full h-full max-w-[95vw] max-h-[95vh] flex items-center justify-center">
-                  <NextImage
-                    src={currentImageUrl}
-                    alt="Image - full view"
-                    fill
-                    unoptimized
-                    sizes="(max-width: 768px) 95vw, 90vw"
-                    className="object-contain rounded-lg shadow-2xl"
-                  />
-                </div>
-                {/* Control buttons positioned at top right of viewport with guaranteed contrast */}
-                <div className="fixed top-4 right-4 flex gap-3 z-50">
-                  <Button
-                    size="icon"
-                    variant="secondary"
-                    className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const filename = entry.text?.startsWith("DRAWING:")
-                        ? `drawing-${entry.id}.png`
-                        : entry.text?.startsWith("PHOTO:")
-                          ? `photo-${entry.id}.jpg`
-                          : `image-${entry.id}.png`;
-                      handleDownload(currentImageUrl, filename);
-                    }}
-                    title="Download image"
-                  >
-                    <Download className="h-6 w-6" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="secondary"
-                    className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowImageModal(false);
-                    }}
-                    title="Close (Esc)"
-                  >
-                    <X className="h-6 w-6" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
+          {globalViewerModal}
         </>
       );
     }
@@ -824,7 +597,7 @@ export const EntryCard = memo(function EntryCard({
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
         } catch (error) {
-          console.error("Failed to create zip:", error);
+          /* console.error("Failed to create zip:", error); */
         }
       };
 
@@ -872,57 +645,61 @@ export const EntryCard = memo(function EntryCard({
                   </span>
                 </div>
                 <div
-                  className="relative cursor-pointer"
+                  className="relative mt-2 max-w-xl cursor-pointer"
                   onMouseEnter={() => setHovering(true)}
                   onMouseLeave={() => setHovering(false)}
-                  onClick={() => setShowGallery(true)}
+                  onClick={() => handleViewMultiple(photosData, 0)}
                 >
-                  <div
-                    className={`grid gap-1 ${
-                      photosData.length === 1 ? "grid-cols-1" : "grid-cols-3"
-                    }`}
-                  >
-                    {displayedPhotos.map((dataUrl, index) => (
-                      <div
-                        key={index}
-                        className={`relative ${
-                          photosData.length === 1
-                            ? "aspect-[4/3] max-w-sm"
-                            : "aspect-square"
-                        }`}
-                      >
-                        <NextImage
-                          src={dataUrl}
-                          alt={`Photo ${index + 1}`}
-                          fill
-                          unoptimized
-                          sizes={
-                            photosData.length === 1
-                              ? "(max-width: 768px) 90vw, 400px"
-                              : "(max-width: 768px) 30vw, 300px"
-                          }
-                          className="object-cover rounded border border-border/20 hover:opacity-90 transition-opacity"
-                        />
-                      </div>
-                    ))}
-                    {remainingCount > 0 && photosData.length > 5 && (
-                      <div className="relative aspect-square bg-black/20 rounded border border-border/20 flex items-center justify-center">
-                        <span className="text-white text-sm font-medium">
-                          +{remainingCount}
-                        </span>
-                        <div className="absolute inset-0 bg-black/40 rounded flex items-center justify-center">
-                          <span className="text-white text-xs">more</span>
+                  {photosData.length === 1 ? (
+                    <div className="relative max-w-full rounded-2xl overflow-hidden border border-border/30 shadow-sm hover:shadow-md hover:ring-2 hover:ring-primary/20 hover:opacity-[0.98] transition-all bg-muted/10 group flex items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photosData[0]}
+                        alt="Photo"
+                        className="max-w-full max-h-[350px] md:max-h-[500px] object-contain rounded-2xl group-hover:scale-[1.01] transition-transform duration-300"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className={`grid gap-1.5 ${
+                        photosData.length === 2 ? "grid-cols-2" : "grid-cols-3"
+                      }`}
+                    >
+                      {displayedPhotos.map((dataUrl, index) => (
+                        <div
+                          key={index}
+                          className="relative aspect-square rounded-xl overflow-hidden border border-border/20 shadow-sm group/item"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewMultiple(photosData, index);
+                          }}
+                        >
+                          <NextImage
+                            src={dataUrl}
+                            alt={`Photo ${index + 1}`}
+                            fill
+                            unoptimized
+                            sizes="(max-width: 768px) 30vw, 200px"
+                            className="object-cover group-hover/item:scale-105 transition-transform duration-300"
+                          />
+                          {/* Dark overlay with clean text if it's the last displayed photo and more exist */}
+                          {index === 4 && remainingCount > 0 && photosData.length > 5 && (
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center text-white hover:bg-black/70 transition-colors">
+                              <span className="text-xl sm:text-2xl font-bold">+{remainingCount}</span>
+                              <span className="text-xs sm:text-sm text-white/90 font-medium">more</span>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  )}
 
-                  {/* Hover overlay for download all */}
-                  {hovering && (
-                    <div className="absolute inset-0 bg-black/60 rounded flex items-center justify-center transition-all duration-200">
-                      <div className="rounded-lg px-3 py-2 flex items-center gap-2 text-sm font-medium bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-gray-100 border border-border/30">
+                  {/* Hover overlay for multiple images (View Collection) */}
+                  {hovering && photosData.length > 1 && (
+                    <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center transition-all duration-200 pointer-events-none">
+                      <div className="rounded-full px-4 py-2 flex items-center gap-2 text-sm font-semibold bg-white/95 dark:bg-gray-800/95 text-gray-900 dark:text-gray-100 border border-white/20 shadow-xl shadow-black/20">
                         <Eye className="h-4 w-4" />
-                        View All
+                        View Gallery
                       </div>
                     </div>
                   )}
@@ -935,7 +712,7 @@ export const EntryCard = memo(function EntryCard({
                   size="sm"
                   variant="ghost"
                   className="h-7 px-2 text-xs"
-                  onClick={() => setShowGallery(true)}
+                  onClick={() => handleViewMultiple(photosData, 0)}
                 >
                   <Eye className="h-3 w-3 mr-1" />
                   View All
@@ -952,14 +729,7 @@ export const EntryCard = memo(function EntryCard({
               </div>
             </div>
           </div>
-
-          {/* Photo Gallery Modal */}
-          <PhotoGallery
-            images={photosData}
-            onClose={() => setShowGallery(false)}
-            initialIndex={0}
-            isOpen={showGallery}
-          />
+          {globalViewerModal}
         </>
       );
     }
@@ -1002,7 +772,7 @@ export const EntryCard = memo(function EntryCard({
           // Save PDF
           doc.save(`${note.title || noteTitle}.pdf`);
         } catch (error) {
-          console.error("Failed to download PDF:", error);
+          /* console.error("Failed to download PDF:", error); */
         }
       };
 
@@ -1056,7 +826,7 @@ export const EntryCard = memo(function EntryCard({
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
         } catch (error) {
-          console.error("Failed to download Markdown:", error);
+          /* console.error("Failed to download Markdown:", error); */
         }
       };
 
@@ -1262,7 +1032,7 @@ export const EntryCard = memo(function EntryCard({
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } catch (e) {
-        console.error("ZIP download failed", e);
+        /* console.error("ZIP download failed", e); */
       }
     };
 
@@ -1279,7 +1049,8 @@ export const EntryCard = memo(function EntryCard({
     const icon = allImages ? "🖼️" : "📄";
 
     return (
-      <div
+      <>
+        <div
         id={`entry-${entry.id}`}
         className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
       >
@@ -1320,106 +1091,83 @@ export const EntryCard = memo(function EntryCard({
               </span>
             </div>
 
-            {/* Display images as visual gallery if possible, otherwise list */}
-            {items.every((it) => isImage(it.type, it.name)) ? (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {items.map((it) => (
+            {/* Display files as a list with thumbnails for images */}
+            <div className="divide-y rounded-md border border-border/20 bg-background">
+              {(showAllFiles ? items : items.slice(0, 3)).map((it) => {
+                const isImg = isImage(it.type, it.name);
+                return (
                   <div
                     key={it.url}
-                    className="relative aspect-square group/image"
+                    className="flex items-center justify-between p-2 hover:bg-accent/30 transition-colors"
                   >
-                    <NextImage
-                      src={it.url}
-                      alt={it.name}
-                      fill
-                      unoptimized
-                      className="object-cover rounded-lg border border-border/20 cursor-pointer hover:opacity-90 transition-opacity bg-background"
-                      onClick={() => handleView(it.url)}
-                    />
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover/image:opacity-100 transition-opacity shadow-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadFileUrl(it.url, it.name);
-                      }}
-                      title="Download"
-                    >
-                      <Download className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="divide-y rounded-md border border-border/20 bg-background">
-                {items.map((it) => {
-                  const isImg = isImage(it.type, it.name);
-                  return (
-                    <div
-                      key={it.url}
-                      className="flex items-center justify-between p-2 hover:bg-accent/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        {isImg ? (
-                          <div
-                            className="relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={() => handleView(it.url)}
-                          >
-                            <NextImage
-                              src={it.url}
-                              alt="Preview"
-                              fill
-                              unoptimized
-                              className="object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="h-10 w-10 flex items-center justify-center bg-muted rounded flex-shrink-0 text-muted-foreground border">
-                            <FileText className="h-5 w-5" />
-                          </div>
-                        )}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {isImg ? (
+                        <div
+                          className="relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => handleView(it.url)}
+                        >
+                          <NextImage
+                            src={it.url}
+                            alt="Preview"
+                            fill
+                            unoptimized
+                            className="object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-10 w-10 flex items-center justify-center bg-muted rounded flex-shrink-0 text-muted-foreground border">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                      )}
 
-                        <div className="min-w-0 flex-1">
-                          <div
-                            className="text-sm font-medium truncate max-w-[180px] sm:max-w-[300px]"
-                            title={it.name}
-                          >
-                            {it.name}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatBytes(it.size)} • {it.type || "file"}
-                          </div>
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className="text-sm font-medium truncate max-w-[180px] sm:max-w-[300px]"
+                          title={it.name}
+                        >
+                          {it.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatBytes(it.size)} • {it.type || "file"}
                         </div>
                       </div>
+                    </div>
 
-                      <div className="flex items-center gap-2 pl-2">
-                        {isImg && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 px-2"
-                            onClick={() => handleView(it.url)}
-                            title="View"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        )}
+                    <div className="flex items-center gap-2 pl-2">
+                      {isImg && (
                         <Button
                           size="sm"
                           variant="ghost"
                           className="h-8 px-2"
-                          onClick={() => downloadFileUrl(it.url, it.name)}
-                          title="Download"
+                          onClick={() => handleView(it.url)}
+                          title="View"
                         >
-                          <Download className="h-4 w-4" />
+                          <Eye className="h-4 w-4" />
                         </Button>
-                      </div>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2"
+                        onClick={() => downloadFileUrl(it.url, it.name)}
+                        title="Download"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  </div>
+                );
+              })}
+              
+              {items.length > 3 && (
+                <div
+                  className="p-2 text-center text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 cursor-pointer hover:underline transition-colors"
+                  onClick={() => setShowAllFiles(!showAllFiles)}
+                >
+                  {showAllFiles ? "Show less" : `View all ${items.length} files`}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Action buttons */}
@@ -1437,8 +1185,9 @@ export const EntryCard = memo(function EntryCard({
             </div>
           )}
         </div>
-        {imageModal}
       </div>
+      {globalViewerModal}
+    </>
     );
   }
 
@@ -1547,7 +1296,7 @@ export const EntryCard = memo(function EntryCard({
           </div>
         )}
       </div>
-      {imageModal}
+      {globalViewerModal}
     </div>
   );
 });

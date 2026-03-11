@@ -22,7 +22,8 @@ import { createEntry } from "@/lib/actions";
 import { compressImageAdaptive } from "@/lib/image-compression";
 import { cn } from "@/lib/utils";
 import { type Entry } from "./entry-card";
-import { DrawingCanvas } from "./drawing-canvas";
+import { DrawingCanvas } from "./digital-canvas";
+import { GlobalImageViewer } from "./global-image-viewer";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 interface ComposerProps {
@@ -58,7 +59,6 @@ export function Composer({
   // Preview state
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>("");
-  const [previewBg, setPreviewBg] = useState("bg-black/90");
 
   // Upload/compress modal state
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -69,57 +69,9 @@ export function Composer({
   const [uploadTotal, setUploadTotal] = useState(0);
   const [uploadMessage, setUploadMessage] = useState<string>("");
 
-  const analyzeImageBrightness = (dataUrl: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        try {
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            resolve(false);
-            return;
-          }
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
-          let totalBrightness = 0;
-          let pixelCount = 0;
-          for (let i = 0; i < data.length; i += 40) {
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
-            const a = data[i + 3];
-            if (a > 0) {
-              const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-              totalBrightness += brightness;
-              pixelCount++;
-            }
-          }
-          const averageBrightness =
-            pixelCount > 0 ? totalBrightness / pixelCount : 0;
-          resolve(averageBrightness > 128);
-        } catch (error) {
-          resolve(false);
-        }
-      };
-      img.onerror = () => resolve(false);
-      img.src = dataUrl;
-    });
-  };
-
-  const handlePreview = async (url: string) => {
+  const handlePreview = (url: string) => {
     setPreviewUrl(url);
     setPreviewOpen(true);
-    try {
-      const isBright = await analyzeImageBrightness(url);
-      setPreviewBg(isBright ? "bg-gray-800/95" : "bg-gray-100/95");
-    } catch {
-      setPreviewBg("bg-black/90");
-    }
   };
 
   // ----- Generic file upload state -----
@@ -277,7 +229,7 @@ export function Composer({
         textareaRef.current.style.height = "32px";
       }
     } catch (error) {
-      console.error("Failed to create entry:", error);
+      /* console.error("Failed to create entry:", error); */
     } finally {
       setIsSubmitting(false);
     }
@@ -312,7 +264,7 @@ export function Composer({
       // Replace placeholder with real entry
       onReplaceEntry?.(placeholder.id, entry);
     } catch (error) {
-      console.error("Failed to save drawing:", error);
+      /* console.error("Failed to save drawing:", error); */
       onUpdateEntry?.(placeholder.id, {
         isLoading: false,
         uploadMessage: "Failed to save drawing",
@@ -376,7 +328,7 @@ export function Composer({
       // Navigate to the note editor
       window.location.href = `/n/${noteSlug}`;
     } catch (error) {
-      console.error("Failed to create note entry:", error);
+      /* console.error("Failed to create note entry:", error); */
       onUpdateEntry?.(placeholder.id, {
         isLoading: false,
         uploadMessage: "Failed to create note",
@@ -448,7 +400,7 @@ export function Composer({
         // Clean up temp URL
         URL.revokeObjectURL(tempPreviewUrl);
       } catch (error: any) {
-        console.error("Failed to save photo:", error);
+        /* console.error("Failed to save photo:", error); */
         // Update placeholder to show error
         onUpdateEntry?.(placeholder.id, {
           isLoading: false,
@@ -460,7 +412,7 @@ export function Composer({
         setIsSubmitting(false);
       }
     } catch (error) {
-      console.error("Failed to process image:", error);
+      /* console.error("Failed to process image:", error); */
       onUpdateEntry?.(placeholder.id, {
         isLoading: false,
         uploadMessage: "Failed to process image",
@@ -577,7 +529,7 @@ export function Composer({
       }
 
       // Chunking logic to avoid oversized server action payloads
-      const MAX_GROUP_CHARS = 4.5 * 1024 * 1024; // ~4.5MB headroom for JSON overhead
+      const MAX_GROUP_CHARS = 3.2 * 1024 * 1024; // ~3.2MB headroom for JSON overhead to safely be below 5MB Next.js limit
       const groups: string[][] = [];
       let current: string[] = [];
       let currentLen = 0;
@@ -631,7 +583,7 @@ export function Composer({
             // Update the newly replaced entry (it's no longer loading)
           }
         } catch (groupErr: any) {
-          console.error("Group upload failed", groupErr);
+          /* console.error("Group upload failed", groupErr); */
         }
       }
 
@@ -643,7 +595,7 @@ export function Composer({
         onRemoveEntry?.(placeholder.id);
       }
     } catch (error) {
-      console.error("Failed to process photos:", error);
+      /* console.error("Failed to process photos:", error); */
       onUpdateEntry?.(placeholder.id, {
         isLoading: false,
         uploadMessage: "We couldn't process your images. Please try again.",
@@ -740,7 +692,7 @@ export function Composer({
           const res = await uploadSingleFile(pf);
           uploaded.push(res);
         } catch (e) {
-          console.error("Unexpected upload failure", e);
+          /* console.error("Unexpected upload failure", e); */
           failedIds.push(pf.id);
         }
       }
@@ -766,7 +718,7 @@ export function Composer({
         setTimeout(() => onRemoveEntry?.(placeholder.id), 3000);
       }
     } catch (error) {
-      console.error("File upload error:", error);
+      /* console.error("File upload error:", error); */
       onUpdateEntry?.(placeholder.id, {
         isLoading: false,
         uploadMessage: "Upload failed. Please try again.",
@@ -1102,6 +1054,7 @@ export function Composer({
             </div>
           </div>
 
+          {/* Force HMR update */}
           <DrawingCanvas
             isOpen={drawingOpen}
             onClose={() => setDrawingOpen(false)}
@@ -1291,65 +1244,7 @@ export function Composer({
             </DialogContent>
           </Dialog>
 
-          {/* Full screen image preview modal */}
-          {previewOpen && previewUrl && (
-            <div
-              className={`fixed inset-0 ${previewBg} z-[60] flex items-center justify-center transition-colors duration-300`}
-              onClick={() => setPreviewOpen(false)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setPreviewOpen(false);
-              }}
-              tabIndex={-1}
-            >
-              <div
-                className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center px-2 sm:px-4 py-4"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="relative w-full h-full max-w-[95vw] max-h-[95vh] flex items-center justify-center">
-                  <NextImage
-                    src={previewUrl}
-                    alt="Image - full view"
-                    fill
-                    unoptimized
-                    sizes="(max-width: 768px) 95vw, 90vw"
-                    className="object-contain rounded-lg shadow-2xl"
-                  />
-                </div>
-                {/* Control buttons */}
-                <div className="fixed top-4 right-4 flex gap-3 z-50">
-                  <Button
-                    size="icon"
-                    variant="secondary"
-                    className="h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const link = document.createElement("a");
-                      link.href = previewUrl;
-                      link.download = "preview.png";
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    }}
-                    title="Download image"
-                  >
-                    <Download className="h-6 w-6" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="secondary"
-                    className="h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPreviewOpen(false);
-                    }}
-                    title="Close (Esc)"
-                  >
-                    <X className="h-6 w-6" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
+
         </form>
       </div>
     );
@@ -1501,7 +1396,20 @@ export function Composer({
       />
       {uploadDialog}
       {/* File upload modal for compact composer */}
-      <Dialog open={fileModalOpen} onOpenChange={setFileModalOpen}>
+      <Dialog 
+        open={fileModalOpen} 
+        onOpenChange={(open) => {
+          setFileModalOpen(open);
+          if (!open) {
+            // Clean up URLs and clear selection when modal is dismissed
+            pendingFiles.forEach((f) => {
+              if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+            });
+            setPendingFiles([]);
+            if (anyFileInputRef.current) anyFileInputRef.current.value = "";
+          }
+        }}
+      >
         <DialogContent
           className="sm:max-w-lg w-full max-h-[85vh] overflow-hidden"
           onKeyDown={handleModalKeyDown}
@@ -1648,66 +1556,6 @@ export function Composer({
         </DialogContent>
       </Dialog>
 
-      {/* Full screen image preview modal */}
-      {previewOpen && previewUrl && (
-        <div
-          className={`fixed inset-0 -top-[25px] ${previewBg} z-[60] flex items-center justify-center transition-colors duration-300`}
-          onClick={() => setPreviewOpen(false)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setPreviewOpen(false);
-          }}
-          tabIndex={-1}
-        >
-          <div
-            className="relative w-full h-full max-w-7xl max-h-full flex items-center justify-center px-2 sm:px-4 py-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="relative w-full h-full max-w-[95vw] max-h-[95vh] flex items-center justify-center">
-              <NextImage
-                src={previewUrl}
-                alt="Image - full view"
-                fill
-                unoptimized
-                sizes="(max-width: 768px) 95vw, 90vw"
-                className="object-contain rounded-lg shadow-2xl"
-              />
-            </div>
-            {/* Control buttons */}
-            <div className="fixed top-4 right-4 flex gap-3 z-50">
-              <Button
-                size="icon"
-                variant="secondary"
-                className="h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // For local blobs, we can just download
-                  const link = document.createElement("a");
-                  link.href = previewUrl;
-                  link.download = "preview.png";
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                }}
-                title="Download image"
-              >
-                <Download className="h-6 w-6" />
-              </Button>
-              <Button
-                size="icon"
-                variant="secondary"
-                className="h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border border-black/40 bg-black/80 text-white backdrop-blur-md hover:bg-black hover:scale-105 transition-all duration-300"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPreviewOpen(false);
-                }}
-                title="Close (Esc)"
-              >
-                <X className="h-6 w-6" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

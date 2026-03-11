@@ -108,7 +108,7 @@ export function JoinRoomSection() {
               setError("Room not found - please check the code");
             }
           } catch (error) {
-            console.error("Error validating room:", error);
+            /* console.error("Error validating room:", error); */
             setError("Error validating room code");
           }
         } else {
@@ -118,7 +118,7 @@ export function JoinRoomSection() {
         setError("Clipboard is empty");
       }
     } catch (error) {
-      console.error("Failed to read clipboard:", error);
+      /* console.error("Failed to read clipboard:", error); */
       setError("Unable to access clipboard");
     } finally {
       setIsPasting(false);
@@ -204,7 +204,7 @@ export function JoinRoomSection() {
                 setIsScanning(false);
               }
             } catch (error) {
-              console.error("Error validating room:", error);
+              /* console.error("Error validating room:", error); */
             }
           }
         },
@@ -239,7 +239,7 @@ export function JoinRoomSection() {
         }
       }, 30000);
     } catch (error) {
-      console.error("Failed to start QR scanner:", error);
+      /* console.error("Failed to start QR scanner:", error); */
       if (error instanceof Error) {
         if (error.name === "NotAllowedError") {
           setError("Camera permission denied");
@@ -257,13 +257,24 @@ export function JoinRoomSection() {
     }
   };
 
-  const handleJoinRoom = async () => {
-    if (roomCode.length !== PIN_LENGTH) {
+  const handleJoinRoom = async (overrideCode?: string | React.FormEvent) => {
+    let codeToJoin = typeof overrideCode === "string" ? overrideCode : roomCode;
+    
+    // Fallback: If state is lagging behind DOM (e.g. rapid Enter keypress),
+    // grab the immediate values from the input references.
+    if (codeToJoin.length !== PIN_LENGTH) {
+      const domCode = inputRefs.current.map((el) => el?.value || "").join("");
+      if (domCode.length === PIN_LENGTH) {
+        codeToJoin = domCode;
+      }
+    }
+
+    if (codeToJoin.length !== PIN_LENGTH) {
       setError("Please enter a 4-digit room code");
       return;
     }
 
-    if (!/^\d{4}$/.test(roomCode)) {
+    if (!/^\d{4}$/.test(codeToJoin)) {
       setError("Room code must be 4 digits");
       return;
     }
@@ -273,16 +284,16 @@ export function JoinRoomSection() {
 
     try {
       // Validate the room exists before navigating
-      const isValid = await validateRoomCode(roomCode);
+      const isValid = await validateRoomCode(codeToJoin);
 
       if (isValid) {
-        router.push(`/${roomCode}`);
+        router.push(`/${codeToJoin}`);
       } else {
         setError("Room not found - please check the code");
         setIsJoining(false);
       }
     } catch (error) {
-      console.error("Failed to join room:", error);
+      /* console.error("Failed to join room:", error); */
       setError("Failed to join room");
       setIsJoining(false);
     }
@@ -307,8 +318,8 @@ export function JoinRoomSection() {
     if (digit && index === PIN_LENGTH - 1) {
       const fullCode = newPinDigits.join("");
       if (fullCode.length === PIN_LENGTH) {
-        // Small delay to let state update
-        setTimeout(() => handleJoinRoom(), 100);
+        // Small delay to let state update visually
+        setTimeout(() => handleJoinRoom(fullCode), 100);
       }
     }
   };
@@ -321,7 +332,8 @@ export function JoinRoomSection() {
       // Move to previous input on backspace if current is empty
       inputRefs.current[index - 1]?.focus();
     } else if (e.key === "Enter") {
-      handleJoinRoom();
+      const domCode = inputRefs.current.map((el) => el?.value || "").join("");
+      handleJoinRoom(domCode);
     } else if (e.key === "ArrowLeft" && index > 0) {
       inputRefs.current[index - 1]?.focus();
     } else if (e.key === "ArrowRight" && index < PIN_LENGTH - 1) {

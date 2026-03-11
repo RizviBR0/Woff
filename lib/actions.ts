@@ -52,12 +52,12 @@ export async function createSpace(): Promise<Space> {
   }
 
   // Create space
-  console.log("💾 Creating space with data:", {
+  /* console.log("💾 Creating space with data:", {
     slug,
     creator_device_id: deviceId,
     visibility: "unlisted",
     allow_public_post: true,
-  });
+  }); */
 
   const { data, error } = await supabase
     .from("spaces")
@@ -71,17 +71,17 @@ export async function createSpace(): Promise<Space> {
     .single();
 
   if (error) {
-    console.error("💾 Error creating space:", error);
-    console.error("💾 Space creation error details:", {
+    /* console.error("💾 Error creating space:", error); */
+    /* console.error("💾 Space creation error details:", {
       message: error.message,
       code: error.code,
       hint: error.hint,
       details: error.details,
-    });
+    }); */
     throw new Error(`Failed to create space: ${error.message}`);
   }
 
-  console.log("💾 Space created successfully:", data);
+  /* console.log("💾 Space created successfully:", data); */
   return data;
 }
 
@@ -126,13 +126,13 @@ export async function createEntry(
     throw new Error("Not authorized to post in this space");
   }
 
-  console.log("💾 Inserting entry with data:", {
+  /* console.log("💾 Inserting entry with data:", {
     space_id: spaceId,
     kind,
     text: text || null,
     meta: meta || null,
     created_by_device_id: deviceId,
-  });
+  }); */
 
   const { data, error } = await supabase
     .from("entries")
@@ -147,17 +147,17 @@ export async function createEntry(
     .single();
 
   if (error) {
-    console.error("💾 Error inserting entry:", error);
-    console.error("💾 Insert error details:", {
+    /* console.error("💾 Error inserting entry:", error); */
+    /* console.error("💾 Insert error details:", {
       message: error.message,
       code: error.code,
       hint: error.hint,
       details: error.details,
-    });
+    }); */
     throw new Error(`Failed to create entry: ${error.message}`);
   }
 
-  console.log("💾 Entry inserted successfully:", data);
+  /* console.log("💾 Entry inserted successfully:", data); */
   return data;
 }
 
@@ -182,23 +182,23 @@ export async function createNoteEntry(
   spaceId: string,
   title?: string,
 ): Promise<{ noteSlug: string; publicCode: string; entryId: string }> {
-  console.log(
+  /* console.log(
     "💾 Creating note entry for space:",
     spaceId,
     "with title:",
     title,
-  );
+  ); */
 
   // Generate unique slug and public code
   const noteSlug = generateShortSlug();
   const publicCode = generateShortSlug();
 
-  console.log("💾 Generated slugs - note:", noteSlug, "public:", publicCode);
+  /* console.log("💾 Generated slugs - note:", noteSlug, "public:", publicCode); */
 
   // Create entry with note data stored as text
   const noteText = `NOTE:${noteSlug}:${publicCode}:${title || "Untitled Note"}`;
 
-  console.log("💾 Creating entry with text:", noteText);
+  /* console.log("💾 Creating entry with text:", noteText); */
 
   try {
     const entry = await createEntry(spaceId, "text", noteText, {
@@ -209,7 +209,7 @@ export async function createNoteEntry(
       visibility: "unlisted",
     });
 
-    console.log("💾 Entry created successfully:", entry.id);
+    /* console.log("💾 Entry created successfully:", entry.id); */
 
     return {
       noteSlug,
@@ -217,7 +217,7 @@ export async function createNoteEntry(
       entryId: entry.id,
     };
   } catch (error) {
-    console.error("💾 Error creating note entry:", error);
+    /* console.error("💾 Error creating note entry:", error); */
     throw error;
   }
 }
@@ -258,7 +258,7 @@ export async function updateNote(
     .limit(1);
 
   if (fetchError) {
-    console.error("Database error:", fetchError);
+    /* console.error("Database error:", fetchError); */
     throw new Error(`Database error: ${fetchError.message}`);
   }
 
@@ -308,10 +308,10 @@ export async function updateNote(
   }
 
   // Update entry
-  console.log("💾 Attempting to update entry:", entry.id, "with data:", {
+  /* console.log("💾 Attempting to update entry:", entry.id, "with data:", {
     text: updatedText,
     meta: updatedMeta,
-  });
+  }); */
 
   const { data, error } = await supabase
     .from("entries")
@@ -323,20 +323,20 @@ export async function updateNote(
     .select();
 
   if (error) {
-    console.error("💾 Update error:", error);
-    console.error("💾 Update error details:", {
+    /* console.error("💾 Update error:", error); */
+    /* console.error("💾 Update error details:", {
       message: error.message,
       code: error.code,
       hint: error.hint,
       details: error.details,
-    });
+    }); */
     throw new Error(`Failed to update note: ${error.message}`);
   }
 
-  console.log("💾 Update result:", data);
+  /* console.log("💾 Update result:", data); */
 
   if (!data || data.length === 0) {
-    console.warn("No data returned from update, using original entry data");
+    /* console.warn("No data returned from update, using original entry data"); */
     // Fall back to using the original entry data with updates applied
     const updatedEntry = {
       ...entry,
@@ -503,7 +503,7 @@ export async function validateRoomCode(roomCode: string): Promise<boolean> {
 
     return true;
   } catch (error) {
-    console.error("Error validating room code:", error);
+    /* console.error("Error validating room code:", error); */
     return false;
   }
 }
@@ -582,7 +582,7 @@ export async function deleteSpace(spaceId: string): Promise<void> {
     .eq("space_id", spaceId);
 
   if (deleteEntriesError) {
-    console.error("Failed to delete entries:", deleteEntriesError);
+    /* console.error("Failed to delete entries:", deleteEntriesError); */
     // Continue anyway as the space delete might still work if cascade is on,
     // or we want to surface the specific space delete error
   }

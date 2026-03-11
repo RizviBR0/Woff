@@ -455,7 +455,7 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
         } catch (e) {
-          console.error("ZIP download failed", e);
+          /* console.error("ZIP download failed", e); */
         }
       }
     } else if (entry.text?.startsWith("DRAWING:")) {
@@ -534,7 +534,7 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
         } catch (error) {
-          console.error("Failed to create zip:", error);
+          /* console.error("Failed to create zip:", error); */
         }
       }
     } else if (entry.text?.startsWith("NOTE:")) {
@@ -607,7 +607,7 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
           `${(note.title || noteTitle).replace(/[^a-zA-Z0-9]/g, "_")}.pdf`
         );
       } catch (error) {
-        console.error("Failed to download note as PDF:", error);
+        /* console.error("Failed to download note as PDF:", error); */
       }
     }
   };
@@ -754,7 +754,7 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
               zip.file(`notes/${safeName}.pdf`, pdfBlob);
             }
           } catch (e) {
-            console.error("Failed to add note to zip:", e);
+            /* console.error("Failed to add note to zip:", e); */
           }
         }
       }
@@ -770,7 +770,7 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.error("Failed to create download zip:", error);
+      /* console.error("Failed to create download zip:", error); */
     }
   };
 

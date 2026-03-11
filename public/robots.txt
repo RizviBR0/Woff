@@ -1,0 +1,10 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Disallow private/internal routes
+Disallow: /api/
+Disallow: /_next/
+
+# Sitemap
+Sitemap: https://woff.space/sitemap.xml
