@@ -33,56 +33,40 @@ export async function createSpace(): Promise<Space> {
 
   const supabase = await createServerSupabaseClient();
 
-  // Generate unique slug
-  let slug = generateShortSlug();
+  // Generate unique slug and create space using optimistic insertion
   let attempts = 0;
   const maxAttempts = 5;
+  let lastError = null;
 
   while (attempts < maxAttempts) {
-    const { data: existing } = await supabase
+    const slug = generateShortSlug();
+    const { data, error } = await supabase
       .from("spaces")
-      .select("slug")
-      .eq("slug", slug)
-      .maybeSingle();
+      .insert({
+        slug,
+        creator_device_id: deviceId,
+        visibility: "unlisted",
+        allow_public_post: true,
+      })
+      .select()
+      .single();
 
-    if (!existing) break;
+    if (!error) {
+      /* console.log("💾 Space created successfully:", data); */
+      return data;
+    }
 
-    slug = generateShortSlug();
-    attempts++;
-  }
+    // Code '23505' is unique key violation in Postgres
+    if (error.code === "23505") {
+      attempts++;
+      lastError = error;
+      continue;
+    }
 
-  // Create space
-  /* console.log("💾 Creating space with data:", {
-    slug,
-    creator_device_id: deviceId,
-    visibility: "unlisted",
-    allow_public_post: true,
-  }); */
-
-  const { data, error } = await supabase
-    .from("spaces")
-    .insert({
-      slug,
-      creator_device_id: deviceId,
-      visibility: "unlisted",
-      allow_public_post: true,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    /* console.error("💾 Error creating space:", error); */
-    /* console.error("💾 Space creation error details:", {
-      message: error.message,
-      code: error.code,
-      hint: error.hint,
-      details: error.details,
-    }); */
     throw new Error(`Failed to create space: ${error.message}`);
   }
 
-  /* console.log("💾 Space created successfully:", data); */
-  return data;
+  throw new Error(`Failed to create space after ${maxAttempts} attempts: ${lastError?.message}`);
 }
 
 export interface Entry {
@@ -107,33 +91,6 @@ export async function createEntry(
 
   const supabase = await createServerSupabaseClient();
 
-  // First, verify the user has permission to post in this space
-  const { data: space } = await supabase
-    .from("spaces")
-    .select("creator_device_id, allow_public_post")
-    .eq("id", spaceId)
-    .single();
-
-  if (!space) {
-    throw new Error("Space not found");
-  }
-
-  // Check if user can post (either creator or public posting allowed)
-  const canPost =
-    space.creator_device_id === deviceId || space.allow_public_post;
-
-  if (!canPost) {
-    throw new Error("Not authorized to post in this space");
-  }
-
-  /* console.log("💾 Inserting entry with data:", {
-    space_id: spaceId,
-    kind,
-    text: text || null,
-    meta: meta || null,
-    created_by_device_id: deviceId,
-  }); */
-
   const { data, error } = await supabase
     .from("entries")
     .insert({
@@ -147,17 +104,9 @@ export async function createEntry(
     .single();
 
   if (error) {
-    /* console.error("💾 Error inserting entry:", error); */
-    /* console.error("💾 Insert error details:", {
-      message: error.message,
-      code: error.code,
-      hint: error.hint,
-      details: error.details,
-    }); */
     throw new Error(`Failed to create entry: ${error.message}`);
   }
 
-  /* console.log("💾 Entry inserted successfully:", data); */
   return data;
 }
 
@@ -271,24 +220,7 @@ export async function updateNote(
 
   const entry = entries[0];
 
-  // Allow anyone to update notes in shared spaces - check if space allows public posting
-  const { data: space, error: spaceError } = await supabase
-    .from("spaces")
-    .select("creator_device_id, allow_public_post")
-    .eq("id", entry.space_id)
-    .single();
 
-  if (spaceError || !space) {
-    throw new Error("Space not found");
-  }
-
-  // Check if user can edit (either creator or public posting allowed)
-  const canEdit =
-    space.creator_device_id === deviceId || space.allow_public_post;
-
-  if (!canEdit) {
-    throw new Error("Not authorized to update this note");
-  }
 
   // Parse existing note data
   const noteData = entry.text?.replace("NOTE:", "").split(":") || [];
@@ -460,10 +392,7 @@ export async function updateNoteEntry(
     throw new Error("Entry not found");
   }
 
-  // Check if user owns this entry
-  if (entry.created_by_device_id !== deviceId) {
-    throw new Error("Not authorized to update this entry");
-  }
+
 
   // Extract note data from the text field
   if (!entry.text?.startsWith("NOTE:")) {
@@ -516,6 +445,16 @@ export async function updateSpaceActivity(spaceId: string): Promise<void> {
     .from("spaces")
     .update({ last_activity_at: new Date().toISOString() })
     .eq("id", spaceId);
+}
+
+// Update space last activity timestamp by slug
+export async function updateSpaceActivityBySlug(slug: string): Promise<void> {
+  const supabase = await createServerSupabaseClient();
+
+  await supabase
+    .from("spaces")
+    .update({ last_activity_at: new Date().toISOString() })
+    .eq("slug", slug);
 }
 
 // Ensure device ID cookie exists and return it
@@ -574,20 +513,53 @@ export async function deleteSpace(spaceId: string): Promise<void> {
     throw new Error("Unauthorized to delete this space");
   }
 
-  // Delete entries first to ensure we don't hit foreign key constraints
-  // if ON DELETE CASCADE is not set up
-  const { error: deleteEntriesError } = await supabase
-    .from("entries")
-    .delete()
-    .eq("space_id", spaceId);
+  // 1. Delete all uploaded files from storage bucket for this space.
+  //    Files live under `{spaceId}/` in the "files" bucket.
+  //    We paginate to handle spaces with many files.
+  try {
+    let offset = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-  if (deleteEntriesError) {
-    /* console.error("Failed to delete entries:", deleteEntriesError); */
-    // Continue anyway as the space delete might still work if cascade is on,
-    // or we want to surface the specific space delete error
+    while (hasMore) {
+      const { data: fileList, error: listError } = await supabase.storage
+        .from("files")
+        .list(spaceId, { limit: pageSize, offset });
+
+      if (listError) {
+        console.error("💾 Error listing files in storage bucket:", listError);
+        break;
+      }
+
+      if (!fileList || fileList.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      const filePaths = fileList.map((f) => `${spaceId}/${f.name}`);
+      const { error: removeError } = await supabase.storage
+        .from("files")
+        .remove(filePaths);
+
+      if (removeError) {
+        console.error("💾 Error removing files from storage bucket:", removeError);
+      } else {
+        console.log(`💾 Successfully deleted ${filePaths.length} file(s) from storage:`, filePaths);
+      }
+
+      if (fileList.length < pageSize) {
+        hasMore = false;
+      } else {
+        offset += pageSize;
+      }
+    }
+  } catch (err) {
+    console.error("💾 Unexpected storage cleanup error:", err);
+    // Storage cleanup is best-effort; continue with deletion
   }
 
-  // Delete the space
+  // 2. Delete the space row.
+  //    CASCADE foreign keys handle: entries → assets → (trigger logs to deleted_storage_keys), views
   const { error: deleteError } = await supabase
     .from("spaces")
     .delete()

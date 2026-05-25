@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { cache } from "react";
+import { createServerSupabaseClient } from "@/lib/supabase";
 import { SpaceContainer } from "@/components/space-container";
 import { cookies } from "next/headers";
-import { updateSpaceActivity } from "@/lib/actions";
+import { updateSpaceActivityBySlug } from "@/lib/actions";
 import type { Metadata } from "next";
 
 // Revalidate every 60 seconds for better caching
@@ -14,29 +15,19 @@ interface SpacePageProps {
   }>;
 }
 
-// Generate metadata for SEO
-export async function generateMetadata({
-  params,
-}: SpacePageProps): Promise<Metadata> {
-  const { slug } = await params;
-  const { data: space } = await supabase
-    .from("spaces")
-    .select("title, slug")
-    .eq("slug", slug)
-    .single();
-
-  return {
-    title: space?.title ? `${space.title} - Woff` : `Space ${slug} - Woff`,
-    description: "A shared space on Woff - simple shareable spaces",
-  };
-}
-
-async function getSpace(slug: string) {
+// Request-scoped cache to deduplicate DB fetch across generateMetadata and Page render
+const getSpaceAndEntries = cache(async (slug: string) => {
+  const supabase = await createServerSupabaseClient();
+  
+  // Single query using join to fetch both space and its entries in one DB roundtrip!
   const { data: space, error } = await supabase
     .from("spaces")
-    .select(
-      "id, slug, title, creator_device_id, visibility, allow_public_post, created_at, last_activity_at, is_pro",
-    )
+    .select(`
+      id, slug, title, creator_device_id, visibility, allow_public_post, created_at, last_activity_at, is_pro,
+      entries (
+        id, space_id, kind, text, meta, created_by_device_id, created_at
+      )
+    `)
     .eq("slug", slug)
     .single();
 
@@ -44,31 +35,47 @@ async function getSpace(slug: string) {
     return null;
   }
 
-  return space;
-}
+  const { entries, ...spaceData } = space;
 
-async function getEntries(spaceId: string) {
-  const { data: entries } = await supabase
-    .from("entries")
-    .select("id, space_id, kind, text, meta, created_by_device_id, created_at")
-    .eq("space_id", spaceId)
-    .order("created_at", { ascending: true });
+  // Sort entries by created_at ascending
+  const sortedEntries = [...(entries || [])].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
 
-  return entries || [];
+  return {
+    space: spaceData,
+    entries: sortedEntries,
+  };
+});
+
+// Generate metadata for SEO
+export async function generateMetadata({
+  params,
+}: SpacePageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const data = await getSpaceAndEntries(slug);
+  const space = data?.space;
+
+  return {
+    title: space?.title ? `${space.title} - Woff` : `Space ${slug} - Woff`,
+    description: "A shared space on Woff - simple shareable spaces",
+  };
 }
 
 export default async function SpacePage({ params }: SpacePageProps) {
   const { slug } = await params;
-  const space = await getSpace(slug);
 
-  if (!space) {
+  // Fetch space + entries and update last activity in parallel!
+  const [data, _] = await Promise.all([
+    getSpaceAndEntries(slug),
+    updateSpaceActivityBySlug(slug),
+  ]);
+
+  if (!data) {
     notFound();
   }
 
-  // Update last activity timestamp when space is viewed
-  await updateSpaceActivity(space.id);
-
-  const entries = await getEntries(space.id);
+  const { space, entries } = data;
 
   // Get device id from cookie (set by middleware)
   const cookieStore = await cookies();

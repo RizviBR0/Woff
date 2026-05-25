@@ -1,5 +1,4 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -25,9 +24,16 @@ export const createClientSupabaseClient = () => {
   return clientSupabaseInstance;
 };
 
+// Singleton instance for server-side Supabase client
+let serverSupabaseInstance: SupabaseClient | null = null;
+
 // Server-side Supabase client with device ID context
 export async function createServerSupabaseClient() {
   // For now, just return the basic client
   // RLS policies will be simplified to allow operations
-  return createClient(supabaseUrl, supabaseAnonKey);
+  if (serverSupabaseInstance) {
+    return serverSupabaseInstance;
+  }
+  serverSupabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+  return serverSupabaseInstance;
 }

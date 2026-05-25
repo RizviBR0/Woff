@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -62,6 +63,10 @@ export function SpaceContainer({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const router = useRouter();
 
+  // Track entry IDs that were added/replaced locally to prevent
+  // the real-time subscription from adding duplicates.
+  const locallyHandledIdsRef = useRef<Set<string>>(new Set());
+
   // Check if current user is the creator
   const isCreator =
     currentDeviceId && space.creator_device_id === currentDeviceId;
@@ -89,24 +94,12 @@ export function SpaceContainer({
   // Helper function to safely add entry without duplicates
   const addEntryIfNotExists = useCallback((newEntry: Entry, source: string) => {
     setEntries((prev) => {
+      // Check if entry already exists by ID
       const exists = prev.some((entry) => entry.id === newEntry.id);
       if (exists) {
-        /* console.log(
-          `🔄 ${source}: Entry already exists, skipping duplicate`,
-          newEntry.id,
-        ); */
         return prev;
       }
-
-      /* console.log(
-        `🔄 ${source}: Adding entry`,
-        newEntry.id,
-        "Current count:",
-        prev.length,
-      ); */
-      const updated = [...prev, newEntry];
-      /* console.log(`🔄 ${source}: New count:`, updated.length); */
-      return updated;
+      return [...prev, newEntry];
     });
   }, []);
 
@@ -135,14 +128,23 @@ export function SpaceContainer({
           filter: `space_id=eq.${space.id}`,
         },
         (payload) => {
-          /* console.log("🔄 Real-time: New entry received", payload); */
           const newEntry = payload.new as Entry;
 
-          // Add a longer delay to let local updates settle first
+          // Skip if this entry was already handled locally
+          // (e.g., via handleNewEntry or handleReplaceEntry)
+          if (locallyHandledIdsRef.current.has(newEntry.id)) {
+            return;
+          }
+
+          // Small delay to let any in-flight local updates settle
           setTimeout(() => {
+            // Double-check after delay
+            if (locallyHandledIdsRef.current.has(newEntry.id)) {
+              return;
+            }
             addEntryIfNotExists(newEntry, "Real-time");
             setHasPosted(true);
-          }, 200); // Increased delay to prevent race conditions with local updates
+          }, 300);
         },
       )
       .on(
@@ -154,7 +156,6 @@ export function SpaceContainer({
           filter: `space_id=eq.${space.id}`,
         },
         (payload) => {
-          /* console.log("🔄 Real-time: Entry updated", payload); */
           const updatedEntry = payload.new as Entry;
 
           setEntries((prev) =>
@@ -167,14 +168,21 @@ export function SpaceContainer({
       .subscribe();
 
     return () => {
-      /* console.log("🔄 Real-time: Unsubscribing from channel"); */
       supabase.removeChannel(channel);
     };
   }, [space.id, addEntryIfNotExists]);
 
   const handleNewEntry = useCallback(
     (entry: Entry) => {
-      /* console.log("📝 Local: Received new entry", entry.id); */
+      // Track this entry ID so real-time doesn't re-add it
+      if (!entry.id.startsWith("placeholder-")) {
+        locallyHandledIdsRef.current.add(entry.id);
+        // Clean up after 10 seconds to avoid unbounded growth
+        setTimeout(() => {
+          locallyHandledIdsRef.current.delete(entry.id);
+        }, 10000);
+      }
+
       addEntryIfNotExists(entry, "Local");
       setHasPosted(true);
 
@@ -202,12 +210,13 @@ export function SpaceContainer({
   // Function to replace a placeholder entry with the real one
   const handleReplaceEntry = useCallback(
     (placeholderId: string, realEntry: Entry) => {
-      /* console.log(
-        "📝 Local: Replacing placeholder",
-        placeholderId,
-        "with",
-        realEntry.id,
-      ); */
+      // Track the real entry ID so real-time doesn't re-add it
+      locallyHandledIdsRef.current.add(realEntry.id);
+      // Clean up after 10 seconds to avoid unbounded growth
+      setTimeout(() => {
+        locallyHandledIdsRef.current.delete(realEntry.id);
+      }, 10000);
+
       setEntries((prev) =>
         prev.map((entry) => (entry.id === placeholderId ? realEntry : entry)),
       );

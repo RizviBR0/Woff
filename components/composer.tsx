@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import NextImage from "next/image";
-import { Plus, Send, X, Download } from "lucide-react";
+import { Plus, Send, X, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,6 +56,11 @@ export function Composer({
   const anyFileInputRef = useRef<HTMLInputElement>(null);
   const lastUploadSignatureRef = useRef<string>("");
   const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB per image
+
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+  const composerRef = useRef<HTMLDivElement>(null);
 
   // Preview state
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -167,7 +173,7 @@ export function Composer({
     };
   };
 
-  const handleGenericFilesSelected = (files: FileList | null) => {
+  const handleGenericFilesSelected = (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     const items = Array.from(files).map((f, i) => {
       let previewUrl = undefined;
@@ -870,10 +876,135 @@ export function Composer({
     return () => window.removeEventListener("paste", handleGlobalPaste);
   }, []);
 
+  // Check for auto-uploaded files from homepage drag/drop
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window as any).__pending_dragged_files) {
+      const files = (window as any).__pending_dragged_files;
+      // Clear immediately to prevent double-execution
+      (window as any).__pending_dragged_files = undefined;
+
+      // Queue these files for upload in the file modal
+      handleGenericFilesSelected(files);
+    }
+  }, []);
+
+  // ---- Drag and Drop handlers ----
+  const handleDragEnter = useCallback((e: React.DragEvent | DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer?.types?.includes("Files")) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent | DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent | DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent | DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      handleGenericFilesSelected(files);
+    }
+  }, []);
+
+  // Global drag/drop listener for the compact (non-centered) composer
+  // so users can drag files anywhere on the page
+  useEffect(() => {
+    if (centered) return; // Centered composer handles it within its own div
+
+    const onDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current++;
+      if (e.dataTransfer?.types?.includes("Files")) {
+        setIsDragging(true);
+      }
+    };
+    const onDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current--;
+      if (dragCounterRef.current === 0) {
+        setIsDragging(false);
+      }
+    };
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        handleGenericFilesSelected(files);
+      }
+    };
+
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [centered]);
+
+  // Drag overlay component — rendered via portal so it escapes any
+  // stacking-context created by the fixed bottom bar's backdrop-blur.
+  const dragOverlay = isDragging
+    ? createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm transition-all duration-200"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          <div className="flex flex-col items-center gap-4 p-10 rounded-3xl border-2 border-dashed border-primary/50 bg-primary/5 dark:bg-primary/10 shadow-2xl shadow-primary/10 animate-in fade-in zoom-in-95 duration-200">
+            <div className="h-16 w-16 rounded-2xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+              <Upload className="h-8 w-8 text-primary" />
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-semibold text-foreground">Drop files here</p>
+              <p className="text-sm text-muted-foreground mt-1">Release to upload any file</p>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
+
   if (centered) {
     // Large centered composer for first post - Enhanced Design
     return (
-      <div className="w-full max-w-3xl mx-auto">
+      <div
+        className="w-full max-w-3xl mx-auto relative"
+        ref={composerRef}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
         {/* Welcome Message */}
         <div className="text-center mb-8">
           <h2 className="text-2xl font-semibold text-foreground mb-3">
@@ -1244,6 +1375,8 @@ export function Composer({
             </DialogContent>
           </Dialog>
 
+          {/* Drag and drop overlay (portal-based, full viewport) */}
+          {dragOverlay}
 
         </form>
       </div>
@@ -1254,8 +1387,13 @@ export function Composer({
   const isExpanded = text.includes("\n") || text.length > 50;
 
   return (
-    <div
-      className={`flex items-start gap-3 bg-background/85 dark:bg-background/95 border-2 border-border/50 dark:border-border/80 px-3 py-2 shadow-lg shadow-black/10 dark:shadow-black/40 backdrop-blur-md transition-all duration-300 hover:shadow-xl hover:shadow-black/15 dark:hover:shadow-black/50 hover:border-primary/20 ring-1 ring-inset ring-white/5 dark:ring-white/10 ${
+    <>
+      {/* Global drag overlay for compact composer */}
+      {dragOverlay}
+
+      <div
+        ref={composerRef}
+        className={`flex items-start gap-3 bg-background/85 dark:bg-background/95 border-2 border-border/50 dark:border-border/80 px-3 py-2 shadow-lg shadow-black/10 dark:shadow-black/40 backdrop-blur-md transition-all duration-300 hover:shadow-xl hover:shadow-black/15 dark:hover:shadow-black/50 hover:border-primary/20 ring-1 ring-inset ring-white/5 dark:ring-white/10 ${
         isExpanded ? "rounded-2xl" : "rounded-full"
       }`}
     >
@@ -1557,5 +1695,6 @@ export function Composer({
       </Dialog>
 
     </div>
+    </>
   );
 }
