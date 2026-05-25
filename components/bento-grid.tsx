@@ -1,6 +1,7 @@
 "use client";
 
 import styles from "./BentoGrid.module.css";
+import { FaShieldAlt } from "react-icons/fa";
 
 const cards = [
   {
@@ -73,14 +74,11 @@ function ShieldVisual() {
       <svg viewBox="0 0 120 140" className={styles.shieldIcon}>
         <defs>
           <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#ff9e00" />
-            <stop offset="100%" stopColor="#ff5a00" />
+            <stop offset="0%" stopColor="#ff9e0011" />
+            <stop offset="100%" stopColor="#ff5a0088" />
           </linearGradient>
         </defs>
         <path d="M60 8L104 25V62C104 95 83 122 60 132C37 122 16 95 16 62V25L60 8Z" />
-        <path d="M60 8V132" />
-        <circle cx="60" cy="62" r="9" />
-        <path d="M60 70V94" />
       </svg>
     </div>
   );
