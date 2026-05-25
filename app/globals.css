@@ -118,3 +118,84 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Custom premium CTA button style from Uiverse.io suitable for light and dark modes */
+.cta-button-glow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  background: linear-gradient(90deg, #ff7d3b, #ff5a00, #ff3600);
+  border-radius: 12px;
+  color: #fff;
+  transition: all 0.3s ease;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+/* Dark mode specific shadows for button */
+.dark .cta-button-glow {
+  box-shadow:
+    inset 0px 0px 5px rgba(255, 255, 255, 0.66),
+    inset 0px 35px 30px rgba(0, 0, 0, 0.95),
+    0px 5px 15px rgba(0, 0, 0, 0.8);
+}
+
+/* Light mode specific shadows for button (clean, glossy look) */
+:not(.dark) > .cta-button-glow,
+.cta-button-glow:not(.dark) {
+  box-shadow:
+    inset 0px 0px 5px rgba(255, 255, 255, 0.8),
+    inset 0px 35px 30px rgba(255, 255, 255, 0.55),
+    0px 5px 15px rgba(255, 90, 0, 0.25);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+/* Background glowing blur (using theme orange, amber, and coral colors) */
+.cta-button-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-radius: 12px;
+  filter: blur(0);
+  z-index: -1;
+  box-shadow: none;
+  background: conic-gradient(
+    rgba(0, 0, 0, 0) 80deg,
+    #ff9e00,
+    #ff5a00,
+    #ff2a00,
+    rgba(0, 0, 0, 0) 280deg
+  );
+  transition: all 0.3s ease;
+}
+
+.cta-button-glow:hover::before {
+  filter: blur(15px);
+}
+
+.cta-button-glow:active::before {
+  filter: blur(5px);
+  transform: translateY(1px);
+}
+
+.cta-button-glow:active {
+  margin-top: 3px;
+}
+
+.dark .cta-button-glow:active {
+  box-shadow:
+    inset 0px 0px 5px rgba(255, 255, 255, 0.66),
+    inset 0px 35px 30px rgba(0, 0, 0, 0.95);
+}
+
+.cta-button-glow:active:not(.dark) {
+  box-shadow:
+    inset 0px 0px 5px rgba(255, 255, 255, 0.8),
+    inset 0px 35px 30px rgba(255, 255, 255, 0.55);
+}
+

@@ -1,0 +1,584 @@
+.bentoSection {
+  --bg: #0f0f0f;
+  --card: rgba(9, 10, 10, 0.86);
+  --card-soft: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.62);
+  --soft: rgba(255, 255, 255, 0.36);
+  --orange: #ff5a00;
+  --orange-soft: rgba(255, 90, 0, 0.22);
+  --cyan: #20d7ff;
+  --purple: #b86cff;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  padding: 96px 24px;
+}
+
+:global(.light) .bentoSection {
+  --bg: #ffffff;
+  --card: rgba(255, 255, 255, 0.88);
+  --card-soft: rgba(0, 0, 0, 0.035);
+  --border: rgba(0, 0, 0, 0.08);
+  --text: #111111;
+  --muted: rgba(0, 0, 0, 0.62);
+  --soft: rgba(0, 0, 0, 0.34);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.04), 0 1px 8px rgba(0, 0, 0, 0.03);
+}
+
+@media (prefers-color-scheme: light) {
+  .bentoSection {
+    --bg: #ffffff;
+    --card: rgba(255, 255, 255, 0.88);
+    --card-soft: rgba(0, 0, 0, 0.035);
+    --border: rgba(0, 0, 0, 0.08);
+    --text: #111111;
+    --muted: rgba(0, 0, 0, 0.62);
+    --soft: rgba(0, 0, 0, 0.34);
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.04), 0 1px 8px rgba(0, 0, 0, 0.03);
+  }
+}
+
+:global(.dark) .bentoSection {
+  --bg: #0f0f0f;
+  --card: rgba(9, 10, 10, 0.86);
+  --card-soft: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.62);
+  --soft: rgba(255, 255, 255, 0.36);
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.header {
+  position: relative;
+  z-index: 1;
+  max-width: 760px;
+  margin: 0 auto 64px;
+  text-align: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--card-soft);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.badge svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--orange);
+  stroke-width: 2;
+}
+
+.header h2 {
+  margin: 22px 0 14px;
+  font-size: clamp(36px, 5vw, 58px);
+  line-height: 1;
+  letter-spacing: -0.055em;
+  font-weight: 800;
+}
+
+.header p {
+  max-width: 680px;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 19px;
+  line-height: 1.55;
+}
+
+.grid {
+  position: relative;
+  z-index: 1;
+  max-width: 1240px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 24px;
+}
+
+.card {
+  position: relative;
+  min-height: 460px;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 38%),
+    radial-gradient(circle at 25% 20%, rgba(255, 90, 0, 0.17), transparent 34%),
+    radial-gradient(circle at 85% 40%, rgba(32, 215, 255, 0.1), transparent 30%),
+    var(--card);
+  box-shadow: var(--shadow);
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 34px 34px;
+  pointer-events: none;
+}
+
+.cardSecure {
+  grid-column: span 5;
+}
+
+.cardNotes {
+  grid-column: span 7;
+}
+
+.cardFiles {
+  grid-column: span 7;
+}
+
+.cardShare {
+  grid-column: span 5;
+}
+
+.visual {
+  position: absolute;
+  inset: 0;
+}
+
+.copy {
+  position: absolute;
+  left: 32px;
+  right: 32px;
+  bottom: 30px;
+  z-index: 2;
+}
+
+.copy h3 {
+  margin: 0 0 10px;
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  font-weight: 800;
+}
+
+.copy p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15.5px;
+  line-height: 1.65;
+}
+
+.shieldWrap {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  width: 230px;
+  height: 230px;
+  transform: translateX(-50%);
+}
+
+.shieldLines span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255, 90, 0, 0.3);
+  clip-path: polygon(50% 0, 94% 16%, 94% 54%, 50% 100%, 6% 54%, 6% 16%);
+}
+
+.shieldLines span:nth-child(2) {
+  inset: 16px;
+  border-color: rgba(32, 215, 255, 0.26);
+}
+
+.shieldLines span:nth-child(3) {
+  inset: 32px;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.shieldIcon {
+  position: absolute;
+  inset: 54px;
+  filter: drop-shadow(0 24px 40px rgba(255, 90, 0, 0.25));
+}
+
+.shieldIcon path:first-child {
+  fill: url("#shieldGradient");
+}
+
+.shieldIcon path,
+.shieldIcon circle {
+  fill: none;
+  stroke: currentColor;
+  color: var(--text);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.shieldIcon path:first-child {
+  fill: rgba(255, 90, 0, 0.72);
+  stroke: rgba(255, 255, 255, 0.36);
+}
+
+.chart {
+  position: absolute;
+  inset: 32px 34px 170px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 55% 50%, rgba(255, 90, 0, 0.22), transparent 34%),
+    radial-gradient(circle at 90% 70%, rgba(184, 108, 255, 0.2), transparent 32%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.chartTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  color: var(--text);
+}
+
+.chartTop strong {
+  display: block;
+  font-size: 36px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.chartTop span {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.chartTop em {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.chart svg {
+  width: 100%;
+  height: auto;
+  max-height: 140px;
+  margin-top: 14px;
+  overflow: visible;
+}
+
+.gridLine {
+  fill: none;
+  stroke: var(--border);
+}
+
+.chartArea {
+  fill: url("#chartGradient");
+  opacity: 0.28;
+}
+
+.chartLine {
+  fill: none;
+  stroke: var(--orange);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart circle {
+  fill: var(--orange);
+  stroke: var(--cyan);
+  stroke-width: 4;
+}
+
+.chart line {
+  stroke: var(--soft);
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+}
+
+.chart text {
+  fill: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.dropScene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, transparent, rgba(32, 215, 255, 0.04), transparent),
+    linear-gradient(var(--border) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 54px;
+}
+
+.fileCard {
+  position: absolute;
+  width: 140px;
+  height: 180px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  left: 20%;
+  top: 36px;
+  transform: rotate(-10deg);
+  padding: 16px;
+  animation: floatFile 6s ease-in-out infinite;
+  display: flex;
+  flex-direction: column;
+}
+
+.fileHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.fileLines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fileLine {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--muted);
+  opacity: 0.25;
+}
+
+.fileLine:nth-child(1) { width: 75%; background: var(--orange); opacity: 0.85; }
+.fileLine:nth-child(2) { width: 100%; }
+.fileLine:nth-child(3) { width: 90%; }
+.fileLine:nth-child(4) { width: 55%; }
+
+.imageCard {
+  position: absolute;
+  width: 170px;
+  height: 170px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3);
+  right: 20%;
+  top: 54px;
+  transform: rotate(8deg);
+  padding: 12px;
+  animation: floatImage 6s ease-in-out infinite;
+  animation-delay: -3s;
+}
+
+.imageInner {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.08));
+}
+
+.imageInner svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+@keyframes floatFile {
+  0%, 100% {
+    transform: rotate(-10deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-8deg) translateY(-10px);
+  }
+}
+
+@keyframes floatImage {
+  0%, 100% {
+    transform: rotate(8deg) translateY(0);
+  }
+  50% {
+    transform: rotate(10deg) translateY(-10px);
+  }
+}
+
+.orbit {
+  position: absolute;
+  top: 48px;
+  left: 50%;
+  width: 240px;
+  height: 240px;
+  transform: translateX(-50%);
+}
+
+.orbitRingOne,
+.orbitRingTwo {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 90, 0, 0.3);
+}
+
+.orbitRingTwo {
+  inset: 42px;
+  border-color: rgba(32, 215, 255, 0.24);
+}
+
+.planetCenter,
+.planetOne,
+.planetTwo,
+.planetThree {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.planetCenter {
+  width: 64px;
+  height: 64px;
+  top: 88px;
+  left: 88px;
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--orange);
+  box-shadow: 0 0 60px rgba(255, 90, 0, 0.18);
+}
+
+.planetOne,
+.planetTwo,
+.planetThree {
+  width: 44px;
+  height: 44px;
+}
+
+.planetOne {
+  left: 2px;
+  top: 98px;
+  color: var(--orange);
+}
+
+.planetTwo {
+  right: 18px;
+  top: 18px;
+  color: var(--purple);
+}
+
+.planetThree {
+  right: 2px;
+  bottom: 36px;
+  color: var(--cyan);
+}
+
+.planetOne svg,
+.planetTwo svg,
+.planetThree svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+@media (max-width: 980px) {
+  .bentoSection {
+    padding: 72px 18px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cardSecure,
+  .cardNotes,
+  .cardFiles,
+  .cardShare {
+    grid-column: span 1;
+  }
+
+  .card {
+    min-height: 430px;
+  }
+}
+
+@media (max-width: 560px) {
+  .header {
+    margin-bottom: 36px;
+  }
+
+  .header p {
+    font-size: 16px;
+  }
+
+  .grid {
+    gap: 16px;
+  }
+
+  .card {
+    min-height: 380px;
+    border-radius: 24px;
+  }
+
+  .copy {
+    left: 22px;
+    right: 22px;
+    bottom: 24px;
+  }
+
+  .copy p {
+    font-size: 14px;
+  }
+
+  .chart {
+    inset: 22px 18px 118px;
+    padding: 18px;
+  }
+
+  .chartTop strong {
+    font-size: 34px;
+  }
+
+  .shieldWrap,
+  .orbit {
+    scale: 0.82;
+    top: 34px;
+  }
+
+  .fileCard {
+    width: 110px;
+    height: 145px;
+    left: 10%;
+    top: 24px;
+    padding: 10px;
+  }
+
+  .imageCard {
+    width: 130px;
+    height: 130px;
+    right: 10%;
+    top: 32px;
+    padding: 8px;
+  }
+}
