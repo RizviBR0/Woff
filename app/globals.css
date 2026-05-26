@@ -66,8 +66,9 @@
   * {
     @apply border-border;
   }
-  body {
+  body, button, input, select, textarea, .font-sans {
     @apply bg-background text-foreground;
+    font-family: 'Almarai', system-ui, -apple-system, sans-serif !important;
   }
 }
 
@@ -197,5 +198,24 @@
   box-shadow:
     inset 0px 0px 5px rgba(255, 255, 255, 0.8),
     inset 0px 35px 30px rgba(255, 255, 255, 0.55);
+}
+
+/* Subtle orange gradient glow on navbar bottom border */
+.navbar-orange-border::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 125, 59, 0.3) 20%,
+    rgba(255, 90, 0, 0.6) 50%,
+    rgba(255, 125, 59, 0.3) 80%,
+    transparent 100%
+  );
+  pointer-events: none;
 }
 

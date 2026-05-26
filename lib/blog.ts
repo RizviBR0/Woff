@@ -18,7 +18,7 @@ export const blogPosts: BlogPost[] = [
     title: "How to Share Notes Online Without Login in Under 10 Seconds",
     excerpt:
       "Share notes online without login in under 10 seconds using Woff — a fast, free online notepad with instant shareable links.",
-    date: "2025-11-16",
+    date: "2026-11-16",
     tags: ["how-to", "guide", "online-notepad"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-share-notes/1200/630",
@@ -36,7 +36,7 @@ export const blogPosts: BlogPost[] = [
       "Online Notepad With Shareable Link – The Easiest Way to Send Text Between Devices",
     excerpt:
       "Send text between devices instantly with a shareable link. See why an online notepad like Woff makes this effortless.",
-    date: "2025-11-16",
+    date: "2026-11-16",
     tags: ["online-notepad", "shareable-link", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-shareable-link/1200/630",
@@ -48,13 +48,13 @@ export const blogPosts: BlogPost[] = [
     ],
   },
   {
-    slug: "best-free-online-notepad-tools-2025",
+    slug: "best-free-online-notepad-tools-2026",
     title:
-      "Best Free Online Notepad Tools in 2025 (and When You Should Use Woff)",
+      "Best Free Online Notepad Tools in 2026 (and When You Should Use Woff)",
     excerpt:
-      "Compare the top free online notepads in 2025 and learn when a fast, link-based notepad like Woff is the best fit.",
-    date: "2025-11-16",
-    tags: ["comparison", "online-notepad", "2025"],
+      "Compare the top free online notepads in 2026 and learn when a fast, link-based notepad like Woff is the best fit.",
+    date: "2026-11-16",
+    tags: ["comparison", "online-notepad", "2026"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-best-free/1200/630",
     content: [
@@ -68,7 +68,7 @@ export const blogPosts: BlogPost[] = [
     title: "How Teachers Can Share Class Notes Online With Students for Free",
     excerpt:
       "A quick, free way for teachers to share class notes online: create, paste, share a link — no accounts required.",
-    date: "2025-11-16",
+    date: "2026-11-16",
     tags: ["education", "teachers", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-teachers/1200/630",
@@ -83,7 +83,7 @@ export const blogPosts: BlogPost[] = [
     title: "How Students Can Share Notes Online With Friends Before Exams",
     excerpt:
       "The fastest way for students to share notes online with friends before exams — create, paste, share one link.",
-    date: "2025-11-16",
+    date: "2026-11-16",
     tags: ["students", "study", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-students/1200/630",
@@ -98,7 +98,7 @@ export const blogPosts: BlogPost[] = [
     title: "The Fastest Way to Share Meeting Notes Online With a Remote Team",
     excerpt:
       "Capture meeting notes and share them online with a remote team in seconds using an instant link.",
-    date: "2025-11-16",
+    date: "2026-11-16",
     tags: ["remote", "teams", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-remote/1200/630",
@@ -114,7 +114,7 @@ export const blogPosts: BlogPost[] = [
       "A Simple Way to Share To-Do Lists and Grocery Lists Online With Family",
     excerpt:
       "Keep family to-do and grocery lists in sync by sharing a single link that anyone can open on any device.",
-    date: "2025-11-16",
+    date: "2026-11-16",
     tags: ["family", "lists", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-family/1200/630",
@@ -130,7 +130,7 @@ export const blogPosts: BlogPost[] = [
       "Minimalist Note-Taking – How to Keep Your Notes Simple and Still Find Them Later",
     excerpt:
       "A minimalist note-taking approach that keeps notes simple and still easy to find later.",
-    date: "2025-11-16",
+    date: "2026-11-16",
     tags: ["productivity", "note-taking"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-minimal/1200/630",
@@ -145,7 +145,7 @@ export const blogPosts: BlogPost[] = [
     title: "Online Notepad vs Full Note-Taking Apps – When You Need Which One",
     excerpt:
       "When to use a lightweight online notepad vs a full note-taking app — strengths, tradeoffs, and workflows.",
-    date: "2025-11-16",
+    date: "2026-11-16",
     tags: ["comparison", "note-taking"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-compare/1200/630",
@@ -160,7 +160,7 @@ export const blogPosts: BlogPost[] = [
     title: "What Is an Online Notepad and Why It's Faster Than Docs or Email",
     excerpt:
       "Learn what an online notepad is and why it's the fastest way to capture and share quick notes compared to Docs or email.",
-    date: "2025-11-16",
+    date: "2026-11-16",
     tags: ["online-notepad", "comparison", "guide"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-online-notepad/1200/630",
@@ -177,7 +177,7 @@ export const blogPosts: BlogPost[] = [
     title: "Introducing Woff: Simple Shareable Spaces",
     excerpt:
       "Meet Woff — a fast, minimal way to create and share collaborative spaces without friction.",
-    date: "2025-11-01",
+    date: "2026-11-01",
     tags: ["announcement", "product"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-intro/1200/630",
@@ -192,7 +192,7 @@ export const blogPosts: BlogPost[] = [
     title: "5 Tips for Faster Sharing with Woff",
     excerpt:
       "Speed up your workflow with these quick tips for links, photos, and notes.",
-    date: "2025-11-05",
+    date: "2026-11-05",
     tags: ["tips", "productivity"],
     author: { name: "Rizvi", avatarUrl: "/rizvi.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-tips/1200/630",
@@ -208,7 +208,7 @@ export const blogPosts: BlogPost[] = [
     slug: "behind-the-scenes",
     title: "Behind the Scenes: Designing Woff",
     excerpt: "A quick peek at the principles that drive our design decisions.",
-    date: "2025-11-10",
+    date: "2026-11-10",
     tags: ["design", "engineering"],
     author: {
       name: "Woff Design",
@@ -225,7 +225,7 @@ export const blogPosts: BlogPost[] = [
   {
     slug: "introducing-woff-simple-shareable-spaces",
     title: "Introducing Woff: Simple, Shareable Spaces",
-    date: "2025-11-10",
+    date: "2026-11-10",
     excerpt:
       "Meet Woff — the fastest way to create a minimal space you can share instantly for notes, photos, files and quick ideas.",
     tags: ["Product", "Launch"],
@@ -240,7 +240,7 @@ export const blogPosts: BlogPost[] = [
   {
     slug: "quick-tips-speed-up-your-workflows",
     title: "Quick Tips: Speed Up Your Woff Workflows",
-    date: "2025-11-12",
+    date: "2026-11-12",
     excerpt:
       "Three power-user tips to move faster in Woff: keyboard actions, instant uploads, and clean sharing.",
     tags: ["Tips", "Guides"],
@@ -255,7 +255,7 @@ export const blogPosts: BlogPost[] = [
   {
     slug: "october-november-updates-better-uploads-and-ui-polish",
     title: "October–November Updates: Better Uploads and UI Polish",
-    date: "2025-11-14",
+    date: "2026-11-14",
     excerpt:
       "Improved image handling, file ZIP downloads, and a refined Discord-style chat layout with avatars and time.",
     tags: ["Updates", "Changelog"],

@@ -83,21 +83,7 @@
   stroke-width: 2;
 }
 
-.header h2 {
-  margin: 22px 0 14px;
-  font-size: clamp(36px, 5vw, 58px);
-  line-height: 1;
-  letter-spacing: -0.055em;
-  font-weight: 800;
-}
 
-.header p {
-  max-width: 680px;
-  margin: 0 auto;
-  color: var(--muted);
-  font-size: 19px;
-  line-height: 1.55;
-}
 
 .grid {
   position: relative;

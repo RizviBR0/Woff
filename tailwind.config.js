@@ -92,6 +92,9 @@ module.exports = {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
   			blob: 'blob 7s infinite'
+  		},
+  		fontFamily: {
+  			sans: ['Almarai', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif']
   		}
   	}
   },

@@ -38,12 +38,12 @@ export const firstTenIdeas: BlogIdea[] = [
   },
   {
     title:
-      "Best Free Online Notepad Tools in 2025 (and When You Should Use Woff)",
-    slug: "best-free-online-notepad-tools-2025",
+      "Best Free Online Notepad Tools in 2026 (and When You Should Use Woff)",
+    slug: "best-free-online-notepad-tools-2026",
     primaryKeyword: "free online notepad",
-    metaTitle: "Best Free Online Notepad Tools (2025) | Woff",
+    metaTitle: "Best Free Online Notepad Tools (2026) | Woff",
     metaDescription:
-      "Compare top free online notepad tools in 2025 and learn when a fast, link-based notepad like Woff is the best fit.",
+      "Compare top free online notepad tools in 2026 and learn when a fast, link-based notepad like Woff is the best fit.",
     pillar: "A",
   },
   {

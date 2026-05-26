@@ -1,135 +1,137 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import BentoGrid from "@/components/bento-grid";
-import {
-  Share,
-  FileText,
-  ArrowRight,
-  Mail,
-  Heart,
-  Calendar,
-  MousePointerClick,
-} from "lucide-react";
+import dynamic from "next/dynamic";
+import { ArrowRight, Mail, Heart, Calendar } from "lucide-react";
 
-const steps = [
-  {
-    icon: MousePointerClick,
-    title: "Create a Space",
-    description: "One click to generate a unique, temporary workspace instantly.",
-  },
-  {
-    icon: FileText,
-    title: "Add Your Content",
-    description: "Drop files, paste code snippets, or write down quick notes.",
-  },
-  {
-    icon: Share,
-    title: "Share the Link",
-    description: "Send the URL or scan the QR code to let others join in real-time.",
-  },
-];
+const BentoGrid = dynamic(() => import("@/components/bento-grid"), {
+  ssr: true,
+});
+
+const TimelineDemo = dynamic(() => import("@/components/timeline-demo"), {
+  ssr: false,
+});
 
 export function HomepageSections() {
   return (
     <>
       <BentoGrid />
 
-      {/* How it Works Section */}
-      <section id="how-it-works" className="py-20 relative">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6 tracking-tight">
-              Get Started in Seconds
-            </h2>
-            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
-              Skip the long onboarding. Woff gets out of your way so you can focus on sharing.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-12 md:gap-8 relative">
-            {/* Connecting Line */}
-            <div className="hidden md:block absolute top-[40px] left-[15%] right-[15%] h-px bg-border" />
-
-            {steps.map((step, index) => {
-              const IconComponent = step.icon;
-              return (
-                <div key={index} className="relative group">
-                  <div className="text-center flex flex-col items-center">
-                    <div className="w-20 h-20 mb-6 relative">
-                      <div className="relative w-full h-full rounded-2xl bg-background border border-border flex items-center justify-center shadow-sm z-10">
-                        <IconComponent className="w-8 h-8 text-foreground" />
-                        
-                        {/* Step Number Badge */}
-                        <div className="absolute -top-3 -right-3 w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center text-sm font-bold shadow-sm">
-                          {index + 1}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <h3 className="text-xl font-bold text-foreground mb-3 tracking-tight">
-                      {step.title}
-                    </h3>
-                    <p className="text-muted-foreground leading-relaxed max-w-xs mx-auto">
-                      {step.description}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="text-center mt-16">
-            <Button
-              size="lg"
-              className="rounded-full px-8 h-12 text-base group"
-            >
-              Start Sharing Now
-              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
-          </div>
-        </div>
+      {/* How it Works Section - Timeline */}
+      <section id="how-it-works" className="relative">
+        <TimelineDemo />
       </section>
 
       {/* Contact Section */}
-      <section id="contact" className="py-20 bg-muted/30">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border bg-background text-foreground text-sm font-medium mb-6">
-            <Mail className="w-4 h-4" />
-            Get in Touch
-          </div>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6 tracking-tight">
-            We&apos;d Love to Hear From You
-          </h2>
-          <p className="text-lg sm:text-xl text-muted-foreground mb-12 max-w-2xl mx-auto">
-            Have questions, feedback, or just want to say hello? We&apos;re
-            always happy to connect with our community.
-          </p>
+      <section
+        id="contact"
+        className="relative overflow-hidden bg-background px-4 py-20 text-foreground sm:px-6 lg:px-8 border-t border-border"
+      >
+        {/* Background Grid */}
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.02)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:42px_42px]" />
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Button
-              size="lg"
-              className="rounded-full group px-8 h-12 text-base"
-              onClick={() =>
-                (window.location.href = "mailto:sabbirh9990@gmail.com")
-              }
-            >
-              <Mail className="w-4 h-4 mr-2" />
-              Contact Us
-              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="rounded-full group px-8 h-12 text-base bg-background"
-              onClick={() =>
-                (window.location.href = "https://calendly.com/rizvibr0/30min")
-              }
-            >
-              <Calendar className="w-4 h-4 mr-2" />
-              Schedule a Meeting
-              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
+        {/* Ambient background glows */}
+        <div className="pointer-events-none absolute left-0 top-1/2 h-[420px] w-[420px] -translate-y-1/2 rounded-full bg-[#ff5a00]/8 dark:bg-[#ff5a00]/20 blur-[130px]" />
+        <div className="pointer-events-none absolute right-10 top-10 h-[280px] w-[420px] rounded-full bg-[#ff5a00]/5 dark:bg-[#ff5a00]/10 blur-[120px]" />
+
+        <div className="relative mx-auto max-w-7xl">
+          {/* Main Card Container */}
+          <div className="relative overflow-hidden rounded-[32px] border border-zinc-200 dark:border-[#ff5a00]/35 bg-white/70 dark:bg-[#111115]/70 px-6 py-16 text-center shadow-xl dark:shadow-[0_0_90px_rgba(255,90,0,0.12)] backdrop-blur-xl sm:px-10 sm:py-20 lg:py-24">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_left_center,rgba(255,90,0,0.1),transparent_28%),radial-gradient(circle_at_right_top,rgba(255,90,0,0.08),transparent_24%)]" />
+            <div className="pointer-events-none absolute left-0 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#ff5a00]/20 dark:bg-[#ff5a00] blur-2xl" />
+            <div className="pointer-events-none absolute right-0 top-0 h-20 w-20 translate-x-1/3 -translate-y-1/3 rounded-full bg-[#ff5a00]/20 dark:bg-[#ff5a00] blur-2xl" />
+
+            <div className="relative z-10">
+              {/* Pulsing Pill Badge */}
+              <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
+                Get In Touch
+              </div>
+
+              {/* Standardized Unified Heading */}
+              <h2 className="mx-auto max-w-4xl text-3xl sm:text-5xl lg:text-6xl font-extrabold leading-tight tracking-[-0.04em] text-zinc-900 dark:text-white">
+                We’d Love to{" "}
+                <span className="bg-gradient-to-r from-[#ff7d3b] via-[#ff5a00] to-[#ff3600] bg-clip-text text-transparent">
+                  Hear From You
+                </span>
+              </h2>
+
+              <p className="mx-auto mt-6 max-w-3xl text-sm sm:text-base md:text-lg leading-relaxed text-zinc-500 dark:text-white/65">
+                Have questions, feedback, or just want to say hi?
+                <br className="hidden sm:block" />
+                We’re always happy to connect with our community.
+              </p>
+
+              <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+                <a
+                  href="mailto:sabbirh9990@gmail.com"
+                  className="group inline-flex w-full items-center justify-center gap-4 rounded-2xl bg-zinc-950 text-white dark:bg-white dark:text-black px-8 py-5 text-lg font-bold shadow-xl hover:bg-zinc-800 dark:hover:bg-zinc-100 hover:scale-[1.01] transition-transform duration-300 sm:w-auto"
+                >
+                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M4 6h16v12H4V6Z"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="m4 7 8 6 8-6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  Contact Us
+                  <svg
+                    className="h-5 w-5 transition group-hover:translate-x-1"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <path
+                      d="M5 12h14M13 6l6 6-6 6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </a>
+
+                <a
+                  href="https://calendly.com/rizvibr0/30min"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group inline-flex w-full items-center justify-center gap-4 rounded-2xl border border-zinc-200 hover:border-zinc-400 dark:border-[#ff5a00]/35 bg-zinc-100/50 dark:bg-black/30 px-8 py-5 text-lg font-bold text-zinc-900 dark:text-white transition-all hover:bg-zinc-100 dark:hover:border-[#ff5a00] dark:hover:bg-[#ff5a00]/10 sm:w-auto"
+                >
+                  <svg
+                    className="h-6 w-6 text-[#ff7a1a]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <path
+                      d="M7 3v4M17 3v4M4 9h16M5 5h14v15H5V5Z"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Schedule a Meeting
+                  <svg
+                    className="h-5 w-5 transition group-hover:translate-x-1"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <path
+                      d="M5 12h14M13 6l6 6-6 6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -139,12 +141,12 @@ export function HomepageSections() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-2 text-muted-foreground font-medium">
-               Made with
+              Made with
               <Heart className="w-5 h-5 text-red-500 fill-current" />
               by the Woff team
             </div>
             <div className="text-sm text-muted-foreground font-medium">
-              © 2025 Woff. Simple shareable spaces.
+              © 2026 Woff. Simple shareable spaces.
             </div>
           </div>
         </div>

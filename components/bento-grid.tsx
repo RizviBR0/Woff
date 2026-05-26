@@ -34,14 +34,19 @@ export default function BentoGrid() {
   return (
     <section className={styles.bentoSection} id="features">
       <div className={styles.header}>
-        <span className={styles.badge}>
-          <SparkIcon />
+        <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mx-auto">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
           Everything you need
-        </span>
+        </div>
 
-        <h2>A workspace for every thought</h2>
+        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight tracking-[-0.04em] text-zinc-900 dark:text-white mt-6 mb-4">
+          A workspace for{" "}
+          <span className="bg-gradient-to-r from-[#ff7d3b] via-[#ff5a00] to-[#ff3600] bg-clip-text text-transparent">
+            every thought
+          </span>
+        </h2>
 
-        <p>
+        <p className="text-zinc-500 dark:text-white/55 text-sm md:text-base max-w-lg mx-auto">
           Share notes, files, images, and code snippets in an instant. Woff is
           designed to be the quickest way to move data from A to B.
         </p>

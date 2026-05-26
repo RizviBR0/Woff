@@ -23,7 +23,7 @@ import { createEntry } from "@/lib/actions";
 import { compressImageAdaptive } from "@/lib/image-compression";
 import { cn } from "@/lib/utils";
 import { type Entry } from "./entry-card";
-import { DrawingCanvas } from "./digital-canvas";
+import { DynamicDrawingCanvas } from "./ui/dynamic-imports";
 import { GlobalImageViewer } from "./global-image-viewer";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
@@ -1186,7 +1186,7 @@ export function Composer({
           </div>
 
           {/* Force HMR update */}
-          <DrawingCanvas
+          <DynamicDrawingCanvas
             isOpen={drawingOpen}
             onClose={() => setDrawingOpen(false)}
             onSave={handleDrawingSave}
@@ -1499,7 +1499,7 @@ export function Composer({
         </div>
       )}
 
-      <DrawingCanvas
+      <DynamicDrawingCanvas
         isOpen={drawingOpen}
         onClose={() => setDrawingOpen(false)}
         onSave={handleDrawingSave}

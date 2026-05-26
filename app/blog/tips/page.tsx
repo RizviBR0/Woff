@@ -60,7 +60,7 @@ export default function BlogTipsPage() {
                   How to Share Notes Online Without Login in Under 10 Seconds
                 </li>
                 <li>
-                  Best Free Online Notepad Tools in 2025 (and When You Should
+                  Best Free Online Notepad Tools in 2026 (and When You Should
                   Use Woff)
                 </li>
                 <li>
@@ -141,7 +141,7 @@ export default function BlogTipsPage() {
               Between Devices
             </li>
             <li>
-              Best Free Online Notepad Tools in 2025 (and When You Should Use
+              Best Free Online Notepad Tools in 2026 (and When You Should Use
               Woff)
             </li>
             <li>
