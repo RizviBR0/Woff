@@ -3,7 +3,17 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import NextImage from "next/image";
-import { Plus, Send, X, Upload } from "lucide-react";
+import {
+  Plus,
+  Send,
+  X,
+  Upload,
+  FileText,
+  Camera,
+  Image as ImageIcon,
+  Paintbrush,
+  FileUp,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -878,7 +888,10 @@ export function Composer({
 
   // Check for auto-uploaded files from homepage drag/drop
   useEffect(() => {
-    if (typeof window !== "undefined" && (window as any).__pending_dragged_files) {
+    if (
+      typeof window !== "undefined" &&
+      (window as any).__pending_dragged_files
+    ) {
       const files = (window as any).__pending_dragged_files;
       // Clear immediately to prevent double-execution
       (window as any).__pending_dragged_files = undefined;
@@ -985,8 +998,12 @@ export function Composer({
               <Upload className="h-8 w-8 text-primary" />
             </div>
             <div className="text-center">
-              <p className="text-lg font-semibold text-foreground">Drop files here</p>
-              <p className="text-sm text-muted-foreground mt-1">Release to upload any file</p>
+              <p className="text-lg font-semibold text-foreground">
+                Drop files here
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Release to upload any file
+              </p>
             </div>
           </div>
         </div>,
@@ -998,7 +1015,7 @@ export function Composer({
     // Large centered composer for first post - Enhanced Design
     return (
       <div
-        className="w-full max-w-3xl mx-auto relative"
+        className="w-full max-w-4xl mx-auto relative"
         ref={composerRef}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
@@ -1015,174 +1032,227 @@ export function Composer({
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 relative">
           <div className="relative group">
-            {/* Main Input Area */}
-            <div className="relative overflow-hidden rounded-3xl border-2 border-border/60 dark:border-border/80 bg-background/80 dark:bg-background/95 backdrop-blur-sm shadow-lg shadow-black/10 dark:shadow-black/40 hover:shadow-xl hover:shadow-black/15 dark:hover:shadow-black/50 transition-all duration-300 group-focus-within:border-primary/50 group-focus-within:shadow-xl group-focus-within:shadow-black/15 dark:group-focus-within:shadow-black/50 ring-1 ring-inset ring-white/5 dark:ring-white/10">
+            {/* Outer glowing border from user design - adjusted with dynamic gradients for light/dark mode */}
+            <div className="pointer-events-none absolute -inset-px rounded-[28px] bg-gradient-to-r from-black/5 via-[#ff5a00]/30 to-black/5 dark:from-white/15 dark:via-[#ff5a00]/45 dark:to-white/10 opacity-70 blur-[1px]" />
+
+            {/* Inset Main Input Area with exact ComposerBox styling - dynamic backgrounds and shadows */}
+            <div className="relative overflow-hidden rounded-[28px] border border-black/10 dark:border-white/12 bg-white/95 dark:bg-[#0b0b0b]/80 backdrop-blur-xl transition-all duration-300">
+              {/* Radial gradient background splashes adjusted dynamically for light and dark modes */}
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(255,90,0,0.12),transparent_45%),radial-gradient(circle_at_70%_0%,rgba(255,90,0,0.08),transparent_34%),radial-gradient(circle_at_100%_100%,rgba(255,90,0,0.06),transparent_30%)] dark:bg-[radial-gradient(circle_at_0%_0%,rgba(255,90,0,0.22),transparent_45%),radial-gradient(circle_at_70%_0%,rgba(255,90,0,0.18),transparent_34%),radial-gradient(circle_at_100%_100%,rgba(255,90,0,0.12),transparent_30%)]" />
+
+              {/* Top-left corner glowing SVG accents - matching the rounded-[28px] curve perfectly */}
+              <svg
+                className="absolute top-0 left-0 w-48 h-48 pointer-events-none z-10"
+                viewBox="0 0 192 192"
+                fill="none"
+              >
+                <path
+                  d="M 1,192 L 1,29 A 28,28 0 0,1 29,1 L 192,1"
+                  stroke="url(#orange-glow-curve)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <defs>
+                  <linearGradient
+                    id="orange-glow-curve"
+                    x1="0"
+                    y1="0"
+                    x2="192"
+                    y2="192"
+                    gradientUnits="userSpaceOnUse"
+                  >
+                    <stop offset="0%" stopColor="#f97316" stopOpacity="0.6" />
+                    <stop offset="50%" stopColor="#f59e0b" stopOpacity="0" />
+                    <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute top-0 left-0 w-16 h-16 bg-orange-500/5 dark:bg-orange-500/10 blur-xl rounded-full pointer-events-none z-10" />
+
               <Textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 placeholder="What's on your mind?"
-                className="min-h-[140px] resize-none border-0 bg-transparent p-8 text-lg leading-relaxed placeholder:text-muted-foreground/70 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
+                className="relative z-10 min-h-[220px] w-full resize-none border-0 bg-transparent px-8 py-7 text-xl text-neutral-900 dark:text-white outline-none placeholder:text-neutral-500/50 dark:placeholder:text-white/35 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none sm:px-10 sm:py-8"
                 disabled={isSubmitting}
               />
 
-              {/* Gradient overlay for visual depth */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            </div>
-
-            {/* Action Bar */}
-            <div className="flex items-center justify-between mt-4 px-2">
-              {/* Left: Add Content Options */}
-              <div className="flex items-center gap-2">
-                <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-10 px-4 rounded-full border border-border/60 dark:border-border/80 bg-background/90 dark:bg-background/95 hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 shadow-sm shadow-black/10 dark:shadow-black/30 hover:shadow-md hover:shadow-black/15 dark:hover:shadow-black/40"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add content
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-56 p-3 rounded-2xl border-2 shadow-xl shadow-black/10 dark:shadow-black/50"
-                    side="top"
-                    align="start"
-                    sideOffset={8}
-                    alignOffset={-8}
-                    avoidCollisions={true}
-                    collisionPadding={16}
-                  >
-                    <div className="space-y-2">
-                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 pb-1">
-                        Create
-                      </div>
-                      <button
-                        onClick={handleNewNote}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm hover:bg-accent/80 transition-colors group"
-                      >
-                        <span className="text-lg">📝</span>
-                        <div className="text-left">
-                          <div className="font-medium">Rich Text Note</div>
-                          <div className="text-xs text-muted-foreground">
-                            Create a formatted document
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm hover:bg-accent/80 transition-colors group"
-                        onClick={handleFileUploadClick}
-                      >
-                        <span className="text-lg">📄</span>
-                        <div className="text-left">
-                          <div className="font-medium">File Upload</div>
-                          <div className="text-xs text-muted-foreground">
-                            Share documents & files
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={handlePhoto}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm hover:bg-accent/80 transition-colors group"
-                      >
-                        <span className="text-lg">📷</span>
-                        <div className="text-left">
-                          <div className="font-medium">Photo</div>
-                          <div className="text-xs text-muted-foreground">
-                            Capture photo instantly
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={handleImages}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm hover:bg-accent/80 transition-colors group"
-                      >
-                        <span className="text-lg">🖼️</span>
-                        <div className="text-left">
-                          <div className="font-medium">Images</div>
-                          <div className="text-xs text-muted-foreground">
-                            Select multiple or single images
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={handleDrawing}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm hover:bg-accent/80 transition-colors group"
-                      >
-                        <span className="text-lg">✏️</span>
-                        <div className="text-left">
-                          <div className="font-medium">Drawing</div>
-                          <div className="text-xs text-muted-foreground">
-                            Create with digital canvas
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+              {/* Spark Icon from user design */}
+              <div className="pointer-events-none absolute bottom-6 right-7 text-[#ff7a1a] opacity-70 z-20">
+                <SparkIcon />
               </div>
+            </div>
+          </div>
 
-              {/* Right: Send Button */}
-              {text.trim() && (
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="h-10 px-6 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-black/20 dark:shadow-black/40 hover:shadow-xl hover:shadow-black/25 dark:hover:shadow-black/50 transition-all duration-200 font-medium"
+          {/* Action Bar */}
+          <div className="flex items-center justify-between mt-4 px-2">
+            {/* Left: Add Content Options */}
+            <div className="flex items-center gap-2">
+              <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 px-4 rounded-full border border-border/60 dark:border-border/80 bg-background/90 dark:bg-background/95 hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 shadow-sm shadow-black/10 dark:shadow-black/30 hover:shadow-md hover:shadow-black/15 dark:hover:shadow-black/40"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add content
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-56 p-3 rounded-2xl border-2 shadow-xl shadow-black/10 dark:shadow-black/50"
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  alignOffset={-8}
+                  avoidCollisions={true}
+                  collisionPadding={16}
                 >
-                  {isSubmitting ? (
-                    <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
-                  ) : (
-                    <Send className="h-4 w-4 mr-2" />
-                  )}
-                  {isSubmitting ? "Posting..." : "Post"}
-                </Button>
-              )}
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] font-semibold text-muted-foreground/60 tracking-widest px-2 pb-1.5 uppercase">
+                      Create
+                    </div>
+                    <button
+                      onClick={handleNewNote}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                    >
+                      <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                        <FileText className="h-4.5 w-4.5" />
+                      </div>
+                      <div className="text-left">
+                        <div className="font-semibold text-foreground">
+                          Rich Text Note
+                        </div>
+                        <div className="text-[11px] text-muted-foreground leading-tight">
+                          Create formatted document
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                      onClick={handleFileUploadClick}
+                    >
+                      <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                        <FileUp className="h-4.5 w-4.5" />
+                      </div>
+                      <div className="text-left">
+                        <div className="font-semibold text-foreground">
+                          File Upload
+                        </div>
+                        <div className="text-[11px] text-muted-foreground leading-tight">
+                          Share documents & files
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={handlePhoto}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                    >
+                      <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                        <Camera className="h-4.5 w-4.5" />
+                      </div>
+                      <div className="text-left">
+                        <div className="font-semibold text-foreground">
+                          Photo
+                        </div>
+                        <div className="text-[11px] text-muted-foreground leading-tight">
+                          Capture photo instantly
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={handleImages}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                    >
+                      <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                        <ImageIcon className="h-4.5 w-4.5" />
+                      </div>
+                      <div className="text-left">
+                        <div className="font-semibold text-foreground">
+                          Images
+                        </div>
+                        <div className="text-[11px] text-muted-foreground leading-tight">
+                          Select multiple photos
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={handleDrawing}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                    >
+                      <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                        <Paintbrush className="h-4.5 w-4.5" />
+                      </div>
+                      <div className="text-left">
+                        <div className="font-semibold text-foreground">
+                          Drawing
+                        </div>
+                        <div className="text-[11px] text-muted-foreground leading-tight">
+                          Create on digital canvas
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
 
-            {/* Shortcut Badges */}
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-8 px-2 max-w-full">
-              <button
-                onClick={handleNewNote}
-                className="group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-all duration-200 border border-blue-200/60 dark:border-blue-800/60 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm hover:shadow-lg hover:shadow-blue-500/20 hover:-translate-y-1 backdrop-blur-sm"
+            {/* Right: Send Button */}
+            {text.trim() && (
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="h-10 px-6 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-black/20 dark:shadow-black/40 hover:shadow-xl hover:shadow-black/25 dark:hover:shadow-black/50 transition-all duration-200 font-medium"
               >
-                <span className="text-sm sm:text-base group-hover:scale-110 transition-transform duration-200">
-                  📝
-                </span>
-                <span className="whitespace-nowrap">Create note</span>
-              </button>
-              <button
-                onClick={handlePhoto}
-                className="group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-green-50 dark:bg-green-950/30 hover:bg-green-100 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300 transition-all duration-200 border border-green-200/60 dark:border-green-800/60 hover:border-green-300 dark:hover:border-green-700 shadow-sm hover:shadow-lg hover:shadow-green-500/20 hover:-translate-y-1 backdrop-blur-sm"
-              >
-                <span className="text-sm sm:text-base group-hover:scale-110 transition-transform duration-200">
-                  📷
-                </span>
-                <span className="whitespace-nowrap">Photo</span>
-              </button>
-              <button
-                onClick={handleImages}
-                className="group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-all duration-200 border border-blue-200/60 dark:border-blue-800/60 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm hover:shadow-lg hover:shadow-blue-500/20 hover:-translate-y-1 backdrop-blur-sm"
-              >
-                <span className="text-sm sm:text-base group-hover:scale-110 transition-transform duration-200">
-                  🖼️
-                </span>
-                <span className="whitespace-nowrap">Images</span>
-              </button>
-              <button
-                onClick={handleDrawing}
-                className="group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-purple-50 dark:bg-purple-950/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 transition-all duration-200 border border-purple-200/60 dark:border-purple-800/60 hover:border-purple-300 dark:hover:border-purple-700 shadow-sm hover:shadow-lg hover:shadow-purple-500/20 hover:-translate-y-1 backdrop-blur-sm"
-              >
-                <span className="text-sm sm:text-base group-hover:scale-110 transition-transform duration-200">
-                  ✏️
-                </span>
-                <span className="whitespace-nowrap">Draw</span>
-              </button>
-            </div>
+                {isSubmitting ? (
+                  <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                {isSubmitting ? "Posting..." : "Post"}
+              </Button>
+            )}
+          </div>
+
+          {/* Shortcut Badges */}
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-8 px-2 max-w-full">
+            <button
+              onClick={handleNewNote}
+              type="button"
+              className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-blue-500/5 dark:bg-blue-500/10 hover:bg-blue-500 hover:text-white dark:hover:bg-blue-500 text-blue-600 dark:text-blue-400 transition-all duration-300 border border-blue-500/15 dark:border-blue-500/25 shadow-sm hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5"
+            >
+              <FileText className="h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
+              <span className="whitespace-nowrap">Create note</span>
+            </button>
+            <button
+              onClick={handlePhoto}
+              type="button"
+              className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-emerald-500/5 dark:bg-emerald-500/10 hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 text-emerald-600 dark:text-emerald-400 transition-all duration-300 border border-emerald-500/15 dark:border-emerald-500/25 shadow-sm hover:shadow-lg hover:shadow-emerald-500/25 hover:-translate-y-0.5"
+            >
+              <Camera className="h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
+              <span className="whitespace-nowrap">Photo</span>
+            </button>
+            <button
+              onClick={handleImages}
+              type="button"
+              className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-indigo-500/5 dark:bg-indigo-500/10 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-500 text-indigo-600 dark:text-indigo-400 transition-all duration-300 border border-indigo-500/15 dark:border-indigo-500/25 shadow-sm hover:shadow-lg hover:shadow-indigo-500/25 hover:-translate-y-0.5"
+            >
+              <ImageIcon className="h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
+              <span className="whitespace-nowrap">Images</span>
+            </button>
+            <button
+              onClick={handleDrawing}
+              type="button"
+              className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-purple-500/5 dark:bg-purple-500/10 hover:bg-purple-500 hover:text-white dark:hover:bg-purple-500 text-purple-600 dark:text-purple-400 transition-all duration-300 border border-purple-500/15 dark:border-purple-500/25 shadow-sm hover:shadow-lg hover:shadow-purple-500/25 hover:-translate-y-0.5"
+            >
+              <Paintbrush className="h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
+              <span className="whitespace-nowrap">Draw</span>
+            </button>
           </div>
 
           {/* Force HMR update */}
@@ -1377,7 +1447,6 @@ export function Composer({
 
           {/* Drag and drop overlay (portal-based, full viewport) */}
           {dragOverlay}
-
         </form>
       </div>
     );
@@ -1394,307 +1463,339 @@ export function Composer({
       <div
         ref={composerRef}
         className={`flex items-start gap-3 bg-background/85 dark:bg-background/95 border-2 border-border/50 dark:border-border/80 px-3 py-2 shadow-lg shadow-black/10 dark:shadow-black/40 backdrop-blur-md transition-all duration-300 hover:shadow-xl hover:shadow-black/15 dark:hover:shadow-black/50 hover:border-primary/20 ring-1 ring-inset ring-white/5 dark:ring-white/10 ${
-        isExpanded ? "rounded-2xl" : "rounded-full"
-      }`}
-    >
-      {/* Plus button */}
-      <div className="flex-shrink-0 pt-0.5">
-        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary transition-all duration-200 border border-transparent hover:border-primary/20"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            className="w-52 p-2 rounded-2xl border-2 shadow-xl shadow-black/10 dark:shadow-black/50"
-            side="top"
-            align="start"
-            sideOffset={8}
-            alignOffset={-8}
-            avoidCollisions={true}
-            collisionPadding={16}
-          >
-            <div className="space-y-1">
-              <button
-                onClick={handleNewNote}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-accent/80 transition-colors group"
-              >
-                <span className="text-base">📝</span>
-                <span className="font-medium">Rich Text Note</span>
-              </button>
-              <button
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-accent/80 transition-colors group"
-                onClick={handleFileUploadClick}
-              >
-                <span className="text-base">📄</span>
-                <span className="font-medium">File Upload</span>
-              </button>
-              <button
-                onClick={handlePhoto}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-accent/80 transition-colors group"
-              >
-                <span className="text-base">📷</span>
-                <span className="font-medium">Photo</span>
-              </button>
-              <button
-                onClick={handleImages}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-accent/80 transition-colors group"
-              >
-                <span className="text-base">🖼️</span>
-                <span className="font-medium">Images</span>
-              </button>
-              <button
-                onClick={handleDrawing}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-accent/80 transition-colors group"
-              >
-                <span className="text-base">✏️</span>
-                <span className="font-medium">Draw</span>
-              </button>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-
-      {/* Input area */}
-      <div className="flex-1 min-w-0 relative">
-        <Textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder="Write something..."
-          className="min-h-[32px] max-h-24 resize-none border-0 bg-transparent px-3 py-1.5 text-sm placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
-          disabled={isSubmitting}
-          rows={1}
-          style={{
-            height: "auto",
-            minHeight: "32px",
-          }}
-          onInput={(e) => {
-            const target = e.target as HTMLTextAreaElement;
-            target.style.height = "auto";
-            target.style.height = Math.min(target.scrollHeight, 96) + "px";
-          }}
-        />
-      </div>
-
-      {/* Send button */}
-      {text.trim() && (
-        <div className="flex-shrink-0 pt-0.5">
-          <Button
-            type="submit"
-            size="icon"
-            disabled={isSubmitting}
-            className="h-7 w-7 rounded-full bg-primary hover:bg-primary/90 shadow-md shadow-black/20 dark:shadow-black/40 hover:shadow-lg hover:shadow-black/25 dark:hover:shadow-black/50 transition-all duration-200"
-            onClick={handleSubmit}
-          >
-            <Send className="h-3 w-3" />
-          </Button>
-        </div>
-      )}
-
-      <DynamicDrawingCanvas
-        isOpen={drawingOpen}
-        onClose={() => setDrawingOpen(false)}
-        onSave={handleDrawingSave}
-      />
-
-      {/* Hidden file input for camera/image capture */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleImageCapture}
-        className="hidden"
-      />
-
-      {/* Hidden file input for multiple photos */}
-      <input
-        ref={multiFileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={handleMultiplePhotos}
-        className="hidden"
-      />
-      {/* Hidden input for any files */}
-      <input
-        ref={anyFileInputRef}
-        type="file"
-        multiple
-        onChange={(e) => handleGenericFilesSelected(e.target.files)}
-        className="hidden"
-      />
-      {uploadDialog}
-      {/* File upload modal for compact composer */}
-      <Dialog 
-        open={fileModalOpen} 
-        onOpenChange={(open) => {
-          setFileModalOpen(open);
-          if (!open) {
-            // Clean up URLs and clear selection when modal is dismissed
-            pendingFiles.forEach((f) => {
-              if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
-            });
-            setPendingFiles([]);
-            if (anyFileInputRef.current) anyFileInputRef.current.value = "";
-          }
-        }}
+          isExpanded ? "rounded-2xl" : "rounded-full"
+        }`}
       >
-        <DialogContent
-          className="sm:max-w-lg w-full max-h-[85vh] overflow-hidden"
-          onKeyDown={handleModalKeyDown}
-        >
-          <DialogHeader>
-            <DialogTitle>Upload files</DialogTitle>
-            <DialogDescription>
-              Max 100MB per file and combined per upload.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 min-h-0">
-            {pendingFiles.length === 0 ? (
-              <div className="text-sm text-muted-foreground">
-                No files selected.
-              </div>
-            ) : (
-              <div className="flex-1 min-h-[96px] max-h-[50vh] overflow-auto divide-y rounded-md border">
-                {pendingFiles.map((pf) => (
-                  <div
-                    key={pf.id}
-                    className="flex items-center justify-between p-2"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {/* Image preview or file icon */}
-                      <div
-                        className={cn(
-                          "relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border",
-                          pf.file.type.startsWith("image/") &&
-                            pf.previewUrl &&
-                            "cursor-zoom-in hover:opacity-90 transition-opacity",
-                        )}
-                        onClick={() => {
-                          if (
-                            pf.file.type.startsWith("image/") &&
-                            pf.previewUrl
-                          ) {
-                            handlePreview(pf.previewUrl);
-                          }
-                        }}
-                      >
-                        {pf.file.type.startsWith("image/") && pf.previewUrl ? (
-                          <NextImage
-                            src={pf.previewUrl}
-                            alt="Preview"
-                            fill
-                            unoptimized
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                            <span className="text-xs uppercase font-bold">
-                              {pf.name.split(".").pop()?.slice(0, 3) || "FILE"}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div
-                          className="text-sm font-medium truncate max-w-[180px] sm:max-w-[300px]"
-                          title={pf.name}
-                        >
-                          {pf.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatBytes(pf.size)} • {pf.type || "file"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {pf.status !== "pending" && (
-                        <div className="text-xs text-muted-foreground w-12 text-right">
-                          {pf.progress}%
-                        </div>
-                      )}
-                      {pf.status === "error" && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          className="h-7 px-2"
-                          onClick={() => retryFile(pf.id)}
-                        >
-                          Retry
-                        </Button>
-                      )}
-                      <button
-                        className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-accent disabled:opacity-50"
-                        onClick={() => removePendingFile(pf.id)}
-                        title="Remove"
-                        disabled={fileUploading}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="text-sm flex items-center justify-between">
-              <div
-                className={
-                  hasOversizeFile ? "text-red-600" : "text-muted-foreground"
-                }
-              >
-                Combined: {formatBytes(totalFileSize)} / {combinedCapLabel} MB
-              </div>
-              {overCombinedLimit && (
-                <div className="text-red-600">Over combined limit</div>
-              )}
-            </div>
-            {hasOversizeFile && (
-              <div className="text-xs text-red-600">
-                One or more files exceed 100MB.
-              </div>
-            )}
-            <div className="flex justify-end gap-2 pt-1">
+        {/* Plus button */}
+        <div className="flex-shrink-0 pt-0.5">
+          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <PopoverTrigger asChild>
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => {
-                  setFileModalOpen(false);
-                  setPendingFiles([]);
-                }}
-                disabled={fileUploading}
+                size="icon"
+                className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary transition-all duration-200 border border-transparent hover:border-primary/20"
               >
-                Cancel
+                <Plus className="h-4 w-4" />
               </Button>
-              <Button
-                type="button"
-                onClick={handleFileUpload}
-                disabled={
-                  fileUploading ||
-                  pendingFiles.length === 0 ||
-                  hasOversizeFile ||
-                  overCombinedLimit
-                }
-              >
-                {fileUploading ? "Uploading..." : "Upload"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-52 p-2 rounded-2xl border-2 shadow-xl shadow-black/10 dark:shadow-black/50"
+              side="top"
+              align="start"
+              sideOffset={8}
+              alignOffset={-8}
+              avoidCollisions={true}
+              collisionPadding={16}
+            >
+              <div className="space-y-1">
+                <button
+                  onClick={handleNewNote}
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                >
+                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <span className="font-semibold text-foreground">
+                    Rich Text Note
+                  </span>
+                </button>
+                <button
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                  onClick={handleFileUploadClick}
+                >
+                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                    <FileUp className="h-4 w-4" />
+                  </div>
+                  <span className="font-semibold text-foreground">
+                    File Upload
+                  </span>
+                </button>
+                <button
+                  onClick={handlePhoto}
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                >
+                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                    <Camera className="h-4 w-4" />
+                  </div>
+                  <span className="font-semibold text-foreground">Photo</span>
+                </button>
+                <button
+                  onClick={handleImages}
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                >
+                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                    <ImageIcon className="h-4 w-4" />
+                  </div>
+                  <span className="font-semibold text-foreground">Images</span>
+                </button>
+                <button
+                  onClick={handleDrawing}
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                >
+                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                    <Paintbrush className="h-4 w-4" />
+                  </div>
+                  <span className="font-semibold text-foreground">Drawing</span>
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
 
-    </div>
+        {/* Input area */}
+        <div className="flex-1 min-w-0 relative">
+          <Textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder="Write something..."
+            className="min-h-[32px] max-h-24 resize-none border-0 bg-transparent px-3 py-1.5 text-sm placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
+            disabled={isSubmitting}
+            rows={1}
+            style={{
+              height: "auto",
+              minHeight: "32px",
+            }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = "auto";
+              target.style.height = Math.min(target.scrollHeight, 96) + "px";
+            }}
+          />
+        </div>
+
+        {/* Send button */}
+        {text.trim() && (
+          <div className="flex-shrink-0 pt-0.5">
+            <Button
+              type="submit"
+              size="icon"
+              disabled={isSubmitting}
+              className="h-7 w-7 rounded-full bg-primary hover:bg-primary/90 shadow-md shadow-black/20 dark:shadow-black/40 hover:shadow-lg hover:shadow-black/25 dark:hover:shadow-black/50 transition-all duration-200"
+              onClick={handleSubmit}
+            >
+              <Send className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+
+        <DynamicDrawingCanvas
+          isOpen={drawingOpen}
+          onClose={() => setDrawingOpen(false)}
+          onSave={handleDrawingSave}
+        />
+
+        {/* Hidden file input for camera/image capture */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleImageCapture}
+          className="hidden"
+        />
+
+        {/* Hidden file input for multiple photos */}
+        <input
+          ref={multiFileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handleMultiplePhotos}
+          className="hidden"
+        />
+        {/* Hidden input for any files */}
+        <input
+          ref={anyFileInputRef}
+          type="file"
+          multiple
+          onChange={(e) => handleGenericFilesSelected(e.target.files)}
+          className="hidden"
+        />
+        {uploadDialog}
+        {/* File upload modal for compact composer */}
+        <Dialog
+          open={fileModalOpen}
+          onOpenChange={(open) => {
+            setFileModalOpen(open);
+            if (!open) {
+              // Clean up URLs and clear selection when modal is dismissed
+              pendingFiles.forEach((f) => {
+                if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+              });
+              setPendingFiles([]);
+              if (anyFileInputRef.current) anyFileInputRef.current.value = "";
+            }
+          }}
+        >
+          <DialogContent
+            className="sm:max-w-lg w-full max-h-[85vh] overflow-hidden"
+            onKeyDown={handleModalKeyDown}
+          >
+            <DialogHeader>
+              <DialogTitle>Upload files</DialogTitle>
+              <DialogDescription>
+                Max 100MB per file and combined per upload.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3 min-h-0">
+              {pendingFiles.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  No files selected.
+                </div>
+              ) : (
+                <div className="flex-1 min-h-[96px] max-h-[50vh] overflow-auto divide-y rounded-md border">
+                  {pendingFiles.map((pf) => (
+                    <div
+                      key={pf.id}
+                      className="flex items-center justify-between p-2"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {/* Image preview or file icon */}
+                        <div
+                          className={cn(
+                            "relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border",
+                            pf.file.type.startsWith("image/") &&
+                              pf.previewUrl &&
+                              "cursor-zoom-in hover:opacity-90 transition-opacity",
+                          )}
+                          onClick={() => {
+                            if (
+                              pf.file.type.startsWith("image/") &&
+                              pf.previewUrl
+                            ) {
+                              handlePreview(pf.previewUrl);
+                            }
+                          }}
+                        >
+                          {pf.file.type.startsWith("image/") &&
+                          pf.previewUrl ? (
+                            <NextImage
+                              src={pf.previewUrl}
+                              alt="Preview"
+                              fill
+                              unoptimized
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                              <span className="text-xs uppercase font-bold">
+                                {pf.name.split(".").pop()?.slice(0, 3) ||
+                                  "FILE"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className="text-sm font-medium truncate max-w-[180px] sm:max-w-[300px]"
+                            title={pf.name}
+                          >
+                            {pf.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatBytes(pf.size)} • {pf.type || "file"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {pf.status !== "pending" && (
+                          <div className="text-xs text-muted-foreground w-12 text-right">
+                            {pf.progress}%
+                          </div>
+                        )}
+                        {pf.status === "error" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            className="h-7 px-2"
+                            onClick={() => retryFile(pf.id)}
+                          >
+                            Retry
+                          </Button>
+                        )}
+                        <button
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-accent disabled:opacity-50"
+                          onClick={() => removePendingFile(pf.id)}
+                          title="Remove"
+                          disabled={fileUploading}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="text-sm flex items-center justify-between">
+                <div
+                  className={
+                    hasOversizeFile ? "text-red-600" : "text-muted-foreground"
+                  }
+                >
+                  Combined: {formatBytes(totalFileSize)} / {combinedCapLabel} MB
+                </div>
+                {overCombinedLimit && (
+                  <div className="text-red-600">Over combined limit</div>
+                )}
+              </div>
+              {hasOversizeFile && (
+                <div className="text-xs text-red-600">
+                  One or more files exceed 100MB.
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setFileModalOpen(false);
+                    setPendingFiles([]);
+                  }}
+                  disabled={fileUploading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleFileUpload}
+                  disabled={
+                    fileUploading ||
+                    pendingFiles.length === 0 ||
+                    hasOversizeFile ||
+                    overCombinedLimit
+                  }
+                >
+                  {fileUploading ? "Uploading..." : "Upload"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </>
+  );
+}
+
+function SparkIcon() {
+  return (
+    <svg
+      className="h-7 w-7"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" />
+      <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z" />
+    </svg>
   );
 }

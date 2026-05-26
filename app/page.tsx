@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Upload, Loader2 } from "lucide-react";
@@ -87,7 +87,13 @@ export default function HomePage() {
       <Navbar />
 
       {/* Hero Section */}
-      <HeroSection />
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <Loader2 className="h-10 w-10 text-primary animate-spin" />
+        </div>
+      }>
+        <HeroSection />
+      </Suspense>
 
       {/* Additional Sections */}
       <HomepageSections />

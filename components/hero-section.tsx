@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Sparkles,
   ScanLine,
@@ -64,6 +64,20 @@ export default function HeroSection() {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const qrScannerRef = useRef<any>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Pre-fill PIN from URL query param (e.g., /?room=1234) when coming back
+  useEffect(() => {
+    const roomFromUrl = searchParams.get("room");
+    if (roomFromUrl && /^\d{4}$/.test(roomFromUrl)) {
+      const digits = roomFromUrl.split("");
+      setPinDigits(digits);
+      // Focus the last input
+      setTimeout(() => {
+        inputRefs.current[3]?.focus();
+      }, 100);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     return () => {
@@ -512,7 +526,7 @@ export default function HeroSection() {
                   <button
                     onClick={handleQRScan}
                     disabled={isJoining || isScanning || isPasting}
-                    className="flex items-center gap-2.5 transition hover:text-zinc-900 dark:hover:text-white disabled:opacity-50"
+                    className="flex items-center gap-2.5 transition hover:text-zinc-900 dark:hover:text-white disabled:opacity-50 bg-transparent"
                   >
                     <ScanLine size={18} />
                     Scan
@@ -523,7 +537,7 @@ export default function HeroSection() {
                   <button
                     onClick={handlePaste}
                     disabled={isJoining || isScanning || isPasting}
-                    className="flex items-center gap-2.5 transition hover:text-zinc-900 dark:hover:text-white disabled:opacity-50"
+                    className="flex items-center gap-2.5 transition hover:text-zinc-900 dark:hover:text-white disabled:opacity-50 bg-transparent"
                   >
                     <Clipboard size={18} />
                     Paste

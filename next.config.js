@@ -15,8 +15,16 @@ const nextConfig = {
     ],
   },
   images: {
-    // Allow external image hosts used in blog covers and avatars
-    domains: ["picsum.photos", "i.pravatar.cc"],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "picsum.photos",
+      },
+      {
+        protocol: "https",
+        hostname: "i.pravatar.cc",
+      },
+    ],
     // Optimize image loading
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256],
