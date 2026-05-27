@@ -68,7 +68,7 @@
   }
   body, button, input, select, textarea, .font-sans {
     @apply bg-background text-foreground;
-    font-family: 'Almarai', system-ui, -apple-system, sans-serif !important;
+    font-family: var(--font-almarai), 'Almarai', system-ui, -apple-system, sans-serif !important;
   }
 }
 
@@ -218,4 +218,49 @@
   );
   pointer-events: none;
 }
+
+/* Sleek scrollbar hidden initially, visible only on hover */
+.hover-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+  display: block;
+}
+.hover-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.hover-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+.hover-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.25);
+}
+.hover-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 120, 0.45);
+}
+.hover-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s ease;
+}
+.hover-scrollbar:hover {
+  scrollbar-color: rgba(120, 120, 120, 0.25) transparent;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* Scoped to AnimatedThemeToggler — the toggler sets the data-attribute and the variable only during a theme toggle. */
+html[data-magicui-theme-vt="active"]::view-transition-group(root) {
+  animation-duration: var(--magicui-theme-toggle-vt-duration);
+}
+
+html[data-magicui-theme-vt="active"]::view-transition-new(root) {
+  clip-path: var(--magicui-theme-vt-clip-from);
+}
+
 

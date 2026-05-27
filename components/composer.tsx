@@ -1077,146 +1077,143 @@ export function Composer({
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 placeholder="What's on your mind?"
-                className="relative z-10 min-h-[220px] w-full resize-none border-0 bg-transparent px-8 py-7 text-xl text-neutral-900 dark:text-white outline-none placeholder:text-neutral-500/50 dark:placeholder:text-white/35 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none sm:px-10 sm:py-8"
+                className="relative z-10 min-h-[180px] w-full resize-none border-0 bg-transparent px-8 pt-7 pb-2 text-xl text-neutral-900 dark:text-white outline-none placeholder:text-neutral-500/50 dark:placeholder:text-white/35 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none sm:px-10 sm:pt-8"
                 disabled={isSubmitting}
               />
 
-              {/* Spark Icon from user design */}
-              <div className="pointer-events-none absolute bottom-6 right-7 text-[#ff7a1a] opacity-70 z-20">
-                <SparkIcon />
+              {/* Bottom toolbar inside input box */}
+              <div className="relative z-10 flex items-center justify-between px-5 pb-4 pt-1 sm:px-7">
+                {/* Left: Add Content */}
+                <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 h-9 px-3.5 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-all duration-200"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span className="hidden sm:inline">Add content</span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-56 p-3 rounded-2xl border-2 shadow-xl shadow-black/10 dark:shadow-black/50"
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    alignOffset={-8}
+                    avoidCollisions={true}
+                    collisionPadding={16}
+                  >
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-semibold text-muted-foreground/60 tracking-widest px-2 pb-1.5 uppercase">
+                        Create
+                      </div>
+                      <button
+                        onClick={handleNewNote}
+                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                      >
+                        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                          <FileText className="h-4.5 w-4.5" />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-foreground">
+                            Rich Text Note
+                          </div>
+                          <div className="text-[11px] text-muted-foreground leading-tight">
+                            Create formatted document
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                        onClick={handleFileUploadClick}
+                      >
+                        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                          <FileUp className="h-4.5 w-4.5" />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-foreground">
+                            File Upload
+                          </div>
+                          <div className="text-[11px] text-muted-foreground leading-tight">
+                            Share documents & files
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={handlePhoto}
+                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                      >
+                        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                          <Camera className="h-4.5 w-4.5" />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-foreground">
+                            Photo
+                          </div>
+                          <div className="text-[11px] text-muted-foreground leading-tight">
+                            Capture photo instantly
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={handleImages}
+                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                      >
+                        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                          <ImageIcon className="h-4.5 w-4.5" />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-foreground">
+                            Images
+                          </div>
+                          <div className="text-[11px] text-muted-foreground leading-tight">
+                            Select multiple photos
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={handleDrawing}
+                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                      >
+                        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                          <Paintbrush className="h-4.5 w-4.5" />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-foreground">
+                            Drawing
+                          </div>
+                          <div className="text-[11px] text-muted-foreground leading-tight">
+                            Create on digital canvas
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Right: Send Button + Spark */}
+                <div className="flex items-center gap-2">
+                  <div className="pointer-events-none text-[#ff7a1a] opacity-70">
+                    <SparkIcon />
+                  </div>
+                  {text.trim() && (
+                    <Button
+                      type="submit"
+                      disabled={isSubmitting}
+                      size="sm"
+                      className="h-9 px-5 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-black/20 dark:shadow-black/40 hover:shadow-xl transition-all duration-200 font-medium"
+                    >
+                      {isSubmitting ? (
+                        <div className="w-3.5 h-3.5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-1.5" />
+                      ) : (
+                        <Send className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      {isSubmitting ? "Posting..." : "Post"}
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Action Bar */}
-          <div className="flex items-center justify-between mt-4 px-2">
-            {/* Left: Add Content Options */}
-            <div className="flex items-center gap-2">
-              <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-10 px-4 rounded-full border border-border/60 dark:border-border/80 bg-background/90 dark:bg-background/95 hover:bg-accent/50 hover:border-primary/30 transition-all duration-200 shadow-sm shadow-black/10 dark:shadow-black/30 hover:shadow-md hover:shadow-black/15 dark:hover:shadow-black/40"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add content
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  className="w-56 p-3 rounded-2xl border-2 shadow-xl shadow-black/10 dark:shadow-black/50"
-                  side="top"
-                  align="start"
-                  sideOffset={8}
-                  alignOffset={-8}
-                  avoidCollisions={true}
-                  collisionPadding={16}
-                >
-                  <div className="space-y-1.5">
-                    <div className="text-[10px] font-semibold text-muted-foreground/60 tracking-widest px-2 pb-1.5 uppercase">
-                      Create
-                    </div>
-                    <button
-                      onClick={handleNewNote}
-                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                    >
-                      <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                        <FileText className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="text-left">
-                        <div className="font-semibold text-foreground">
-                          Rich Text Note
-                        </div>
-                        <div className="text-[11px] text-muted-foreground leading-tight">
-                          Create formatted document
-                        </div>
-                      </div>
-                    </button>
-                    <button
-                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                      onClick={handleFileUploadClick}
-                    >
-                      <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition-colors">
-                        <FileUp className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="text-left">
-                        <div className="font-semibold text-foreground">
-                          File Upload
-                        </div>
-                        <div className="text-[11px] text-muted-foreground leading-tight">
-                          Share documents & files
-                        </div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={handlePhoto}
-                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                    >
-                      <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                        <Camera className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="text-left">
-                        <div className="font-semibold text-foreground">
-                          Photo
-                        </div>
-                        <div className="text-[11px] text-muted-foreground leading-tight">
-                          Capture photo instantly
-                        </div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={handleImages}
-                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                    >
-                      <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-                        <ImageIcon className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="text-left">
-                        <div className="font-semibold text-foreground">
-                          Images
-                        </div>
-                        <div className="text-[11px] text-muted-foreground leading-tight">
-                          Select multiple photos
-                        </div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={handleDrawing}
-                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                    >
-                      <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">
-                        <Paintbrush className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="text-left">
-                        <div className="font-semibold text-foreground">
-                          Drawing
-                        </div>
-                        <div className="text-[11px] text-muted-foreground leading-tight">
-                          Create on digital canvas
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Right: Send Button */}
-            {text.trim() && (
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="h-10 px-6 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-black/20 dark:shadow-black/40 hover:shadow-xl hover:shadow-black/25 dark:hover:shadow-black/50 transition-all duration-200 font-medium"
-              >
-                {isSubmitting ? (
-                  <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
-                ) : (
-                  <Send className="h-4 w-4 mr-2" />
-                )}
-                {isSubmitting ? "Posting..." : "Post"}
-              </Button>
-            )}
           </div>
 
           {/* Shortcut Badges */}

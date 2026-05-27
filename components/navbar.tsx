@@ -4,12 +4,9 @@ import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 import { Logo } from "@/components/logo";
 import { createSpace } from "@/lib/actions";
 import {
-  Sun,
-  Moon,
   Menu,
   X,
   Info,
@@ -20,6 +17,7 @@ import {
   ArrowRight,
   Loader2,
 } from "lucide-react";
+import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 
 const navLinks = [
   {
@@ -56,12 +54,7 @@ export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [showCta, setShowCta] = useState(false);
-  const { resolvedTheme, setTheme } = useTheme();
   const router = useRouter();
-
-  const toggleTheme = () => {
-    setTheme(resolvedTheme === "dark" ? "light" : "dark");
-  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -126,15 +119,10 @@ export function Navbar() {
             {/* Right side: CTA + Theme Toggle */}
             <motion.div layout="position" className="flex items-center gap-3 relative z-10">
                 {/* Theme toggle — Sun/Moon */}
-              <motion.button
-                layout="position"
-                onClick={toggleTheme}
+              <AnimatedThemeToggler
                 className="relative rounded-full w-9 h-9 flex items-center justify-center border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20 transition-all duration-200"
                 aria-label="Toggle theme"
-              >
-                <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-              </motion.button>
+              />
 
               {/* Mobile menu button */}
               <motion.div layout="position" className="md:hidden">
