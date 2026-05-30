@@ -313,6 +313,12 @@ export function SpaceContainer({
     setIsDeleting(true);
     try {
       await deleteSpace(space.id);
+      
+      // Clear last_created_space from localStorage so input stays empty on homepage
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("last_created_space");
+      }
+      
       router.push("/");
     } catch (error) {
       setIsDeleting(false);
