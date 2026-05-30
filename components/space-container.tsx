@@ -28,6 +28,7 @@ import { ActivitySidebar } from "./activity-sidebar";
 import { Logo } from "./logo";
 import { createClientSupabaseClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import QRCode from "qrcode";
 import {
   Popover,
   PopoverContent,
@@ -79,6 +80,10 @@ export function SpaceContainer({
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  // First time visitor onboarding guide
+  const [showGuide, setShowGuide] = useState(false);
+  const [guideStep, setGuideStep] = useState(1);
+
   // Track if we're on desktop for sidebar offset
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => {
@@ -88,6 +93,26 @@ export function SpaceContainer({
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hasVisited = localStorage.getItem("woff_visited_before");
+      if (!hasVisited) {
+        setShowGuide(true);
+        // Expand sidebar on desktop by default so they can see full labels
+        if (window.innerWidth >= 768) {
+          setSidebarExpanded(true);
+        }
+      }
+    }
+  }, []);
+
+  const dismissGuide = () => {
+    setShowGuide(false);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("woff_visited_before", "true");
+    }
+  };
 
   // Track entry IDs that were added/replaced locally to prevent
   // the real-time subscription from adding duplicates.
@@ -202,7 +227,9 @@ export function SpaceContainer({
         (payload) => {
           const oldEntry = payload.old as { id: string };
           if (oldEntry && oldEntry.id) {
-            setEntries((prev) => prev.filter((entry) => entry.id !== oldEntry.id));
+            setEntries((prev) =>
+              prev.filter((entry) => entry.id !== oldEntry.id),
+            );
           }
         },
       )
@@ -295,15 +322,17 @@ export function SpaceContainer({
 
   const generateQRCode = async (url: string) => {
     try {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&format=png&data=${encodeURIComponent(
-        url,
-      )}`;
+      const qrUrl = await QRCode.toDataURL(url, {
+        margin: 2,
+        width: 256,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
+      });
       setQrCodeUrl(qrUrl);
     } catch (error) {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&format=png&data=${encodeURIComponent(
-        url,
-      )}`;
-      setQrCodeUrl(qrUrl);
+      console.error("Error generating QR code:", error);
     }
   };
 
@@ -311,7 +340,7 @@ export function SpaceContainer({
     const shareUrl = `${window.location.origin}/${space.slug}`;
     setShareModalOpen(true);
     setMobileSidebarOpen(false);
-    setTimeout(() => generateQRCode(shareUrl), 100);
+    generateQRCode(shareUrl);
   };
 
   const handleCopyFromModal = async () => {
@@ -427,76 +456,200 @@ export function SpaceContainer({
         <div
           className={`flex flex-col gap-2 py-3 ${isCurrentlyExpanded ? "px-3" : "px-2"}`}
         >
-          {/* Room Code Button */}
-          {isCurrentlyExpanded ? (
-            <div className="flex flex-col gap-1.5 w-full">
-              <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 px-1 uppercase tracking-wider">
-                Room Code
-              </span>
-              <button
-                onClick={handleCopy}
-                className={`flex items-center justify-between gap-2 w-full rounded-xl px-3 py-2 text-sm transition-all duration-200 border ${
-                  copied
-                    ? "bg-green-500/10 border-green-500/30 text-green-600 dark:bg-green-500/20 dark:border-green-500/40 dark:text-green-300"
-                    : "border-zinc-200 dark:border-white/[0.06] text-zinc-600 hover:text-zinc-950 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/5"
-                }`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  {copied ? (
-                    <Check className="h-4 w-4 flex-shrink-0 text-green-600 dark:text-green-400" />
-                  ) : (
-                    <Copy className="h-4 w-4 flex-shrink-0" />
-                  )}
-                  <span className="truncate font-sans font-bold text-sm tracking-tight text-zinc-800 dark:text-zinc-200">
-                    {copied ? "Copied!" : space.slug}
-                  </span>
+          {/* Room Code Button with Onboarding Popover */}
+          <Popover open={showGuide && guideStep === 1}>
+            <PopoverTrigger asChild>
+              <div className="w-full">
+                {isCurrentlyExpanded ? (
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 px-1 uppercase tracking-wider">
+                      Room Code
+                    </span>
+                    <button
+                      onClick={handleCopy}
+                      className={`flex items-center justify-between gap-2 w-full rounded-xl px-3 py-2 text-sm transition-all duration-300 border ${
+                        showGuide && guideStep === 1
+                          ? "bg-orange-500/10 border-[#ff5a00] text-[#ff5a00] dark:bg-orange-500/20 dark:border-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.25)] scale-[1.02]"
+                          : copied
+                            ? "bg-green-500/10 border-green-500/30 text-green-600 dark:bg-green-500/20 dark:border-green-500/40 dark:text-green-300"
+                            : "border-zinc-200 dark:border-white/[0.06] text-zinc-600 hover:text-zinc-950 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/5"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {copied ? (
+                          <Check className="h-4 w-4 flex-shrink-0 text-green-600 dark:text-green-400" />
+                        ) : (
+                          <Copy className="h-4 w-4 flex-shrink-0" />
+                        )}
+                        <span className="truncate bg-transparent font-sans font-bold text-sm tracking-tight text-zinc-800 dark:text-zinc-200">
+                          {copied ? "Copied!" : space.slug}
+                        </span>
+                      </div>
+                      {!isPro && (
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none flex-shrink-0 ${
+                            daysUntilExpiry <= 2
+                              ? "bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-400"
+                              : daysUntilExpiry <= 4
+                                ? "bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
+                                : "bg-zinc-200 text-zinc-600 dark:bg-white/10 dark:text-zinc-400"
+                          }`}
+                        >
+                          {daysUntilExpiry}d
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <SidebarButton
+                    icon={copied ? Check : Copy}
+                    label={
+                      copied
+                        ? "Copied!"
+                        : isPro
+                          ? `Copy Code: ${space.slug}`
+                          : `Copy Code: ${space.slug} (Expires in ${daysUntilExpiry}d)`
+                    }
+                    onClick={handleCopy}
+                    className={
+                      showGuide && guideStep === 1
+                        ? "bg-orange-500/10 border border-[#ff5a00] text-[#ff5a00] dark:bg-orange-500/20 dark:border-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_12px_rgba(255,90,0,0.2)] scale-[1.05]"
+                        : copied
+                          ? "text-green-600 dark:text-green-400 hover:text-green-500"
+                          : ""
+                    }
+                  />
+                )}
+              </div>
+            </PopoverTrigger>
+            <PopoverContent
+              side="right"
+              align="start"
+              sideOffset={12}
+              className="w-72 p-0 border border-orange-500/30 bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-xl shadow-[0_10px_30px_rgba(255,90,0,0.15)] rounded-2xl animate-in fade-in slide-in-from-left-2 duration-300 z-[9999]"
+            >
+              <div className="p-4 space-y-3.5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-orange-500/10 to-transparent blur-xl pointer-events-none" />
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black text-[#ff5a00] uppercase tracking-wider bg-orange-500/10 dark:bg-orange-500/20 px-2 py-0.5 rounded-full">
+                      Step 1 of 2
+                    </span>
+                    <button
+                      onClick={dismissGuide}
+                      className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5">
+                    <Copy className="h-4 w-4 text-[#ff5a00]" />
+                    Copy & Share Room ID
+                  </h4>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                    Clicking this will copy the room ID/link to your clipboard.
+                    You can share it with anyone so they can join this space
+                    instantly!
+                  </p>
                 </div>
-                {!isPro && (
-                  <span
-                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none flex-shrink-0 ${
-                      daysUntilExpiry <= 2
-                        ? "bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-400"
-                        : daysUntilExpiry <= 4
-                          ? "bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
-                          : "bg-zinc-200 text-zinc-600 dark:bg-white/10 dark:text-zinc-400"
+                <div className="flex justify-between items-center pt-1">
+                  <button
+                    onClick={dismissGuide}
+                    className="text-xs font-medium text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                  >
+                    Skip guide
+                  </button>
+                  <Button
+                    size="sm"
+                    onClick={() => setGuideStep(2)}
+                    className="h-7 rounded-lg text-xs font-bold bg-[#ff5a00] hover:bg-[#ff5a00]/95 text-white shadow-md shadow-orange-500/10"
+                  >
+                    Next option
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Share Button with Onboarding Popover */}
+          <Popover open={showGuide && guideStep === 2}>
+            <PopoverTrigger asChild>
+              <div className="w-full">
+                {isCurrentlyExpanded ? (
+                  <button
+                    onClick={handleShare}
+                    className={`flex items-center gap-3 w-full rounded-xl px-3 py-2 text-sm transition-all duration-300 border ${
+                      showGuide && guideStep === 2
+                        ? "bg-orange-500/10 border-[#ff5a00] text-[#ff5a00] dark:bg-orange-500/20 dark:border-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.25)] scale-[1.02]"
+                        : "border-transparent text-zinc-500 hover:text-zinc-950 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/5"
                     }`}
                   >
-                    {daysUntilExpiry}d
-                  </span>
+                    <Share className="h-[18px] w-[18px] flex-shrink-0" />
+                    <span className="text-sm font-medium">Share Space</span>
+                  </button>
+                ) : (
+                  <SidebarButton
+                    icon={Share}
+                    label="Share"
+                    onClick={handleShare}
+                    className={
+                      showGuide && guideStep === 2
+                        ? "bg-orange-500/10 border border-[#ff5a00] text-[#ff5a00] dark:bg-orange-500/20 dark:border-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_12px_rgba(255,90,0,0.2)] scale-[1.05]"
+                        : ""
+                    }
+                  />
                 )}
-              </button>
-            </div>
-          ) : (
-            <SidebarButton
-              icon={copied ? Check : Copy}
-              label={
-                copied
-                  ? "Copied!"
-                  : isPro
-                    ? `Copy Code: ${space.slug}`
-                    : `Copy Code: ${space.slug} (Expires in ${daysUntilExpiry}d)`
-              }
-              onClick={handleCopy}
-              className={
-                copied
-                  ? "text-green-600 dark:text-green-400 hover:text-green-500"
-                  : ""
-              }
-            />
-          )}
-
-          {/* Share Button */}
-          {isCurrentlyExpanded ? (
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-3 w-full rounded-xl px-3 py-2 text-sm text-zinc-500 hover:text-zinc-950 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/5 transition-all duration-200 border border-transparent"
+              </div>
+            </PopoverTrigger>
+            <PopoverContent
+              side="right"
+              align="start"
+              sideOffset={12}
+              className="w-72 p-0 border border-orange-500/30 bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-xl shadow-[0_10px_30px_rgba(255,90,0,0.15)] rounded-2xl animate-in fade-in slide-in-from-left-2 duration-300 z-[9999]"
             >
-              <Share className="h-[18px] w-[18px] flex-shrink-0" />
-              <span className="text-sm font-medium">Share Space</span>
-            </button>
-          ) : (
-            <SidebarButton icon={Share} label="Share" onClick={handleShare} />
-          )}
+              <div className="p-4 space-y-3.5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-orange-500/10 to-transparent blur-xl pointer-events-none" />
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black text-[#ff5a00] uppercase tracking-wider bg-orange-500/10 dark:bg-orange-500/20 px-2 py-0.5 rounded-full">
+                      Step 2 of 2
+                    </span>
+                    <button
+                      onClick={dismissGuide}
+                      className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5">
+                    <Share className="h-4 w-4 text-[#ff5a00]" />
+                    Interactive QR Sharing
+                  </h4>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                    Use the share option to generate a custom QR code instantly!
+                    Anyone can scan it to connect their mobile devices directly.
+                  </p>
+                </div>
+                <div className="flex justify-between items-center pt-1">
+                  <button
+                    onClick={() => setGuideStep(1)}
+                    className="text-xs font-medium text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <Button
+                    size="sm"
+                    onClick={dismissGuide}
+                    className="h-7 rounded-lg text-xs font-bold bg-[#ff5a00] hover:bg-[#ff5a00]/95 text-white shadow-md shadow-orange-500/10"
+                  >
+                    Got it!
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
 
           {/* Expiry indicator — Collapsed ONLY */}
           {!isPro && !isCurrentlyExpanded && (
@@ -601,9 +754,7 @@ export function SpaceContainer({
                         Toggle light/dark mode
                       </div>
                     </div>
-                    <AnimatedThemeToggler
-                      className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors animate-in fade-in duration-200"
-                    />
+                    <AnimatedThemeToggler className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors animate-in fade-in duration-200" />
                   </div>
                 </div>
 
@@ -718,10 +869,14 @@ export function SpaceContainer({
 
                 {/* Bottom composer — offset left for sidebar on desktop */}
                 <div
-                  className="fixed bottom-0 right-0 pb-safe transition-all duration-300 animate-in slide-in-from-bottom-5 duration-200 z-30 bg-gradient-to-t from-white/30 via-white/10 to-transparent dark:from-[#030303]/30 dark:via-[#030303]/10 dark:to-transparent"
+                  className="fixed bottom-0 right-0 pb-safe transition-all animate-in slide-in-from-bottom-5 duration-200 z-30 bg-gradient-to-t from-white/30 via-white/10 to-transparent dark:from-[#030303]/30 dark:via-[#030303]/10 dark:to-transparent"
                   style={{ left: isDesktop ? sidebarWidth : 0 }}
                 >
-                  <ProgressiveBlur height="100%" position="bottom" className="-z-10" />
+                  <ProgressiveBlur
+                    height="100%"
+                    position="bottom"
+                    className="-z-10"
+                  />
                   <div className="container mx-auto px-4 pt-1.5 pb-4 relative z-10">
                     <div className="mx-auto max-w-2xl">
                       <Composer
@@ -752,80 +907,87 @@ export function SpaceContainer({
           }
         }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md border border-orange-500/20 bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-xl shadow-[0_20px_50px_rgba(255,90,0,0.15)] rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Share className="h-5 w-5" />
-              Share this space
+            <DialogTitle className="flex items-center gap-2.5 text-xl font-bold">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500 dark:bg-orange-500/20 dark:text-orange-400">
+                <Share className="h-5 w-5" />
+              </div>
+              Share Space
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6">
-            {/* QR Code */}
-            <div className="flex justify-center">
-              {qrCodeUrl ? (
-                <div className="p-4 bg-white dark:bg-gray-100 rounded-lg border-2 border-border shadow-sm">
-                  <Image
-                    src={qrCodeUrl}
-                    alt="QR Code for space"
-                    width={192}
-                    height={192}
-                    className="w-48 h-48 block"
-                    unoptimized
-                  />
+            {/* QR Code Container with Glowing Orange Border and radial ambient glow */}
+            <div className="flex justify-center py-4">
+              <div className="relative group p-1.5 rounded-[24px] bg-gradient-to-br from-orange-500/30 via-orange-500/10 to-transparent dark:from-orange-500/40 dark:via-orange-500/15 dark:to-transparent">
+                {/* Glow Orb behind QR card */}
+                <div className="absolute inset-0 rounded-[24px] bg-gradient-to-r from-orange-500 to-amber-500 blur-2xl opacity-20 dark:opacity-30 group-hover:opacity-40 transition-opacity duration-500" />
+
+                {/* Main QR Card */}
+                <div className="relative p-4 bg-white dark:bg-[#151518] rounded-[18px] border border-orange-500/35 dark:border-orange-500/45 shadow-[0_4px_30px_rgba(255,90,0,0.12)] flex flex-col items-center">
+                  {qrCodeUrl ? (
+                    <Image
+                      src={qrCodeUrl}
+                      alt="QR Code for space"
+                      width={192}
+                      height={192}
+                      className="w-48 h-48 block rounded-lg select-none pointer-events-none"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="w-48 h-48 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 rounded-lg">
+                      <Loader2 className="h-8 w-8 text-orange-500 animate-spin" />
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="w-56 h-56 flex items-center justify-center bg-muted rounded-lg border-2 border-dashed border-border">
-                  <div className="text-center">
-                    <QrCode className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Generating QR code...
-                    </p>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
 
             {/* Share URL */}
             <div className="space-y-3">
-              <label className="text-sm font-medium text-foreground">
+              <label className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                 Share link
               </label>
-              <div className="flex gap-2">
-                <div className="flex-1 p-3 bg-muted rounded-md text-sm font-mono text-foreground border">
+              <div className="flex gap-2.5">
+                <div className="flex-1 px-4 py-3 bg-zinc-50 dark:bg-[#18181b]/50 rounded-xl text-sm font-mono text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-white/[0.06] select-all truncate flex items-center">
                   woff.space/{space.slug}
                 </div>
                 <Button
-                  size="sm"
                   onClick={handleCopyFromModal}
-                  variant={copied ? "default" : "outline"}
-                  className={
-                    copied ? "bg-green-600 hover:bg-green-700 text-white" : ""
-                  }
+                  className={`px-5 rounded-xl font-medium transition-all duration-300 shrink-0 flex items-center gap-1.5 ${
+                    copied
+                      ? "bg-green-600 hover:bg-green-700 text-white shadow-[0_2px_10px_rgba(22,163,74,0.2)]"
+                      : "bg-[#ff5a00] hover:bg-[#ff5a00]/95 text-white shadow-[0_4px_12px_rgba(255,90,0,0.2)] hover:scale-[1.02] active:scale-[0.98]"
+                  }`}
                 >
                   {copied ? (
                     <>
-                      <Check className="h-4 w-4 mr-1" />
-                      Copied!
+                      <Check className="h-4 w-4" />
+                      <span>Copied!</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="h-4 w-4 mr-1" />
-                      Copy
+                      <Copy className="h-4 w-4" />
+                      <span>Copy</span>
                     </>
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center">
                 Anyone with this link can view and contribute to this space
               </p>
             </div>
 
-            {/* Future features placeholder */}
-            <div className="text-center pt-4 border-t border-border">
-              <p className="text-sm text-muted-foreground">
-                🚀 More sharing options coming soon
-              </p>
+            {/* Premium footer */}
+            <div className="text-center pt-4 border-t border-zinc-200 dark:border-white/[0.06] flex items-center justify-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 tracking-wide uppercase">
+                Real-time sharing active
+              </span>
             </div>
           </div>
         </DialogContent>
