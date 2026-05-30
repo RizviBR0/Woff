@@ -23,6 +23,7 @@ import { Space, deleteSpace } from "@/lib/actions";
 import { getDaysUntilExpiry } from "@/lib/utils";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
+import { ProgressiveBlur } from "@/components/ui/progressive-blur";
 import { ActivitySidebar } from "./activity-sidebar";
 import { Logo } from "./logo";
 import { createClientSupabaseClient } from "@/lib/supabase";
@@ -188,6 +189,21 @@ export function SpaceContainer({
               entry.id === updatedEntry.id ? updatedEntry : entry,
             ),
           );
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "entries",
+          filter: `space_id=eq.${space.id}`,
+        },
+        (payload) => {
+          const oldEntry = payload.old as { id: string };
+          if (oldEntry && oldEntry.id) {
+            setEntries((prev) => prev.filter((entry) => entry.id !== oldEntry.id));
+          }
         },
       )
       .subscribe();
@@ -373,13 +389,20 @@ export function SpaceContainer({
           className={`flex items-center ${isCurrentlyExpanded ? "justify-between px-4" : "justify-center"} h-14 flex-shrink-0`}
         >
           {isCurrentlyExpanded ? (
-            <Link href={`/?room=${space.slug}`} title="Back to home">
-              <Logo
-                width={90}
-                height={28}
-                className="cursor-pointer hover:opacity-80 transition-opacity"
-              />
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href={`/?room=${space.slug}`} title="Back to home">
+                <Logo
+                  width={90}
+                  height={28}
+                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                />
+              </Link>
+              {isPro && (
+                <span className="bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-500 dark:to-pink-500 text-white border-none text-[9px] font-black px-1.5 py-1 rounded-full tracking-wider leading-none shadow-[0_2px_8px_rgba(168,85,247,0.25)] select-none">
+                  PRO
+                </span>
+              )}
+            </div>
           ) : null}
           {!isMobile && (
             <button
@@ -396,15 +419,6 @@ export function SpaceContainer({
             </button>
           )}
         </div>
-
-        {/* PRO badge */}
-        {isPro && isCurrentlyExpanded && (
-          <div className="px-4 pb-2">
-            <span className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-600 dark:text-purple-300 border border-purple-200 dark:border-purple-800/30 text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wider">
-              PRO
-            </span>
-          </div>
-        )}
 
         {/* Divider */}
         <div className="mx-3 h-px bg-zinc-200 dark:bg-white/[0.06]" />
@@ -697,16 +711,18 @@ export function SpaceContainer({
                       key={`${entry.id}-${index}`}
                       entry={entry}
                       currentDeviceId={currentDeviceId || null}
+                      onDelete={handleRemoveEntry}
                     />
                   ))}
                 </div>
 
                 {/* Bottom composer — offset left for sidebar on desktop */}
                 <div
-                  className="fixed bottom-0 right-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pb-safe transition-all duration-300 animate-in slide-in-from-bottom-5 duration-200"
+                  className="fixed bottom-0 right-0 pb-safe transition-all duration-300 animate-in slide-in-from-bottom-5 duration-200 z-30 bg-gradient-to-t from-white/30 via-white/10 to-transparent dark:from-[#030303]/30 dark:via-[#030303]/10 dark:to-transparent"
                   style={{ left: isDesktop ? sidebarWidth : 0 }}
                 >
-                  <div className="container mx-auto px-4 py-3">
+                  <ProgressiveBlur height="100%" position="bottom" className="-z-10" />
+                  <div className="container mx-auto px-4 pt-1.5 pb-4 relative z-10">
                     <div className="mx-auto max-w-2xl">
                       <Composer
                         spaceId={space.id}

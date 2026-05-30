@@ -11,6 +11,8 @@ import {
   Edit,
   Lock,
   ChevronDown,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +26,19 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useState, useEffect, memo } from "react";
 import { GlobalImageViewer } from "./global-image-viewer";
 import { displayNameForDevice } from "@/lib/display-name";
+import { deleteEntry } from "@/lib/actions";
 import NextImage from "next/image";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export interface Entry {
   id: string;
@@ -44,11 +58,13 @@ export interface Entry {
 interface EntryCardProps {
   entry: Entry;
   currentDeviceId?: string | null;
+  onDelete?: (entryId: string) => void;
 }
 
 export const EntryCard = memo(function EntryCard({
   entry,
   currentDeviceId = null,
+  onDelete,
 }: EntryCardProps) {
   const [isNoteLocked, setIsNoteLocked] = useState(false);
   const [noteLoaded, setNoteLoaded] = useState(false);
@@ -58,6 +74,72 @@ export const EntryCard = memo(function EntryCard({
   const [hovering, setHovering] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showAllFiles, setShowAllFiles] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteEntry(entry.id);
+      onDelete?.(entry.id);
+    } catch (err: any) {
+      setIsDeleting(false);
+      alert("Failed to delete: " + err.message);
+    }
+  };
+
+  const DeleteButton = () => {
+    if (!isMine) return null;
+    return (
+      <AlertDialog>
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
+          <AlertDialogTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 rounded-full text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+              disabled={isDeleting}
+              title="Delete message"
+            >
+              {isDeleting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </AlertDialogTrigger>
+        </div>
+        <AlertDialogContent className="border-red-500/20 dark:border-red-500/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground dark:text-foreground font-semibold flex items-center gap-2">
+              <span className="text-red-500">⚠️</span> Delete Message
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Are you sure you want to permanently delete this message? This action cannot be undone and will delete any associated files.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4 gap-2 sm:gap-0">
+            <AlertDialogCancel disabled={isDeleting} className="border-border hover:bg-accent">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600 text-white font-medium shadow-[0_0_10px_rgba(239,68,68,0.2)] focus:ring-red-500 h-9 px-4 rounded-md inline-flex items-center justify-center"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin animate-spin-fast" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  };
 
   const isMine =
     !!entry.created_by_device_id &&
@@ -272,62 +354,349 @@ export const EntryCard = memo(function EntryCard({
   if (entry.id.startsWith("placeholder-")) {
     const meta = entry.meta || {};
     const metaType = meta.type || "";
+    const isError = !entry.isLoading;
 
     // Determine icon and label based on meta type
     let icon = "📤";
-    let label = "Uploading...";
-    let previewContent = null;
+    let label = entry.uploadMessage || "Uploading...";
+    let customSkeleton = null;
 
     if (metaType === "photo" || metaType === "drawing") {
       icon = metaType === "drawing" ? "🎨" : "📷";
-      label = metaType === "drawing" ? "Drawing" : "Photo";
-      if (meta.previewUrl) {
-        previewContent = (
-          <div className="mt-2 w-full flex">
-            <div className="relative max-w-full rounded-2xl overflow-hidden border border-border/30 shadow-sm bg-muted/10 flex items-center justify-center p-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={meta.previewUrl}
-                alt="Preview"
-                className="max-w-full max-h-[200px] object-contain opacity-50 blur-[2px] rounded-xl"
-              />
-            </div>
-          </div>
-        );
-      }
-    } else if (metaType === "photos") {
-      icon = "🖼️";
-      label = `${meta.count || "Multiple"} Photos`;
-      if (meta.previewUrls && meta.previewUrls.length > 0) {
-        previewContent = (
-          <div className="mt-2 flex gap-1.5 flex-wrap max-w-sm">
-            {meta.previewUrls.slice(0, 4).map((url: string, i: number) => (
-              <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-border/20 shadow-sm opacity-60">
+      const isDrawing = metaType === "drawing";
+      
+      customSkeleton = (
+        <div className={`relative mt-2 max-w-[280px] rounded-xl overflow-hidden border ${
+          isError 
+            ? "border-destructive/20 bg-destructive/5 shadow-sm" 
+            : "border-orange-500/20 dark:border-orange-500/30 bg-muted/5 shadow-sm"
+        } p-2 transition-all duration-300`}>
+          <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden bg-muted/20 flex items-center justify-center border border-border/30">
+            {meta.previewUrl ? (
+              <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={url}
-                  alt={`Preview ${i + 1}`}
-                  className="w-full h-full object-cover blur-[1px]"
+                  src={meta.previewUrl}
+                  alt="Preview"
+                  className={`w-full h-full object-cover rounded-lg transition-all duration-300 ${
+                    isError ? "opacity-30 blur-[2px]" : "opacity-60 blur-[1px] animate-pulse"
+                  }`}
                 />
+                {!isError && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-orange-500/10 via-transparent to-transparent pointer-events-none" />
+                )}
+              </>
+            ) : (
+              <div className="text-3xl animate-bounce">
+                {icon}
               </div>
-            ))}
-            {meta.previewUrls.length > 4 && (
-              <div className="w-16 h-16 bg-muted rounded-xl border border-border/20 shadow-sm flex flex-col items-center justify-center text-muted-foreground">
-                <span className="font-bold text-sm">+{meta.previewUrls.length - 4}</span>
-                <span className="text-[10px] font-medium leading-none">more</span>
+            )}
+            
+            {/* Ambient glowing center piece */}
+            {!isError && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="relative flex items-center justify-center h-12 w-12">
+                  <div className="absolute inset-0 rounded-full bg-orange-500/20 border border-orange-500/30 animate-ping" style={{ animationDuration: "2s" }} />
+                  <div className="relative h-9 w-9 rounded-full bg-orange-500/10 dark:bg-orange-500/20 flex items-center justify-center border border-orange-500/30">
+                    <span className="text-orange-500 dark:text-orange-400 text-xs font-bold animate-pulse">
+                      {isDrawing ? "🎨" : "⚡"}
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
-        );
-      }
+          
+          <div className="mt-2.5 px-1 pb-1">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className={`text-[11px] font-semibold tracking-wide uppercase ${isError ? "text-destructive" : "text-orange-500 dark:text-orange-400"}`}>
+                {isError ? "Upload Failed" : isDrawing ? "Saving Drawing" : "Uploading Photo"}
+              </span>
+              {!isError && typeof entry.uploadProgress === "number" && (
+                <span className="text-[10px] font-bold text-orange-500 dark:text-orange-400 font-mono bg-orange-500/10 px-1.5 py-0.5 rounded">
+                  {entry.uploadProgress}%
+                </span>
+              )}
+            </div>
+            <p className={`text-xs truncate ${isError ? "text-destructive/80 font-medium" : "text-muted-foreground"}`}>
+              {label}
+            </p>
+          </div>
+          
+          {/* Orange glowing progress at bottom */}
+          {!isError && typeof entry.uploadProgress === "number" && (
+            <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-muted/30 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 transition-all duration-300 rounded-full"
+                style={{ width: `${entry.uploadProgress}%` }}
+              />
+            </div>
+          )}
+        </div>
+      );
+    } else if (metaType === "photos") {
+      icon = "🖼️";
+      
+      customSkeleton = (
+        <div className={`relative mt-2 max-w-[280px] rounded-xl overflow-hidden border ${
+          isError 
+            ? "border-destructive/20 bg-destructive/5 shadow-sm" 
+            : "border-orange-500/20 dark:border-orange-500/30 bg-muted/5 shadow-sm"
+        } p-2 transition-all duration-300`}>
+          <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden bg-muted/20 flex items-center justify-center border border-border/30">
+            {meta.previewUrls && meta.previewUrls.length > 0 ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={meta.previewUrls[0]}
+                  alt="Front preview"
+                  className={`w-full h-full object-cover rounded-lg transition-all duration-300 ${
+                    isError ? "opacity-30 blur-[2px]" : "opacity-60 blur-[1px] animate-pulse"
+                  }`}
+                />
+                {!isError && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-orange-500/15 via-transparent to-transparent pointer-events-none" />
+                )}
+              </>
+            ) : (
+              <div className="text-3xl animate-bounce">🖼️</div>
+            )}
+            
+            {/* Photo Stack Counter Badge */}
+            <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white border border-white/10 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+              <span>🖼️</span>
+              <span>{meta.count || 2} Photos</span>
+            </div>
+
+            {/* Central Glow Orb */}
+            {!isError && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="relative flex items-center justify-center h-12 w-12">
+                  <div className="absolute inset-0 rounded-full bg-orange-500/25 border border-orange-500/30 animate-ping" style={{ animationDuration: "2.2s" }} />
+                  <div className="relative h-9 w-9 rounded-full bg-orange-500/20 flex items-center justify-center border border-orange-500/30">
+                    <span className="text-orange-500 dark:text-orange-400 text-[10px] font-extrabold animate-pulse">
+                      +{meta.count ? meta.count - 1 : 1}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-2.5 px-1 pb-1">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className={`text-[11px] font-semibold tracking-wide uppercase ${isError ? "text-destructive" : "text-orange-500 dark:text-orange-400"}`}>
+                {isError ? "Failed to Upload" : "Uploading Stack"}
+              </span>
+              {!isError && typeof entry.uploadProgress === "number" && (
+                <span className="text-[10px] font-bold text-orange-500 dark:text-orange-400 font-mono bg-orange-500/10 px-1.5 py-0.5 rounded">
+                  {entry.uploadProgress}%
+                </span>
+              )}
+            </div>
+            <p className={`text-xs truncate ${isError ? "text-destructive/80 font-medium" : "text-muted-foreground"}`}>
+              {label}
+            </p>
+          </div>
+
+          {/* Orange glowing progress at bottom */}
+          {!isError && typeof entry.uploadProgress === "number" && (
+            <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-muted/30 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 transition-all duration-300 rounded-full"
+                style={{ width: `${entry.uploadProgress}%` }}
+              />
+            </div>
+          )}
+        </div>
+      );
     } else if (metaType === "files") {
       icon = "📄";
       const items = meta.items || [];
-      label =
-        items.length > 1 ? `${items.length} Files` : items[0]?.name || "File";
+      const hasMultiple = items.length > 1;
+      
+      customSkeleton = (
+        <div className="relative mt-2 max-w-[320px] pt-1 transition-all duration-300">
+          {hasMultiple ? (
+            // Stacked Document Skeletons
+            <div className="relative w-full min-h-[74px]">
+              {/* Back Sheet */}
+              <div className={`absolute inset-x-2 top-0 h-[66px] rounded-xl border ${
+                isError ? "border-destructive/10 bg-destructive/5" : "border-orange-500/10 bg-muted/5 shadow-sm"
+              } rotate-[3deg] translate-y-[-4px] scale-[0.97] opacity-35 transition-transform`} />
+              
+              {/* Front Sheet */}
+              <div className={`relative w-full rounded-xl border ${
+                isError 
+                  ? "border-destructive/30 bg-destructive/5 shadow-md shadow-destructive/5" 
+                  : "border-orange-500/20 dark:border-orange-500/30 bg-gradient-to-r from-muted/20 to-orange-500/[0.01] shadow-lg shadow-orange-500/[0.04] dark:shadow-orange-500/[0.06]"
+              } p-3 flex items-center gap-3 overflow-hidden min-h-[66px] transition-all`}>
+                
+                {/* File icon container */}
+                <div className={`h-10 w-10 rounded-lg flex items-center justify-center border flex-shrink-0 transition-colors ${
+                  isError 
+                    ? "bg-destructive/10 border-destructive/20 text-destructive" 
+                    : "bg-orange-500/10 border-orange-500/20 text-orange-500 animate-pulse"
+                }`}>
+                  <FileText className="h-5 w-5" />
+                </div>
+
+                {/* Shimmer details */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className={`text-[11px] font-semibold tracking-wide uppercase ${isError ? "text-destructive" : "text-orange-500 dark:text-orange-400"}`}>
+                      {isError ? "Upload Failed" : `Uploading ${items.length} Files`}
+                    </span>
+                    {!isError && typeof entry.uploadProgress === "number" && (
+                      <span className="text-[10px] font-bold text-orange-500 dark:text-orange-400 font-mono bg-orange-500/10 px-1.5 py-0.5 rounded">
+                        {entry.uploadProgress}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="h-3.5 bg-muted-foreground/15 rounded-md animate-pulse w-4/5" />
+                    <div className="h-2 bg-muted-foreground/10 rounded-md animate-pulse w-2/5" />
+                  </div>
+                </div>
+
+                {/* Orange glowing progress at bottom */}
+                {!isError && typeof entry.uploadProgress === "number" && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-muted/30 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 transition-all duration-300 rounded-full shadow-[0_0_8px_rgba(255,90,0,0.8)]"
+                      style={{ width: `${entry.uploadProgress}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            // Single Document Skeleton
+            <div className={`relative w-full rounded-xl border ${
+              isError 
+                ? "border-destructive/30 bg-destructive/5 shadow-md" 
+                : "border-orange-500/20 dark:border-orange-500/30 bg-gradient-to-r from-muted/20 to-orange-500/[0.01] shadow-lg shadow-orange-500/[0.04] dark:shadow-orange-500/[0.06]"
+            } p-3 flex items-center gap-3 overflow-hidden min-h-[66px] transition-all`}>
+              
+              {/* File icon container */}
+              <div className={`h-10 w-10 rounded-lg flex items-center justify-center border flex-shrink-0 transition-colors ${
+                isError 
+                  ? "bg-destructive/10 border-destructive/20 text-destructive" 
+                  : "bg-orange-500/10 border-orange-500/20 text-orange-500 animate-pulse"
+              }`}>
+                <FileText className="h-5 w-5" />
+              </div>
+
+              {/* Shimmer details */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className={`text-[11px] font-semibold tracking-wide uppercase ${isError ? "text-destructive" : "text-orange-500 dark:text-orange-400"}`}>
+                    {isError ? "Upload Failed" : "Uploading File"}
+                  </span>
+                  {!isError && typeof entry.uploadProgress === "number" && (
+                    <span className="text-[10px] font-bold text-orange-500 dark:text-orange-400 font-mono bg-orange-500/10 px-1.5 py-0.5 rounded">
+                      {entry.uploadProgress}%
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <div className="h-3.5 bg-muted-foreground/15 rounded-md animate-pulse w-[90%]" />
+                  <div className="h-2 bg-muted-foreground/10 rounded-md animate-pulse w-[30%]" />
+                </div>
+              </div>
+
+              {/* Orange glowing progress at bottom */}
+              {!isError && typeof entry.uploadProgress === "number" && (
+                <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-muted/30 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 transition-all duration-300 rounded-full shadow-[0_0_8px_rgba(255,90,0,0.8)]"
+                    style={{ width: `${entry.uploadProgress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
     } else if (metaType === "note") {
       icon = "📝";
-      label = "Note";
+      
+      customSkeleton = (
+        <div className={`relative mt-2 max-w-[300px] rounded-xl border ${
+          isError 
+            ? "border-destructive/30 bg-destructive/5 shadow-md shadow-destructive/5" 
+            : "border-orange-500/20 dark:border-orange-500/30 bg-gradient-to-br from-muted/20 to-orange-500/[0.01] shadow-lg shadow-orange-500/[0.04] dark:shadow-orange-500/[0.06]"
+        } p-3 overflow-hidden min-h-[80px] transition-all`}>
+          
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`h-6 w-6 rounded flex items-center justify-center border flex-shrink-0 ${
+              isError 
+                ? "bg-destructive/10 border-destructive/20 text-destructive" 
+                : "bg-orange-500/10 border-orange-500/20 text-orange-500 animate-pulse"
+            }`}>
+              <span className="text-xs font-bold">📝</span>
+            </div>
+            <span className={`text-[11px] font-semibold tracking-wide uppercase ${isError ? "text-destructive" : "text-orange-500 dark:text-orange-400"}`}>
+              {isError ? "Failed to Create" : "Creating Note..."}
+            </span>
+            {!isError && typeof entry.uploadProgress === "number" && (
+              <span className="ml-auto text-[10px] font-bold text-orange-500 dark:text-orange-400 font-mono bg-orange-500/10 px-1.5 py-0.5 rounded">
+                {entry.uploadProgress}%
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="h-3.5 bg-muted-foreground/15 rounded animate-pulse w-[85%]" />
+            <div className="h-2 bg-muted-foreground/10 rounded animate-pulse w-full" />
+            <div className="h-2 bg-muted-foreground/10 rounded animate-pulse w-3/4" />
+          </div>
+
+          {/* Orange glowing progress at bottom */}
+          {!isError && typeof entry.uploadProgress === "number" && (
+            <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-muted/30 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 transition-all duration-300 rounded-full shadow-[0_0_8px_rgba(255,90,0,0.8)]"
+                style={{ width: `${entry.uploadProgress}%` }}
+              />
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (!customSkeleton) {
+      customSkeleton = (
+        <div className={`relative mt-2 max-w-[280px] rounded-xl border ${
+          isError 
+            ? "border-destructive/30 bg-destructive/5" 
+            : "border-orange-500/20 dark:border-orange-500/30 bg-gradient-to-r from-muted/20 to-orange-500/[0.01] shadow-lg shadow-orange-500/[0.04] dark:shadow-orange-500/[0.06]"
+        } p-3 flex items-center gap-3 overflow-hidden min-h-[60px] transition-all`}>
+          <div className={`h-8 w-8 rounded flex items-center justify-center border flex-shrink-0 ${
+            isError ? "bg-destructive/10 border-destructive/20 text-destructive" : "bg-orange-500/10 border-orange-500/20 text-orange-500 animate-pulse"
+          }`}>
+            <span className="text-sm font-bold">{icon}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className={`text-[10px] font-semibold tracking-wide uppercase ${isError ? "text-destructive" : "text-orange-500"}`}>
+                {isError ? "Failed" : "Uploading"}
+              </span>
+            </div>
+            <p className={`text-xs truncate ${isError ? "text-destructive/80 font-medium" : "text-muted-foreground"}`}>
+              {label}
+            </p>
+          </div>
+          {!isError && typeof entry.uploadProgress === "number" && (
+            <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-muted/30 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-300"
+                style={{ width: `${entry.uploadProgress}%` }}
+              />
+            </div>
+          )}
+        </div>
+      );
     }
 
     return (
@@ -335,9 +704,6 @@ export const EntryCard = memo(function EntryCard({
         id={`entry-${entry.id}`}
         className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
       >
-        {/* Loading overlay */}
-        {loadingOverlay}
-
         {/* Avatar */}
         {avatar}
 
@@ -357,14 +723,8 @@ export const EntryCard = memo(function EntryCard({
             </span>
           </div>
 
-          {/* Content type indicator */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>{icon}</span>
-              <span>{label}</span>
-            </div>
-            {previewContent}
-          </div>
+          {/* Glowing custom skeleton contents */}
+          {customSkeleton}
         </div>
       </div>
     );
@@ -380,6 +740,7 @@ export const EntryCard = memo(function EntryCard({
             id={`entry-${entry.id}`}
             className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
           >
+            <DeleteButton />
             {/* Loading overlay for optimistic UI */}
             {loadingOverlay}
 
@@ -462,6 +823,7 @@ export const EntryCard = memo(function EntryCard({
             id={`entry-${entry.id}`}
             className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
           >
+            <DeleteButton />
             {/* Loading overlay for optimistic UI */}
             {loadingOverlay}
 
@@ -610,6 +972,7 @@ export const EntryCard = memo(function EntryCard({
             id={`entry-${entry.id}`}
             className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
           >
+            <DeleteButton />
             {/* Loading overlay for optimistic UI */}
             {loadingOverlay}
 
@@ -835,6 +1198,7 @@ export const EntryCard = memo(function EntryCard({
           id={`entry-${entry.id}`}
           className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
         >
+          <DeleteButton />
           {/* Loading overlay for optimistic UI */}
           {loadingOverlay}
 
@@ -947,6 +1311,7 @@ export const EntryCard = memo(function EntryCard({
         id={`entry-${entry.id}`}
         className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
       >
+        <DeleteButton />
         {/* Loading overlay for optimistic UI */}
         {loadingOverlay}
 
@@ -1054,6 +1419,7 @@ export const EntryCard = memo(function EntryCard({
         id={`entry-${entry.id}`}
         className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
       >
+        <DeleteButton />
         {/* Loading overlay for optimistic UI */}
         {loadingOverlay}
 
@@ -1197,6 +1563,7 @@ export const EntryCard = memo(function EntryCard({
       id={`entry-${entry.id}`}
       className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
     >
+      <DeleteButton />
       {/* Loading overlay for optimistic UI */}
       {loadingOverlay}
 

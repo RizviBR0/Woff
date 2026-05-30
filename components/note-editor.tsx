@@ -13,21 +13,30 @@ import {
   Code,
   Type,
   Save,
-  Eye,
   Underline,
   Strikethrough,
   List,
   ListOrdered,
   Quote,
-  Heading1,
-  Heading2,
-  Heading3,
   ImageIcon,
   Check,
   X,
   Moon,
   Sun,
   Monitor,
+  Undo2,
+  Redo2,
+  Minus,
+  Plus,
+  ChevronDown,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  Maximize2,
+  Minimize2,
+  Highlighter,
+  PenLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +44,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -45,6 +58,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { SlashMenu } from "./slash-menu";
 import { updateNote, createSpace, createNoteEntry, type Note } from "@/lib/actions";
 import { compressImageAdaptive } from "@/lib/image-compression";
@@ -77,6 +91,10 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
 
   const { theme, setTheme } = useTheme();
 
+  // Zoom and fullscreen state
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   // Load autosave setting from localStorage
   useEffect(() => {
     const savedAutoSave = localStorage.getItem("woff-autosave-enabled");
@@ -105,6 +123,51 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorInitializedRef = useRef(false); // Track if editor content was initialized
+
+  // Selection range preservation refs and callbacks
+  const savedRangeRef = useRef<Range | null>(null);
+
+  const saveActiveSelection = useCallback(() => {
+    const selection = window.getSelection();
+    if (
+      selection &&
+      selection.rangeCount > 0 &&
+      editorRef.current &&
+      editorRef.current.contains(selection.anchorNode)
+    ) {
+      savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+    }
+  }, []);
+
+  const restoreActiveSelection = useCallback(() => {
+    if (savedRangeRef.current && editorRef.current) {
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(savedRangeRef.current.cloneRange());
+      }
+    }
+  }, []);
+
+  // Listen for selection changes inside the editor
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (
+        selection &&
+        selection.rangeCount > 0 &&
+        editorRef.current &&
+        editorRef.current.contains(selection.anchorNode)
+      ) {
+        savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+      }
+    };
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, []);
 
   // Load note from server (via API route to avoid client-side server action calls)
   useEffect(() => {
@@ -878,276 +941,20 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   const formatText = (command: string, value?: string) => {
     if (!editorRef.current) return;
 
-    editorRef.current.focus();
+    restoreActiveSelection();
 
     if (command === "formatBlock" && value) {
-      // Handle block-level formatting (headings, paragraphs, etc.)
-      const selection = window.getSelection();
-      if (!selection || !selection.rangeCount) return;
-
-      const range = selection.getRangeAt(0);
-      const selectedText = range.toString();
-
-      // If there's selected text, create a new block element with just that text
-      if (selectedText.trim()) {
-        // Extract the selected content
-        const fragment = range.extractContents();
-
-        // Create new element with the desired tag
-        const newElement = document.createElement(value.toUpperCase());
-
-        // Add appropriate classes for styling
-        if (value === "blockquote") {
-          newElement.className =
-            "border-l-4 border-primary/30 pl-6 italic my-4";
-        } else if (value === "pre") {
-          newElement.className =
-            "bg-muted border border-border/20 rounded-lg p-4 font-mono text-sm overflow-x-auto my-4 whitespace-pre-wrap";
-          newElement.style.whiteSpace = "pre-wrap";
-          newElement.style.wordBreak = "break-word";
-          newElement.style.overflowWrap = "break-word";
-        } else if (value === "p") {
-          newElement.className = "leading-relaxed text-foreground mb-4";
-        } else if (value.match(/^h[1-6]$/)) {
-          const headingClasses = {
-            h1: "text-3xl font-bold mt-8 mb-4",
-            h2: "text-2xl font-semibold mt-6 mb-3",
-            h3: "text-xl font-semibold mt-4 mb-2",
-            h4: "text-lg font-medium mt-3 mb-2",
-            h5: "text-base font-medium mt-2 mb-1",
-            h6: "text-sm font-medium mt-2 mb-1",
-          };
-          newElement.className =
-            headingClasses[value as keyof typeof headingClasses] || "";
-        }
-
-        // Add the selected content to the new element
-        if (
-          fragment.textContent === selectedText &&
-          !fragment.querySelector("*")
-        ) {
-          // Pure text selection
-          newElement.textContent = selectedText;
-        } else {
-          // Complex selection with HTML elements
-          newElement.appendChild(fragment);
-        }
-
-        // Insert the new element
-        range.insertNode(newElement);
-
-        // Position cursor after the new element
-        range.setStartAfter(newElement);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
-
-        // Update content
-        setTimeout(() => {
-          handleContentChange();
-        }, 10);
-
-        return;
+      try {
+        const tag = value.startsWith("<") ? value : `<${value}>`;
+        document.execCommand("formatBlock", false, tag);
+      } catch (error) {
+        console.warn("formatBlock failed:", error);
       }
-
-      // If no text is selected, format the current block element
-      let currentNode = range.startContainer;
-
-      // Find the current block element
-      if (currentNode.nodeType === Node.TEXT_NODE) {
-        currentNode = currentNode.parentElement || currentNode;
-      }
-
-      // Find the closest block element or create one if none exists
-      let blockElement: Element | null = null;
-      let searchNode = currentNode;
-
-      while (searchNode && searchNode !== editorRef.current) {
-        if (
-          searchNode instanceof Element &&
-          [
-            "P",
-            "DIV",
-            "H1",
-            "H2",
-            "H3",
-            "H4",
-            "H5",
-            "H6",
-            "BLOCKQUOTE",
-            "PRE",
-          ].includes(searchNode.tagName)
-        ) {
-          blockElement = searchNode;
-          break;
-        }
-        const parent = searchNode.parentElement;
-        if (!parent) break;
-        searchNode = parent;
-      }
-
-      // If no block element found, create a paragraph wrapper
-      if (!blockElement) {
-        const p = document.createElement("P");
-        if (currentNode.nodeType === Node.TEXT_NODE) {
-          const parent = currentNode.parentNode;
-          if (parent) {
-            parent.insertBefore(p, currentNode);
-            p.appendChild(currentNode);
-            blockElement = p;
-          }
-        }
-      }
-
-      if (blockElement && blockElement !== editorRef.current) {
-        // Get the content and clean it if needed
-        let innerHTML = blockElement.innerHTML;
-
-        // If the block contains complex nested structures from pasted content,
-        // preserve only the text and basic inline formatting
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = innerHTML;
-
-        // Remove unwanted attributes and classes from pasted content
-        const allElements = tempDiv.querySelectorAll("*");
-        allElements.forEach((el) => {
-          // Remove all attributes except href for links
-          const attributes = Array.from(el.attributes);
-          attributes.forEach((attr) => {
-            if (attr.name !== "href" || el.tagName !== "A") {
-              el.removeAttribute(attr.name);
-            }
-          });
-
-          // Convert div/span to appropriate inline elements if they have formatting
-          if (el.tagName === "DIV" || el.tagName === "SPAN") {
-            const computedStyle = window.getComputedStyle(el);
-            if (
-              computedStyle.fontWeight === "bold" ||
-              computedStyle.fontWeight >= "600"
-            ) {
-              const strong = document.createElement("strong");
-              strong.innerHTML = el.innerHTML;
-              el.parentNode?.replaceChild(strong, el);
-            } else if (computedStyle.fontStyle === "italic") {
-              const em = document.createElement("em");
-              em.innerHTML = el.innerHTML;
-              el.parentNode?.replaceChild(em, el);
-            }
-          }
-        });
-
-        innerHTML = tempDiv.innerHTML;
-
-        // Create new element with the desired tag
-        // Special handling for converting to paragraph when only part of a block is selected
-        let newElement: HTMLElement;
-        const selection = window.getSelection();
-        const hasSelection =
-          selection &&
-          selection.rangeCount > 0 &&
-          selection.getRangeAt(0).toString().length > 0;
-        const range = hasSelection ? selection!.getRangeAt(0) : null;
-        const fullBlockSelected = (() => {
-          if (!range) return false;
-          const testRange = document.createRange();
-          testRange.selectNodeContents(blockElement);
-          return (
-            range.startContainer === testRange.startContainer &&
-            range.startOffset === testRange.startOffset &&
-            range.endContainer === testRange.endContainer &&
-            range.endOffset === testRange.endOffset
-          );
-        })();
-
-        // If applying paragraph formatting (value === 'p') with a partial selection inside a heading/code/blockquote, split the block
-        if (
-          value === "p" &&
-          hasSelection &&
-          !fullBlockSelected &&
-          blockElement.tagName !== "P"
-        ) {
-          // Extract selected content
-          const fragment = range!.extractContents();
-          // Create paragraph for selected part
-          const p = document.createElement("p");
-          p.className = "leading-relaxed text-foreground mb-4";
-          p.appendChild(fragment);
-
-          // Insert the paragraph before the remainder of the original block at cursor position
-          range!.insertNode(p);
-
-          // Clean the original block's innerHTML (it now has removed selection)
-          // If original block becomes empty, ensure it has a break to remain editable
-          if (blockElement.textContent?.trim() === "") {
-            blockElement.innerHTML = "<br>";
-          }
-
-          // Position cursor at end of new paragraph
-          setTimeout(() => {
-            const sel = window.getSelection();
-            if (sel) {
-              const afterRange = document.createRange();
-              afterRange.selectNodeContents(p);
-              afterRange.collapse(false);
-              sel.removeAllRanges();
-              sel.addRange(afterRange);
-            }
-            handleContentChange();
-          }, 10);
-
-          return; // Early exit; we handled partial selection conversion
-        }
-
-        newElement = document.createElement(value.toUpperCase());
-        newElement.innerHTML = innerHTML;
-
-        // Add appropriate classes for styling
-        if (value === "blockquote") {
-          newElement.className =
-            "border-l-4 border-primary/30 pl-6 italic my-4";
-        } else if (value === "pre") {
-          newElement.className =
-            "bg-muted border border-border/20 rounded-lg p-4 font-mono text-sm overflow-x-auto my-4 whitespace-pre-wrap";
-          newElement.style.whiteSpace = "pre-wrap";
-          newElement.style.wordBreak = "break-word";
-          newElement.style.overflowWrap = "break-word";
-        } else if (value === "p") {
-          // Add paragraph classes for consistent styling
-          newElement.className = "leading-relaxed text-foreground mb-4";
-        } else if (value.match(/^h[1-6]$/)) {
-          // Add heading classes
-          const headingClasses = {
-            h1: "text-3xl font-bold mt-8 mb-4",
-            h2: "text-2xl font-semibold mt-6 mb-3",
-            h3: "text-xl font-semibold mt-4 mb-2",
-            h4: "text-lg font-medium mt-3 mb-2",
-            h5: "text-base font-medium mt-2 mb-1",
-            h6: "text-sm font-medium mt-2 mb-1",
-          };
-          newElement.className =
-            headingClasses[value as keyof typeof headingClasses] || "";
-        }
-
-        // Replace the current element
-        if (blockElement.parentElement) {
-          blockElement.parentElement.replaceChild(newElement, blockElement);
-
-          // Keep typing within the chosen block without forcing a new paragraph
-
-          // Set cursor at the end of the new element
-          setTimeout(() => {
-            const sel = window.getSelection();
-            if (sel && newElement) {
-              const range = document.createRange();
-              range.selectNodeContents(newElement);
-              range.collapse(false);
-              sel.removeAllRanges();
-              sel.addRange(range);
-            }
-          }, 10);
-        }
-      }
+      setTimeout(() => {
+        handleContentChange();
+        saveActiveSelection();
+      }, 50);
+      return;
     } else {
       // Handle inline formatting (bold, italic, etc.)
       const selection = window.getSelection();
@@ -1155,26 +962,22 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
         const range = selection.getRangeAt(0);
         const selectedText = range.toString();
 
-        // Only apply formatting if there's selected text
         if (selectedText) {
           try {
             if (command === "createLink" && value) {
-              // Special handling for links
               const linkElement = document.createElement("a");
               linkElement.href = value;
               linkElement.textContent = selectedText;
               linkElement.className =
                 "text-blue-600 dark:text-blue-400 underline underline-offset-2 decoration-blue-600/40 dark:decoration-blue-400/40 hover:decoration-blue-600 dark:hover:decoration-blue-400 transition-colors hover:text-blue-700 dark:hover:text-blue-300";
-              linkElement.style.cursor = "default"; // Changed from pointer to default
+              linkElement.style.cursor = "default";
               linkElement.contentEditable = "false";
-              // Remove target and rel attributes to disable direct clicking
               linkElement.removeAttribute("target");
               linkElement.removeAttribute("rel");
 
               range.deleteContents();
               range.insertNode(linkElement);
 
-              // Move cursor after the inserted element
               range.setStartAfter(linkElement);
               range.collapse(true);
               selection.removeAllRanges();
@@ -1183,78 +986,12 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
               document.execCommand(command, false, value);
             }
           } catch (error) {
-            /* console.warn("execCommand failed:", error); */
-            // Fallback for modern browsers
-            if (
-              command === "bold" ||
-              command === "italic" ||
-              command === "underline" ||
-              command === "strikeThrough"
-            ) {
-              const elementTag =
-                command === "bold"
-                  ? "strong"
-                  : command === "italic"
-                  ? "em"
-                  : command === "underline"
-                  ? "u"
-                  : command === "strikeThrough"
-                  ? "s"
-                  : "span";
-
-              // Extract the selected content, preserving any existing inline formatting
-              const fragment = range.extractContents();
-              const element = document.createElement(elementTag);
-
-              // If fragment contains only text, use textContent
-              if (
-                fragment.textContent === selectedText &&
-                !fragment.querySelector("*")
-              ) {
-                element.textContent = selectedText;
-              } else {
-                // If fragment contains HTML elements, preserve them
-                element.appendChild(fragment);
-              }
-
-              range.insertNode(element);
-
-              // Move cursor after the inserted element
-              range.setStartAfter(element);
-              range.collapse(true);
-              selection.removeAllRanges();
-              selection.addRange(range);
-            } else if (command === "createLink" && value) {
-              // Fallback for createLink
-              const linkElement = document.createElement("a");
-              linkElement.href = value;
-              linkElement.textContent = selectedText;
-              linkElement.className =
-                "text-blue-600 dark:text-blue-400 underline underline-offset-2 decoration-blue-600/40 dark:decoration-blue-400/40 hover:decoration-blue-600 dark:hover:decoration-blue-400 transition-colors hover:text-blue-700 dark:hover:text-blue-300";
-              linkElement.style.cursor = "default"; // Changed from pointer to default
-              linkElement.contentEditable = "false";
-              // Remove target and rel attributes to disable direct clicking
-              linkElement.removeAttribute("target");
-              linkElement.removeAttribute("rel");
-
-              range.deleteContents();
-              range.insertNode(linkElement);
-
-              // Move cursor after the inserted element
-              range.setStartAfter(linkElement);
-              range.collapse(true);
-              selection.removeAllRanges();
-              selection.addRange(range);
-            }
+            console.warn("execCommand failed:", error);
           }
-        } else {
-          // If no text is selected, don't apply formatting to prevent it from affecting the entire context
-          /* console.log("No text selected for inline formatting"); */
         }
       }
     }
 
-    // Ensure the editor remains focused and content is updated
     setTimeout(() => {
       if (editorRef.current) {
         editorRef.current.focus();
@@ -1269,99 +1006,19 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   const createList = (listType: "ul" | "ol") => {
     if (!editorRef.current) return;
 
-    editorRef.current.focus();
+    restoreActiveSelection();
 
-    const selection = window.getSelection();
-    if (!selection || !selection.rangeCount) return;
-
-    const range = selection.getRangeAt(0);
-    let currentNode = range.startContainer;
-
-    // Find the current block element
-    if (currentNode.nodeType === Node.TEXT_NODE) {
-      currentNode = currentNode.parentElement || currentNode;
+    try {
+      const command = listType === "ul" ? "insertUnorderedList" : "insertOrderedList";
+      document.execCommand(command);
+    } catch (error) {
+      console.warn("createList failed:", error);
     }
 
-    // Find the closest block element
-    let blockElement: Element | null = null;
-    while (currentNode && currentNode !== editorRef.current) {
-      if (
-        currentNode instanceof Element &&
-        [
-          "P",
-          "DIV",
-          "H1",
-          "H2",
-          "H3",
-          "H4",
-          "H5",
-          "H6",
-          "BLOCKQUOTE",
-          "PRE",
-        ].includes(currentNode.tagName)
-      ) {
-        blockElement = currentNode;
-        break;
-      }
-      const parent = currentNode.parentElement;
-      if (!parent) break;
-      currentNode = parent;
-    }
-
-    // If no block element found, create one
-    if (!blockElement) {
-      blockElement = document.createElement("p");
-      const range = selection.getRangeAt(0);
-      const textNode = range.startContainer;
-      if (textNode.nodeType === Node.TEXT_NODE && textNode.parentNode) {
-        textNode.parentNode.insertBefore(blockElement, textNode);
-        blockElement.appendChild(textNode);
-      }
-    }
-
-    if (blockElement && blockElement.parentElement) {
-      // Get current text content
-      const currentText = blockElement.textContent || "";
-
-      // Create list structure
-      const list = document.createElement(listType);
-      const listItem = document.createElement("li");
-
-      // Add proper CSS classes for styling
-      if (listType === "ul") {
-        list.className = "list-disc pl-6 my-4";
-      } else {
-        list.className = "list-decimal pl-6 my-4";
-      }
-
-      listItem.className = "my-1";
-
-      // Set content
-      if (currentText.trim()) {
-        listItem.textContent = currentText;
-      } else {
-        listItem.innerHTML = "<br>";
-      }
-
-      list.appendChild(listItem);
-
-      // Replace the current block with the list
-      blockElement.parentElement.replaceChild(list, blockElement);
-
-      // Position cursor at the end of the list item
-      setTimeout(() => {
-        const newSel = window.getSelection();
-        if (newSel && listItem) {
-          const newRange = document.createRange();
-          newRange.selectNodeContents(listItem);
-          newRange.collapse(false);
-          newSel.removeAllRanges();
-          newSel.addRange(newRange);
-          editorRef.current?.focus();
-        }
-        handleContentChange();
-      }, 10);
-    }
+    setTimeout(() => {
+      handleContentChange();
+      saveActiveSelection();
+    }, 50);
   };
 
   // Handle keyboard shortcuts
@@ -1420,7 +1077,6 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   };
 
   const handleSlashMenuSelect = (command: string, value?: string) => {
-    /* console.log("🔽 Slash menu select:", { command, value }); */
     if (!editorRef.current) return;
 
     setShowSlashMenu(false);
@@ -1431,12 +1087,10 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
     // Get the current selection
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) {
-      /* console.log("❌ No selection available for slash menu"); */
       return;
     }
 
     if (command === "insertHorizontalRule") {
-      /* console.log("📏 Inserting horizontal rule"); */
       // Special handling for horizontal rule
       const range = sel.getRangeAt(0);
       const hr = document.createElement("hr");
@@ -1455,196 +1109,13 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
       sel.removeAllRanges();
       sel.addRange(newRange);
     } else if (command === "formatBlock" && value) {
-      /* console.log("📝 Format block:", value); */
-      // Handle block formatting (headings, quotes, code blocks)
-      const range = sel.getRangeAt(0);
-      let currentNode = range.startContainer;
-
-      // Find the current block element
-      if (currentNode.nodeType === Node.TEXT_NODE) {
-        currentNode = currentNode.parentElement || currentNode;
-      }
-
-      // Find the closest block element
-      let blockElement: Element | null = null;
-      while (currentNode && currentNode !== editorRef.current) {
-        if (
-          currentNode instanceof Element &&
-          [
-            "P",
-            "DIV",
-            "H1",
-            "H2",
-            "H3",
-            "H4",
-            "H5",
-            "H6",
-            "BLOCKQUOTE",
-            "PRE",
-          ].includes(currentNode.tagName)
-        ) {
-          blockElement = currentNode;
-          break;
-        }
-        const parent = currentNode.parentElement;
-        if (!parent) break;
-        currentNode = parent;
-      }
-
-      // If no block element found, create one
-      if (!blockElement) {
-        blockElement = document.createElement("p");
-        const range = sel.getRangeAt(0);
-        const textNode = range.startContainer;
-        if (textNode.nodeType === Node.TEXT_NODE && textNode.parentNode) {
-          textNode.parentNode.insertBefore(blockElement, textNode);
-          blockElement.appendChild(textNode);
-        }
-      }
-
-      if (blockElement && blockElement.parentElement) {
-        // Get current content (text only, no HTML)
-        const currentText = blockElement.textContent || "";
-
-        // Create new element with the desired tag
-        const newElement = document.createElement(value.toUpperCase());
-
-        // Add the text content (this ensures the text is preserved)
-        newElement.textContent = currentText;
-
-        // Add appropriate classes for styling
-        if (value === "blockquote") {
-          newElement.className =
-            "border-l-4 border-primary/30 pl-6 italic my-4";
-        } else if (value === "pre") {
-          newElement.className =
-            "bg-muted border border-border/20 rounded-lg p-4 font-mono text-sm overflow-x-auto my-4 whitespace-pre-wrap";
-          newElement.style.whiteSpace = "pre-wrap";
-          newElement.style.wordBreak = "break-word";
-          newElement.style.overflowWrap = "break-word";
-        } else if (value.match(/^h[1-6]$/)) {
-          const headingClasses = {
-            h1: "text-3xl font-bold mt-8 mb-4",
-            h2: "text-2xl font-semibold mt-6 mb-3",
-            h3: "text-xl font-semibold mt-4 mb-2",
-            h4: "text-lg font-medium mt-3 mb-2",
-            h5: "text-base font-medium mt-2 mb-1",
-            h6: "text-sm font-medium mt-2 mb-1",
-          };
-          newElement.className =
-            headingClasses[value as keyof typeof headingClasses] || "";
-        }
-
-        // If the element is empty, add a placeholder
-        if (!currentText.trim()) {
-          newElement.innerHTML = "<br>";
-        }
-
-        // Replace the current element
-        blockElement.parentElement.replaceChild(newElement, blockElement);
-
-        // Position cursor at the end of the new element
-        setTimeout(() => {
-          const newSel = window.getSelection();
-          if (newSel && newElement) {
-            const newRange = document.createRange();
-            newRange.selectNodeContents(newElement);
-            newRange.collapse(false);
-            newSel.removeAllRanges();
-            newSel.addRange(newRange);
-            editorRef.current?.focus();
-          }
-        }, 10);
-      }
+      formatText("formatBlock", value);
     } else if (
       command === "insertUnorderedList" ||
       command === "insertOrderedList"
     ) {
-      /* console.log("📋 Creating list:", command); */
-      // Handle lists from slash menu
       const listType = command === "insertUnorderedList" ? "ul" : "ol";
-      const range = sel.getRangeAt(0);
-      let currentNode = range.startContainer;
-
-      // Find the current block element
-      if (currentNode.nodeType === Node.TEXT_NODE) {
-        currentNode = currentNode.parentElement || currentNode;
-      }
-
-      let blockElement: Element | null = null;
-      while (currentNode && currentNode !== editorRef.current) {
-        if (
-          currentNode instanceof Element &&
-          [
-            "P",
-            "DIV",
-            "H1",
-            "H2",
-            "H3",
-            "H4",
-            "H5",
-            "H6",
-            "BLOCKQUOTE",
-            "PRE",
-          ].includes(currentNode.tagName)
-        ) {
-          blockElement = currentNode;
-          break;
-        }
-        const parent = currentNode.parentElement;
-        if (!parent) break;
-        currentNode = parent;
-      }
-
-      if (blockElement && blockElement.parentElement) {
-        // Get current text content
-        const currentText = blockElement.textContent || "";
-
-        // Create list structure
-        const list = document.createElement(listType);
-        const listItem = document.createElement("li");
-
-        // Add proper CSS classes for styling
-        if (listType === "ul") {
-          list.className = "list-disc pl-6 my-4";
-        } else {
-          list.className = "list-decimal pl-6 my-4";
-        }
-
-        listItem.className = "my-1";
-
-        // Set content
-        if (currentText.trim()) {
-          listItem.textContent = currentText;
-        } else {
-          listItem.innerHTML = "<br>";
-        }
-
-        list.appendChild(listItem);
-
-        // Replace the current block with the list
-        blockElement.parentElement.replaceChild(list, blockElement);
-
-        // Move cursor to the list item
-        setTimeout(() => {
-          const newSel = window.getSelection();
-          if (newSel) {
-            const newRange = document.createRange();
-            newRange.selectNodeContents(listItem);
-            newRange.collapse(false);
-            newSel.removeAllRanges();
-            newSel.addRange(newRange);
-            editorRef.current?.focus();
-          }
-        }, 10);
-      }
-    } else {
-      /* console.log(
-        "❓ Unknown slash menu command:",
-        command,
-        "with value:",
-        value
-      ); */
+      createList(listType);
     }
 
     // Update content
@@ -1950,6 +1421,58 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
     };
   };
 
+  // Undo/Redo handlers
+  const handleUndo = () => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand("undo");
+    setTimeout(() => handleContentChange(), 10);
+  };
+
+  const handleRedo = () => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand("redo");
+    setTimeout(() => handleContentChange(), 10);
+  };
+
+  // Zoom controls
+  const handleZoomIn = () => setZoomLevel((z) => Math.min(200, z + 10));
+  const handleZoomOut = () => setZoomLevel((z) => Math.max(50, z - 10));
+
+  // Text alignment
+  const handleAlignment = (alignment: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    const cmd =
+      alignment === "justify"
+        ? "justifyFull"
+        : `justify${alignment.charAt(0).toUpperCase() + alignment.slice(1)}`;
+    document.execCommand(cmd);
+    setTimeout(() => handleContentChange(), 10);
+  };
+
+  // Text highlight
+  const handleHighlight = () => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+    document.execCommand("hiliteColor", false, "#fef08a");
+    setTimeout(() => handleContentChange(), 10);
+  };
+
+  // Fullscreen toggle
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.();
+      setIsFullscreen(false);
+    }
+  };
+
   // Font family options
   const fontFamilies = {
     system: "font-sans",
@@ -1981,31 +1504,10 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
 
   return (
     <>
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-          * {
-            box-shadow: none !important;
-          }
-          *::before, *::after {
-            box-shadow: none !important;
-          }
-          .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
-            box-shadow: none !important;
-          }
-          button {
-            box-shadow: none !important;
-          }
-          div {
-            box-shadow: none !important;
-          }
-        `,
-        }}
-      />
-      <div className="min-h-screen bg-gradient-to-br from-background via-muted/5 to-muted/20 relative">
+      <div className="min-h-screen flex flex-col bg-[#f5f6f8] dark:bg-[#0f0f10] transition-colors pb-12">
         {/* Top bar - hidden from print */}
-        <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl print:hidden">
-          <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="bg-white dark:bg-[#1a1b1e] border-b border-border/60 print:hidden shrink-0">
+          <div className="max-w-screen-xl mx-auto px-6 py-2 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Button
                 variant="ghost"
@@ -2017,7 +1519,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                     router.push("/");
                   }
                 }}
-                className="h-11 w-11 hover:scale-105 transition-all duration-200 hover:bg-primary/10 rounded-xl"
+                className="h-9 w-9 shrink-0 rounded-lg hover:bg-accent"
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
@@ -2028,7 +1530,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={startTitleEdit}
-                      className="text-2xl font-bold px-2 py-1 rounded-lg transition-colors hover:bg-accent/20"
+                      className="text-lg font-semibold px-2 py-0.5 rounded-md hover:bg-accent/50 transition-colors truncate max-w-[280px] md:max-w-[400px] text-foreground"
                       title="Click to edit title"
                     >
                       {note.title || "Untitled Note"}
@@ -2050,7 +1552,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                         setTempTitle(e.target.value)
                       }
                       placeholder="Untitled Note"
-                      className={`border-0 bg-transparent text-2xl font-bold px-2 py-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-0 placeholder:text-muted-foreground/50 transition-all duration-200 rounded-lg ${
+                      className={`border-0 bg-transparent text-lg font-semibold px-2 py-0.5 focus-visible:ring-1 focus-visible:ring-primary rounded-md ${
                         !tempTitle.trim()
                           ? "text-red-500 bg-red-50 dark:bg-red-900/20"
                           : ""
@@ -2085,7 +1587,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                             cancelTitleEdit();
                           }
                         }}
-                        className="h-8 w-8 p-0 hover:bg-green-100 hover:text-green-700 transition-colors"
+                        className="h-8 w-8 p-0 hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-950 dark:hover:text-green-300 transition-colors"
                         title="Confirm changes (Enter)"
                         disabled={!tempTitle.trim()}
                       >
@@ -2095,7 +1597,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                         variant="ghost"
                         size="sm"
                         onClick={cancelTitleEdit}
-                        className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-700 transition-colors"
+                        className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-950 dark:hover:text-red-300 transition-colors"
                         title="Cancel changes (Escape)"
                       >
                         <X className="h-4 w-4" />
@@ -2136,6 +1638,11 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                 Share
               </Button>
 
+              <AnimatedThemeToggler
+                className="relative rounded-full w-9 h-9 flex items-center justify-center border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20 transition-all duration-200"
+                aria-label="Toggle theme"
+              />
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -2167,217 +1674,300 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                       />
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() =>
-                      setTheme(
-                        theme === "light"
-                          ? "dark"
-                          : theme === "dark"
-                          ? "system"
-                          : "light"
-                      )
-                    }
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center">
-                      {theme === "light" ? (
-                        <Sun className="h-4 w-4 mr-2" />
-                      ) : theme === "dark" ? (
-                        <Moon className="h-4 w-4 mr-2" />
-                      ) : (
-                        <Monitor className="h-4 w-4 mr-2" />
-                      )}
-                      Theme
-                    </div>
-                    <span className="text-sm text-muted-foreground capitalize">
-                      {theme || "system"}
-                    </span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <Type className="h-4 w-4 mr-2" />
-                    Font: {note.font_family}
-                  </DropdownMenuItem>
+
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
         </div>
 
-        {/* Formatting Toolbar */}
-        <div
-          className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg print:hidden"
-          style={{ boxShadow: "none !important", filter: "drop-shadow(none)" }}
-        >
-          <div
-            className="max-w-4xl mx-auto px-8 py-3"
-            style={{
-              boxShadow: "none !important",
-              filter: "drop-shadow(none)",
-            }}
-          >
-            <div
-              className="flex items-center justify-between"
-              style={{
-                boxShadow: "none !important",
-                filter: "drop-shadow(none)",
-              }}
-            >
-              <div className="flex items-center gap-3">
-                {/* Format Buttons */}
-                <div
-                  className="flex items-center gap-1 bg-muted/50 rounded-lg p-1"
-                  style={{
-                    boxShadow: "none !important",
-                    filter: "drop-shadow(none)",
-                  }}
+        {/* Formatting Toolbar - Centered minimal Google Docs style */}
+        <div className="sticky top-0 z-40 bg-white dark:bg-[#1a1b1e] border-b border-border/60 shadow-sm print:hidden shrink-0">
+          <div className="max-w-screen-xl mx-auto px-4 py-1.5 flex items-center justify-center gap-2 overflow-x-auto select-none">
+            <div className="flex items-center gap-0.5 bg-muted/20 dark:bg-muted/10 rounded-lg p-0.5 border border-border/20">
+              {/* Group 1: Undo/Redo */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleUndo}
+                className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                title="Undo"
+              >
+                <Undo2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleRedo}
+                className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                title="Redo"
+              >
+                <Redo2 className="h-4 w-4" />
+              </Button>
+
+              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
+
+              {/* Group 2: Zoom */}
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleZoomOut}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Zoom Out"
                 >
-                  <button
-                    onClick={() => formatText("bold")}
-                    className="p-2 hover:bg-accent rounded-md transition-colors"
-                    title="Bold"
-                  >
-                    <Bold className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => formatText("italic")}
-                    className="p-2 hover:bg-accent rounded-md transition-colors"
-                    title="Italic"
-                  >
-                    <Italic className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => formatText("underline")}
-                    className="p-2 hover:bg-accent rounded-md transition-colors"
-                    title="Underline"
-                  >
-                    <Underline className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => formatText("strikeThrough")}
-                    className="p-2 hover:bg-accent rounded-md transition-colors"
-                    title="Strikethrough"
-                  >
-                    <Strikethrough className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {/* Heading Buttons */}
-                <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
-                  <button
-                    onClick={() => formatText("formatBlock", "h1")}
-                    className="px-2 py-2 hover:bg-accent rounded-md transition-colors text-sm font-medium"
-                    title="Heading 1"
-                  >
-                    H1
-                  </button>
-                  <button
-                    onClick={() => formatText("formatBlock", "h2")}
-                    className="px-2 py-2 hover:bg-accent rounded-md transition-colors text-sm font-medium"
-                    title="Heading 2"
-                  >
-                    H2
-                  </button>
-                  <button
-                    onClick={() => formatText("formatBlock", "h3")}
-                    className="px-2 py-2 hover:bg-accent rounded-md transition-colors text-sm font-medium"
-                    title="Heading 3"
-                  >
-                    H3
-                  </button>
-                  <button
-                    onClick={() => formatText("formatBlock", "h4")}
-                    className="px-2 py-2 hover:bg-accent rounded-md transition-colors text-sm font-medium"
-                    title="Heading 4"
-                  >
-                    H4
-                  </button>
-                  <button
-                    onClick={() => formatText("formatBlock", "p")}
-                    className="px-2 py-2 hover:bg-accent rounded-md transition-colors text-sm font-medium"
-                    title="Paragraph"
-                  >
-                    P
-                  </button>
-                </div>
-
-                {/* List and Block Buttons */}
-                <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
-                  <button
-                    onClick={() => createList("ul")}
-                    className="p-2 hover:bg-accent rounded-md transition-colors"
-                    title="Bullet List"
-                  >
-                    <List className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => createList("ol")}
-                    className="p-2 hover:bg-accent rounded-md transition-colors"
-                    title="Numbered List"
-                  >
-                    <ListOrdered className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => formatText("formatBlock", "blockquote")}
-                    className="p-2 hover:bg-accent rounded-md transition-colors"
-                    title="Quote"
-                  >
-                    <Quote className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => formatText("formatBlock", "pre")}
-                    className="p-2 hover:bg-accent rounded-md transition-colors"
-                    title="Code Block"
-                  >
-                    <Code className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2 hover:bg-accent rounded-md transition-colors"
-                    title="Insert Image"
-                  >
-                    <ImageIcon className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {/* Save Button */}
-                <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
-                  <button
-                    onClick={saveNote}
-                    disabled={isSaving}
-                    className="p-2 hover:bg-accent rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={isSaving ? "Saving..." : "Save Note (Ctrl+S)"}
-                  >
-                    <Save
-                      className={`h-4 w-4 ${isSaving ? "animate-spin" : ""}`}
-                    />
-                  </button>
-                </div>
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <span className="text-xs font-mono font-semibold px-1 min-w-[40px] text-center select-none text-foreground">
+                  {zoomLevel}%
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleZoomIn}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Zoom In"
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
               </div>
 
-              {/* Share Button - Only visible when scrolled */}
-              {showToolbarShare && (
-                <div className="flex items-center animate-in fade-in-0 slide-in-from-right-2 duration-200">
-                  <button
-                    onClick={() => setShareDialogOpen(true)}
-                    className="p-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors"
-                    title="Share Note"
+              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
+
+              {/* Group 3: Styles Dropdown (Nested heading/paragraph) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 gap-1 rounded hover:bg-accent hover:text-accent-foreground text-xs font-medium text-foreground"
                   >
-                    <Share className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
+                    Style <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48 bg-popover text-popover-foreground border border-border">
+                  <DropdownMenuItem onClick={() => formatText("formatBlock", "p")} className="cursor-pointer">
+                    Normal text
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="cursor-pointer">Headings</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-40 bg-popover text-popover-foreground border border-border">
+                      <DropdownMenuItem onClick={() => formatText("formatBlock", "h1")} className="cursor-pointer">
+                        Heading 1
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => formatText("formatBlock", "h2")} className="cursor-pointer">
+                        Heading 2
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => formatText("formatBlock", "h3")} className="cursor-pointer">
+                        Heading 3
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => formatText("formatBlock", "h4")} className="cursor-pointer">
+                        Heading 4
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
+
+              {/* Group 4: Text Style Controls */}
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => formatText("bold")}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Bold"
+                >
+                  <Bold className="h-4 w-4 font-bold" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => formatText("italic")}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Italic"
+                >
+                  <Italic className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => formatText("underline")}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Underline"
+                >
+                  <Underline className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => formatText("strikeThrough")}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Strikethrough"
+                >
+                  <Strikethrough className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleHighlight}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground relative"
+                  title="Highlight Text"
+                >
+                  <Highlighter className="h-4 w-4 text-amber-500" />
+                  <span className="absolute bottom-1 right-1 w-2 h-1 bg-amber-400 rounded-full" />
+                </Button>
+              </div>
+
+              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
+
+              {/* Group 5: Text Alignment */}
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleAlignment("left")}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Align Left"
+                >
+                  <AlignLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleAlignment("center")}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Align Center"
+                >
+                  <AlignCenter className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleAlignment("right")}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Align Right"
+                >
+                  <AlignRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleAlignment("justify")}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Justify"
+                >
+                  <AlignJustify className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
+
+              {/* Group 6: Blocks & Lists Dropdown (Nested list types) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 gap-1 rounded hover:bg-accent hover:text-accent-foreground text-xs font-medium text-foreground"
+                    title="Lists & Blocks"
+                  >
+                    Blocks <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48 bg-popover text-popover-foreground border border-border">
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="cursor-pointer">Lists</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-40 bg-popover text-popover-foreground border border-border">
+                      <DropdownMenuItem onClick={() => createList("ul")} className="cursor-pointer">
+                        Bullet List
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => createList("ol")} className="cursor-pointer">
+                        Numbered List
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="cursor-pointer">Blocks</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-40 bg-popover text-popover-foreground border border-border">
+                      <DropdownMenuItem onClick={() => formatText("formatBlock", "blockquote")} className="cursor-pointer">
+                        Blockquote
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => formatText("formatBlock", "pre")} className="cursor-pointer">
+                        Code Block
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
+
+              {/* Group 7: Actions */}
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    const url = prompt("Enter URL:");
+                    if (url) formatText("createLink", url);
+                  }}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Insert Link"
+                >
+                  <Link className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Insert Image"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleFullscreen}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
+                  title="Toggle Fullscreen"
+                >
+                  {isFullscreen ? (
+                    <Minimize2 className="h-4 w-4" />
+                  ) : (
+                    <Maximize2 className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={saveNote}
+                  disabled={isSaving}
+                  className="h-8 w-8 rounded hover:bg-accent hover:text-primary text-primary"
+                  title={isSaving ? "Saving..." : "Save Note (Ctrl+S)"}
+                >
+                  <Save className={`h-4 w-4 ${isSaving ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Main Editor Container */}
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          {/* Modern editor container */}
-          <div className="bg-card rounded-3xl border border-border/50 backdrop-blur-sm print:border-0 print:rounded-none relative">
-            {/* Editor content with focus ring only on the editor area */}
-            <div className="relative">
+        {/* Editor Area with A4 Centered page design */}
+        <div className="flex-1 overflow-auto p-4 md:p-8 flex justify-center bg-[#f5f6f8] dark:bg-[#0f0f10] transition-colors pb-24">
+          <div
+            className="w-full max-w-[850px] transition-all duration-200 origin-top shadow-[0_4px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)] bg-white dark:bg-[#1a1b1e] border border-border/40 rounded-xl relative min-h-[29.7cm] flex flex-col"
+            style={{
+              transform: `scale(${zoomLevel / 100})`,
+            }}
+          >
+            {/* Editor content */}
+            <div className="relative flex-1 flex flex-col p-10 md:p-16">
               <div
                 ref={editorRef}
                 contentEditable
@@ -2393,7 +1983,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                 onMouseUp={handleSelection}
                 onKeyUp={handleSelection}
                 className={cn(
-                  "min-h-[75vh] focus:outline-none prose prose-lg max-w-none w-full",
+                  "flex-1 focus:outline-none prose prose-lg max-w-none w-full text-foreground dark:text-[#e3e3e3] text-left [&_*]:text-left !bg-transparent",
                   fontFamilies[note.font_family],
                   "prose-headings:scroll-mt-16",
                   "prose-h1:text-4xl prose-h1:font-bold prose-h1:mt-8 prose-h1:mb-4 prose-h1:text-foreground",
@@ -2402,12 +1992,12 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                   "prose-h4:text-xl prose-h4:font-medium prose-h4:mt-3 prose-h4:mb-2 prose-h4:text-foreground",
                   "prose-h5:text-lg prose-h5:font-medium prose-h5:mt-2 prose-h5:mb-1 prose-h5:text-foreground",
                   "prose-h6:text-base prose-h6:font-medium prose-h6:mt-2 prose-h6:mb-1 prose-h6:text-foreground",
-                  "prose-p:leading-relaxed prose-p:text-foreground prose-p:mb-4",
-                  "prose-strong:text-foreground prose-em:text-foreground",
-                  "prose-li:my-1 prose-li:text-foreground",
-                  "prose-blockquote:border-l-4 prose-blockquote:border-primary/40 prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-muted-foreground prose-blockquote:bg-muted/20 prose-blockquote:py-2 prose-blockquote:rounded-r-lg prose-blockquote:my-4",
-                  "prose-code:bg-muted/60 prose-code:text-primary prose-code:px-2 prose-code:py-1 prose-code:rounded prose-code:text-sm prose-code:font-mono",
-                  "prose-pre:bg-muted/60 prose-pre:border prose-pre:border-border/30 prose-pre:rounded-xl prose-pre:p-4 prose-pre:my-4 prose-pre:text-sm prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words",
+                  "prose-p:leading-relaxed prose-p:text-foreground prose-p:mb-4 dark:prose-p:text-[#e3e3e3]",
+                  "prose-strong:text-foreground prose-em:text-foreground dark:prose-strong:text-[#ffffff]",
+                  "prose-li:my-1 prose-li:text-foreground dark:prose-li:text-[#e3e3e3]",
+                  "prose-blockquote:border-l-4 prose-blockquote:border-primary/40 prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-muted-foreground prose-blockquote:py-2 prose-blockquote:rounded-r-lg prose-blockquote:my-4",
+                  "prose-code:text-primary prose-code:px-2 prose-code:py-1 prose-code:rounded prose-code:text-sm prose-code:font-mono",
+                  "prose-pre:border prose-pre:border-border/30 prose-pre:rounded-xl prose-pre:p-4 prose-pre:my-4 prose-pre:text-sm prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words",
                   "prose-ul:list-disc prose-ul:pl-6 prose-ol:list-decimal prose-ol:pl-6 prose-li:marker:text-primary/70",
                   "prose-hr:border-border/50 prose-hr:my-8",
                   // Link styling with distinct blue color but default cursor
@@ -2415,7 +2005,6 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                   // Links have default cursor and are not directly clickable
                   "[&_a]:!cursor-default [&_a]:pointer-events-auto [&_a]:select-none",
                   "dark:prose-invert",
-                  "px-10 py-12 text-left [&_*]:text-left",
                   // Enhanced placeholder styles
                   "empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 empty:before:pointer-events-none empty:before:italic empty:before:text-xl",
                   // Smooth focus transition
@@ -2435,37 +2024,35 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
                 }}
               />
             </div>
+          </div>
+        </div>
 
-            {/* Status bar with stats */}
-            <div className="px-8 py-3 border-t border-border/30 bg-gradient-to-r from-background/60 to-muted/10 print:hidden">
-              <div className="flex items-center justify-end gap-6 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <span className="font-medium">Lines:</span>
-                  <span className="text-foreground font-mono">
-                    {stats.lines}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-medium">Words:</span>
-                  <span className="text-foreground font-mono">
-                    {stats.words}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-medium">Sentences:</span>
-                  <span className="text-foreground font-mono">
-                    {stats.sentences}
-                  </span>
-                </div>
-              </div>
-            </div>
+        {/* Status Bar fixed to bottom of screen */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#1a1b1e]/80 backdrop-blur border-t border-border/60 px-6 py-2 flex items-center justify-end gap-6 text-xs text-muted-foreground print:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.03)] dark:shadow-[0_-2px_10px_rgba(0,0,0,0.2)]">
+          <div className="flex items-center gap-1">
+            <span className="font-medium text-muted-foreground">Lines:</span>
+            <span className="text-foreground font-semibold font-mono">
+              {stats.lines}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-medium text-muted-foreground">Words:</span>
+            <span className="text-foreground font-semibold font-mono">
+              {stats.words}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-medium text-muted-foreground">Sentences:</span>
+            <span className="text-foreground font-semibold font-mono">
+              {stats.sentences}
+            </span>
           </div>
         </div>
 
         {/* Selection formatting bubble */}
         {showSelectionBubble && (
           <div
-            className="fixed z-50 bg-card/95 backdrop-blur-sm border border-border/50 rounded-xl p-1.5 flex items-center gap-1 animate-in fade-in-0 zoom-in-95 duration-200"
+            className="fixed z-50 bg-card/95 backdrop-blur-sm border border-border/50 rounded-xl p-1.5 flex items-center gap-1 animate-in fade-in-0 zoom-in-95 duration-200 shadow-md"
             style={{
               left: selectionBubblePos.x - 100,
               top: selectionBubblePos.y,

@@ -569,3 +569,76 @@ export async function deleteSpace(spaceId: string): Promise<void> {
     throw new Error(`Failed to delete space: ${deleteError.message}`);
   }
 }
+
+export async function deleteEntry(entryId: string): Promise<void> {
+  const deviceId = await ensureDeviceId();
+  const supabase = await createServerSupabaseClient();
+
+  // 1. Fetch the entry to check ownership
+  const { data: entry, error: fetchError } = await supabase
+    .from("entries")
+    .select("created_by_device_id, space_id")
+    .eq("id", entryId)
+    .single();
+
+  if (fetchError || !entry) {
+    throw new Error("Entry not found");
+  }
+
+  // 2. Fetch the space to check if the user is the creator of the space
+  const { data: space } = await supabase
+    .from("spaces")
+    .select("creator_device_id")
+    .eq("id", entry.space_id)
+    .single();
+
+  const isEntryCreator = entry.created_by_device_id === deviceId;
+  const isSpaceCreator = space?.creator_device_id === deviceId;
+
+  if (!isEntryCreator && !isSpaceCreator) {
+    throw new Error("Unauthorized to delete this entry");
+  }
+
+  // 3. Delete related files from storage if the entry has assets
+  const { data: fullEntry } = await supabase
+    .from("entries")
+    .select("kind, meta")
+    .eq("id", entryId)
+    .single();
+
+  if (fullEntry && fullEntry.kind === "file" && fullEntry.meta?.items) {
+    const items = fullEntry.meta.items || [];
+    const filePaths = items.map((it: any) => {
+      try {
+        const urlParts = it.url.split("/object/public/files/");
+        if (urlParts.length > 1) {
+          return decodeURIComponent(urlParts[1]);
+        }
+      } catch (err) {
+        console.error("Failed to parse file url for deletion:", err);
+      }
+      return null;
+    }).filter(Boolean);
+
+    if (filePaths.length > 0) {
+      const { error: removeError } = await supabase.storage
+        .from("files")
+        .remove(filePaths);
+
+      if (removeError) {
+        console.error("Failed to remove files from storage:", removeError);
+      }
+    }
+  }
+
+  // 4. Delete the entry row
+  const { error: deleteError } = await supabase
+    .from("entries")
+    .delete()
+    .eq("id", entryId);
+
+  if (deleteError) {
+    throw new Error(`Failed to delete entry: ${deleteError.message}`);
+  }
+}
+

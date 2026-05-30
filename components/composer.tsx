@@ -18,10 +18,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -58,7 +60,7 @@ export function Composer({
 }: ComposerProps) {
   const [text, setText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [drawingOpen, setDrawingOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -259,7 +261,7 @@ export function Composer({
   };
 
   const handleDrawing = () => {
-    setPopoverOpen(false);
+    setDropdownOpen(false);
     setDrawingOpen(true);
   };
 
@@ -292,21 +294,21 @@ export function Composer({
   };
 
   const handleImages = () => {
-    setPopoverOpen(false);
+    setDropdownOpen(false);
     if (multiFileInputRef.current) {
       multiFileInputRef.current.click();
     }
   };
 
   const handlePhoto = () => {
-    setPopoverOpen(false);
+    setDropdownOpen(false);
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
   };
 
   const handleFileUploadClick = () => {
-    setPopoverOpen(false);
+    setDropdownOpen(false);
     if (anyFileInputRef.current) {
       anyFileInputRef.current.value = "";
       anyFileInputRef.current.click();
@@ -314,7 +316,7 @@ export function Composer({
   };
 
   const handleNewNote = async () => {
-    setPopoverOpen(false);
+    setDropdownOpen(false);
 
     // Generate a random note slug and public code
     const noteSlug = Math.random().toString(36).substring(2, 8);
@@ -759,8 +761,8 @@ export function Composer({
   // Shared upload/compression dialog UI
   const uploadDialog = (
     <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md overflow-hidden border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl shadow-black/20 dark:shadow-black/50">
+        <DialogHeader className="sr-only">
           <DialogTitle>
             {uploadStage === "Compressing" && "Preparing images"}
             {uploadStage === "Uploading" && "Uploading"}
@@ -768,64 +770,184 @@ export function Composer({
             {uploadStage === "Error" && "Something went wrong"}
           </DialogTitle>
           <DialogDescription>
-            {uploadStage === "Compressing" &&
-              (uploadTotal > 1
-                ? "We are optimizing your images before upload."
-                : "Optimizing your photo before upload.")}
-            {uploadStage === "Uploading" && "Sending to your space..."}
-            {uploadStage === "Done" && "Upload complete."}
-            {uploadStage === "Error" &&
-              "Please try again or choose smaller images."}
+            {uploadStage === "Compressing" && "Optimizing your images"}
+            {uploadStage === "Uploading" && "Sending to your space"}
+            {uploadStage === "Done" && "Upload complete"}
+            {uploadStage === "Error" && "Please try again"}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <div className="text-sm text-muted-foreground">
-            {uploadTotal > 0 && (
-              <span>
-                {uploadStage === "Compressing" && (
-                  <>
-                    {uploadProcessed} / {uploadTotal} processed
-                  </>
-                )}
-                {uploadStage !== "Compressing" && uploadTotal > 0 && (
-                  <>
-                    {uploadTotal} {uploadTotal === 1 ? "item" : "items"}
-                  </>
-                )}
-              </span>
+        <div className="flex flex-col items-center gap-5 py-6 px-2">
+          {/* Animated icon */}
+          <div className="relative flex items-center justify-center">
+            {uploadStage === "Compressing" && (
+              <div className="relative">
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-orange-500/10 to-amber-500/10 dark:from-orange-500/20 dark:to-amber-500/20 flex items-center justify-center border border-orange-500/10 dark:border-orange-500/20">
+                  <svg
+                    className="h-7 w-7 text-orange-500 dark:text-orange-400"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                </div>
+                {/* Pulsing rings */}
+                <div className="absolute inset-0 rounded-2xl border border-orange-500/20 dark:border-orange-400/30 animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="absolute -inset-2 rounded-3xl border border-orange-500/10 dark:border-orange-400/15 animate-ping" style={{ animationDuration: '2.5s', animationDelay: '0.5s' }} />
+              </div>
+            )}
+            {uploadStage === "Uploading" && (
+              <div className="relative">
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/10 to-blue-500/10 dark:from-primary/20 dark:to-blue-500/20 flex items-center justify-center border border-primary/10 dark:border-primary/20">
+                  <Upload className="h-7 w-7 text-primary" />
+                </div>
+                {/* Orbiting dot */}
+                <div className="absolute inset-[-8px] animate-spin" style={{ animationDuration: '2s' }}>
+                  <div className="h-2.5 w-2.5 rounded-full bg-primary shadow-lg shadow-primary/50 absolute top-0 left-1/2 -translate-x-1/2" />
+                </div>
+                {/* Subtle glow */}
+                <div className="absolute inset-0 rounded-2xl bg-primary/5 dark:bg-primary/10 animate-pulse" />
+              </div>
+            )}
+            {uploadStage === "Done" && (
+              <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-green-500/10 dark:from-emerald-500/20 dark:to-green-500/20 flex items-center justify-center border border-emerald-500/10 dark:border-emerald-500/20">
+                <svg
+                  className="h-8 w-8 text-emerald-500 dark:text-emerald-400"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    strokeDasharray: 30,
+                    strokeDashoffset: 0,
+                    animation: 'checkmark-draw 0.4s ease-out',
+                  }}
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+            )}
+            {uploadStage === "Error" && (
+              <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-red-500/10 to-rose-500/10 dark:from-red-500/20 dark:to-rose-500/20 flex items-center justify-center border border-red-500/10 dark:border-red-500/20">
+                <X className="h-8 w-8 text-red-500 dark:text-red-400" />
+              </div>
+            )}
+            {uploadStage === "Preparing" && (
+              <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center border border-border/50 animate-pulse">
+                <Upload className="h-7 w-7 text-muted-foreground" />
+              </div>
             )}
           </div>
 
-          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-            <div
-              className={cn(
-                "h-2 rounded-full transition-all",
-                uploadStage === "Error"
-                  ? "bg-red-500"
-                  : uploadStage === "Done"
-                    ? "bg-green-500"
-                    : "bg-primary",
-              )}
-              style={{
-                width:
-                  uploadStage === "Compressing" && uploadTotal > 0
-                    ? `${Math.round((uploadProcessed / uploadTotal) * 100)}%`
-                    : uploadStage === "Uploading"
-                      ? "100%"
-                      : uploadStage === "Done"
-                        ? "100%"
-                        : uploadStage === "Error"
-                          ? "100%"
-                          : "0%",
-              }}
-            />
+          {/* Title + description */}
+          <div className="text-center space-y-1.5">
+            <h3 className="text-base font-semibold text-foreground">
+              {uploadStage === "Compressing" && "Preparing images"}
+              {uploadStage === "Uploading" && "Uploading"}
+              {uploadStage === "Done" && "All set!"}
+              {uploadStage === "Error" && "Something went wrong"}
+              {uploadStage === "Preparing" && "Getting ready..."}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {uploadStage === "Compressing" &&
+                (uploadTotal > 1
+                  ? "Optimizing your images before upload"
+                  : "Optimizing your photo before upload")}
+              {uploadStage === "Uploading" && "Sending to your space..."}
+              {uploadStage === "Done" && "Upload complete"}
+              {uploadStage === "Error" &&
+                "Please try again or choose smaller images"}
+              {uploadStage === "Preparing" && "Preparing your files..."}
+            </p>
           </div>
 
-          {uploadMessage && (
-            <div className="text-xs text-muted-foreground">{uploadMessage}</div>
-          )}
+          {/* Progress section */}
+          <div className="w-full space-y-2.5 px-2">
+            {/* Counter */}
+            {uploadTotal > 0 && (
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {uploadStage === "Compressing" && (
+                    <>
+                      {uploadProcessed} of {uploadTotal} processed
+                    </>
+                  )}
+                  {uploadStage !== "Compressing" && uploadTotal > 0 && (
+                    <>
+                      {uploadTotal} {uploadTotal === 1 ? "item" : "items"}
+                    </>
+                  )}
+                </span>
+                {uploadStage === "Compressing" && uploadTotal > 0 && (
+                  <span className="font-medium tabular-nums">
+                    {Math.round((uploadProcessed / uploadTotal) * 100)}%
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Progress bar */}
+            <div className="relative h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all duration-500 ease-out",
+                  uploadStage === "Error"
+                    ? "bg-gradient-to-r from-red-500 to-rose-500"
+                    : uploadStage === "Done"
+                      ? "bg-gradient-to-r from-emerald-500 to-green-500"
+                      : "bg-gradient-to-r from-primary via-primary to-orange-500",
+                )}
+                style={{
+                  width:
+                    uploadStage === "Compressing" && uploadTotal > 0
+                      ? `${Math.round((uploadProcessed / uploadTotal) * 100)}%`
+                      : uploadStage === "Uploading"
+                        ? "100%"
+                        : uploadStage === "Done"
+                          ? "100%"
+                          : uploadStage === "Error"
+                            ? "100%"
+                            : "0%",
+                }}
+              />
+              {/* Shimmer effect on active upload */}
+              {(uploadStage === "Uploading" || uploadStage === "Compressing") && (
+                <div
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent"
+                  style={{
+                    animation: 'shimmer 1.5s ease-in-out infinite',
+                  }}
+                />
+              )}
+            </div>
+
+            {uploadMessage && (
+              <div className="text-xs text-muted-foreground/80 text-center">
+                {uploadMessage}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Inject keyframes */}
+        <style>{`
+          @keyframes checkmark-draw {
+            from { stroke-dashoffset: 30; }
+            to { stroke-dashoffset: 0; }
+          }
+          @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }
+        `}</style>
       </DialogContent>
     </Dialog>
   );
@@ -1084,112 +1206,102 @@ export function Composer({
               {/* Bottom toolbar inside input box */}
               <div className="relative z-10 flex items-center justify-between px-5 pb-4 pt-1 sm:px-7">
                 {/* Left: Add Content */}
-                <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <button
+                <DropdownMenu
+                  open={dropdownOpen}
+                  onOpenChange={setDropdownOpen}
+                >
+                  <DropdownMenuTrigger asChild>
+                    <Button
                       type="button"
-                      className="flex items-center gap-2 h-9 px-3.5 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-all duration-200"
+                      size="icon"
+                      variant="ghost"
+                      className="rounded-full shadow-none"
+                      aria-label="Add content"
                     >
-                      <Plus className="h-4 w-4" />
-                      <span className="hidden sm:inline">Add content</span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-56 p-3 rounded-2xl border-2 shadow-xl shadow-black/10 dark:shadow-black/50"
+                      <Plus size={16} strokeWidth={2} aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    className="pb-2"
                     side="top"
                     align="start"
                     sideOffset={8}
-                    alignOffset={-8}
-                    avoidCollisions={true}
-                    collisionPadding={16}
                   >
-                    <div className="space-y-1.5">
-                      <div className="text-[10px] font-semibold text-muted-foreground/60 tracking-widest px-2 pb-1.5 uppercase">
-                        Create
+                    <DropdownMenuLabel>Add content</DropdownMenuLabel>
+                    <DropdownMenuItem onSelect={handleNewNote}>
+                      <div
+                        className="flex size-8 items-center justify-center rounded-lg border border-blue-500/10 dark:border-blue-500/20 bg-blue-500/5 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                        aria-hidden="true"
+                      >
+                        <FileText size={16} strokeWidth={2} />
                       </div>
-                      <button
-                        onClick={handleNewNote}
-                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                      <div>
+                        <div className="text-sm font-medium">
+                          Rich Text Note
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Create formatted document
+                        </div>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={handleFileUploadClick}>
+                      <div
+                        className="flex size-8 items-center justify-center rounded-lg border border-amber-500/10 dark:border-amber-500/20 bg-amber-500/5 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                        aria-hidden="true"
                       >
-                        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                          <FileText className="h-4.5 w-4.5" />
+                        <FileUp size={16} strokeWidth={2} />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">File Upload</div>
+                        <div className="text-xs text-muted-foreground">
+                          Share documents & files
                         </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-foreground">
-                            Rich Text Note
-                          </div>
-                          <div className="text-[11px] text-muted-foreground leading-tight">
-                            Create formatted document
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                        onClick={handleFileUploadClick}
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={handlePhoto}>
+                      <div
+                        className="flex size-8 items-center justify-center rounded-lg border border-emerald-500/10 dark:border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        aria-hidden="true"
                       >
-                        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition-colors">
-                          <FileUp className="h-4.5 w-4.5" />
+                        <Camera size={16} strokeWidth={2} />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Photo</div>
+                        <div className="text-xs text-muted-foreground">
+                          Capture photo instantly
                         </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-foreground">
-                            File Upload
-                          </div>
-                          <div className="text-[11px] text-muted-foreground leading-tight">
-                            Share documents & files
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={handlePhoto}
-                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={handleImages}>
+                      <div
+                        className="flex size-8 items-center justify-center rounded-lg border border-indigo-500/10 dark:border-indigo-500/20 bg-indigo-500/5 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                        aria-hidden="true"
                       >
-                        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                          <Camera className="h-4.5 w-4.5" />
+                        <ImageIcon size={16} strokeWidth={2} />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Images</div>
+                        <div className="text-xs text-muted-foreground">
+                          Select multiple photos
                         </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-foreground">
-                            Photo
-                          </div>
-                          <div className="text-[11px] text-muted-foreground leading-tight">
-                            Capture photo instantly
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={handleImages}
-                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={handleDrawing}>
+                      <div
+                        className="flex size-8 items-center justify-center rounded-lg border border-purple-500/10 dark:border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                        aria-hidden="true"
                       >
-                        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-                          <ImageIcon className="h-4.5 w-4.5" />
+                        <Paintbrush size={16} strokeWidth={2} />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Drawing</div>
+                        <div className="text-xs text-muted-foreground">
+                          Create on digital canvas
                         </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-foreground">
-                            Images
-                          </div>
-                          <div className="text-[11px] text-muted-foreground leading-tight">
-                            Select multiple photos
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={handleDrawing}
-                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                      >
-                        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">
-                          <Paintbrush className="h-4.5 w-4.5" />
-                        </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-foreground">
-                            Drawing
-                          </div>
-                          <div className="text-[11px] text-muted-foreground leading-tight">
-                            Create on digital canvas
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {/* Right: Send Button + Spark */}
                 <div className="flex items-center gap-2">
@@ -1459,88 +1571,9 @@ export function Composer({
 
       <div
         ref={composerRef}
-        className={`flex items-start gap-3 bg-background/85 dark:bg-background/95 border-2 border-border/50 dark:border-border/80 px-3 py-2 shadow-lg shadow-black/10 dark:shadow-black/40 backdrop-blur-md transition-all duration-300 hover:shadow-xl hover:shadow-black/15 dark:hover:shadow-black/50 hover:border-primary/20 ring-1 ring-inset ring-white/5 dark:ring-white/10 ${
-          isExpanded ? "rounded-2xl" : "rounded-full"
-        }`}
+        className="w-full flex flex-col gap-1.5 bg-white/90 dark:bg-zinc-950/90 border border-zinc-200/85 dark:border-zinc-800/80 px-3.5 py-2.5 shadow-xl shadow-black/5 rounded-[24px] backdrop-blur-xl transition-all duration-300 hover:shadow-2xl hover:shadow-black/10 hover:border-zinc-300 dark:hover:border-zinc-700/80 group"
       >
-        {/* Plus button */}
-        <div className="flex-shrink-0 pt-0.5">
-          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary transition-all duration-200 border border-transparent hover:border-primary/20"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-52 p-2 rounded-2xl border-2 shadow-xl shadow-black/10 dark:shadow-black/50"
-              side="top"
-              align="start"
-              sideOffset={8}
-              alignOffset={-8}
-              avoidCollisions={true}
-              collisionPadding={16}
-            >
-              <div className="space-y-1">
-                <button
-                  onClick={handleNewNote}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                >
-                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                    <FileText className="h-4 w-4" />
-                  </div>
-                  <span className="font-semibold text-foreground">
-                    Rich Text Note
-                  </span>
-                </button>
-                <button
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                  onClick={handleFileUploadClick}
-                >
-                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition-colors">
-                    <FileUp className="h-4 w-4" />
-                  </div>
-                  <span className="font-semibold text-foreground">
-                    File Upload
-                  </span>
-                </button>
-                <button
-                  onClick={handlePhoto}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                >
-                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                    <Camera className="h-4 w-4" />
-                  </div>
-                  <span className="font-semibold text-foreground">Photo</span>
-                </button>
-                <button
-                  onClick={handleImages}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                >
-                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-                    <ImageIcon className="h-4 w-4" />
-                  </div>
-                  <span className="font-semibold text-foreground">Images</span>
-                </button>
-                <button
-                  onClick={handleDrawing}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm hover:bg-accent/80 transition-colors group"
-                >
-                  <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">
-                    <Paintbrush className="h-4 w-4" />
-                  </div>
-                  <span className="font-semibold text-foreground">Drawing</span>
-                </button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        {/* Input area */}
+        {/* Top: Input area */}
         <div className="flex-1 min-w-0 relative">
           <Textarea
             ref={textareaRef}
@@ -1549,35 +1582,162 @@ export function Composer({
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder="Write something..."
-            className="min-h-[32px] max-h-24 resize-none border-0 bg-transparent px-3 py-1.5 text-sm placeholder:text-muted-foreground/60 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
+            className="w-full min-h-[36px] max-h-36 resize-none border-0 bg-transparent px-1 py-0.5 text-[15px] placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none caret-orange-500 text-zinc-850 dark:text-zinc-100 font-normal leading-relaxed"
             disabled={isSubmitting}
             rows={1}
             style={{
               height: "auto",
-              minHeight: "32px",
+              minHeight: "36px",
             }}
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;
               target.style.height = "auto";
-              target.style.height = Math.min(target.scrollHeight, 96) + "px";
+              target.style.height = Math.min(target.scrollHeight, 144) + "px";
             }}
           />
         </div>
 
-        {/* Send button */}
-        {text.trim() && (
-          <div className="flex-shrink-0 pt-0.5">
+        {/* Bottom row: Actions & Buttons */}
+        <div className="flex items-center justify-between">
+          {/* Left: Plus button */}
+          <div className="flex-shrink-0">
+            <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-[12px] border border-zinc-200/80 dark:border-zinc-850 bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-450 dark:text-zinc-500 hover:text-zinc-650 dark:hover:text-zinc-350 transition-all duration-200"
+                  aria-label="Add content"
+                >
+                  <Plus size={18} strokeWidth={1.8} aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="pb-2"
+                side="top"
+                align="start"
+                sideOffset={12}
+              >
+                <DropdownMenuLabel>Add content</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={handleNewNote}>
+                  <div
+                    className="flex size-8 items-center justify-center rounded-lg border border-blue-500/10 dark:border-blue-500/20 bg-blue-500/5 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                    aria-hidden="true"
+                  >
+                    <FileText size={16} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">Rich Text Note</div>
+                    <div className="text-xs text-muted-foreground">
+                      Create formatted document
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleFileUploadClick}>
+                  <div
+                    className="flex size-8 items-center justify-center rounded-lg border border-amber-500/10 dark:border-amber-500/20 bg-amber-500/5 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                    aria-hidden="true"
+                  >
+                    <FileUp size={16} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">File Upload</div>
+                    <div className="text-xs text-muted-foreground">
+                      Share documents & files
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handlePhoto}>
+                  <div
+                    className="flex size-8 items-center justify-center rounded-lg border border-emerald-500/10 dark:border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    aria-hidden="true"
+                  >
+                    <Camera size={16} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">Photo</div>
+                    <div className="text-xs text-muted-foreground">
+                      Capture photo instantly
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleImages}>
+                  <div
+                    className="flex size-8 items-center justify-center rounded-lg border border-indigo-500/10 dark:border-indigo-500/20 bg-indigo-500/5 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                    aria-hidden="true"
+                  >
+                    <ImageIcon size={16} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">Images</div>
+                    <div className="text-xs text-muted-foreground">
+                      Select multiple photos
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleDrawing}>
+                  <div
+                    className="flex size-8 items-center justify-center rounded-lg border border-purple-500/10 dark:border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                    aria-hidden="true"
+                  >
+                    <Paintbrush size={16} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">Drawing</div>
+                    <div className="text-xs text-muted-foreground">
+                      Create on digital canvas
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Right: Close and Send buttons */}
+          <div className="flex items-center gap-3">
+            {/* Close / Clear button */}
+            {text.trim() && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8.5 w-8.5 rounded-full text-zinc-400 hover:text-zinc-650 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all duration-200"
+                onClick={() => setText("")}
+                aria-label="Clear text"
+              >
+                <X size={16} strokeWidth={1.8} />
+              </Button>
+            )}
+
+            {/* Send button */}
             <Button
               type="submit"
               size="icon"
-              disabled={isSubmitting}
-              className="h-7 w-7 rounded-full bg-primary hover:bg-primary/90 shadow-md shadow-black/20 dark:shadow-black/40 hover:shadow-lg hover:shadow-black/25 dark:hover:shadow-black/50 transition-all duration-200"
+              disabled={!text.trim() || isSubmitting}
+              className={`h-9 w-9 rounded-[12px] transition-all duration-300 flex items-center justify-center ${
+                text.trim() && !isSubmitting
+                  ? "cta-button-glow text-white border-none shadow-[0_4px_12px_rgba(255,90,0,0.2)] hover:scale-[1.04] active:scale-[0.96]"
+                  : "bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200/50 dark:border-zinc-800/80 text-zinc-400 dark:text-zinc-600 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              }`}
               onClick={handleSubmit}
+              aria-label="Send"
             >
-              <Send className="h-3 w-3" />
+              <svg
+                className="h-3.5 w-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
             </Button>
           </div>
-        )}
+        </div>
 
         <DynamicDrawingCanvas
           isOpen={drawingOpen}
