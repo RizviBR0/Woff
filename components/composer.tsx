@@ -1326,41 +1326,66 @@ export function Composer({
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Shortcut Badges */}
+          </div>          {/* Shortcut Badges */}
           <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-8 px-2 max-w-full">
+            {/* Create Note Badge */}
             <button
               onClick={handleNewNote}
               type="button"
-              className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-blue-500/5 dark:bg-blue-500/10 hover:bg-blue-500 hover:text-white dark:hover:bg-blue-500 text-blue-600 dark:text-blue-400 transition-all duration-300 border border-blue-500/15 dark:border-blue-500/25 shadow-sm hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5"
+              className="group relative flex items-center gap-2.5 px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-300 bg-blue-500/[0.04] dark:bg-blue-500/[0.02] hover:bg-blue-600 dark:hover:bg-blue-500 text-blue-600 hover:text-white dark:text-blue-400 dark:hover:text-white border border-blue-500/25 dark:border-blue-500/15 shadow-sm hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:-translate-y-0.5 overflow-hidden"
             >
-              <FileText className="h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
-              <span className="whitespace-nowrap">Create note</span>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+              <div className="relative flex items-center gap-2.5">
+                <div className="flex h-5.5 w-5.5 items-center justify-center rounded-full bg-blue-500/10 group-hover:bg-white/20 text-blue-500 group-hover:text-white dark:text-blue-400 dark:group-hover:text-white transition-colors duration-300">
+                  <FileText className="h-3.5 w-3.5 group-hover:scale-110 transition-transform duration-300" />
+                </div>
+                <span className="whitespace-nowrap">Create note</span>
+              </div>
             </button>
+
+            {/* Photo Badge */}
             <button
               onClick={handlePhoto}
               type="button"
-              className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-emerald-500/5 dark:bg-emerald-500/10 hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 text-emerald-600 dark:text-emerald-400 transition-all duration-300 border border-emerald-500/15 dark:border-emerald-500/25 shadow-sm hover:shadow-lg hover:shadow-emerald-500/25 hover:-translate-y-0.5"
+              className="group relative flex items-center gap-2.5 px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-300 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.02] hover:bg-emerald-600 dark:hover:bg-emerald-500 text-emerald-600 hover:text-white dark:text-emerald-400 dark:hover:text-white border border-emerald-500/25 dark:border-emerald-500/15 shadow-sm hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:-translate-y-0.5 overflow-hidden"
             >
-              <Camera className="h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
-              <span className="whitespace-nowrap">Photo</span>
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+              <div className="relative flex items-center gap-2.5">
+                <div className="flex h-5.5 w-5.5 items-center justify-center rounded-full bg-emerald-500/10 group-hover:bg-white/20 text-emerald-500 group-hover:text-white dark:text-emerald-400 dark:group-hover:text-white transition-colors duration-300">
+                  <Camera className="h-3.5 w-3.5 group-hover:scale-110 transition-transform duration-300" />
+                </div>
+                <span className="whitespace-nowrap">Photo</span>
+              </div>
             </button>
+
+            {/* Images Badge */}
             <button
               onClick={handleImages}
               type="button"
-              className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-indigo-500/5 dark:bg-indigo-500/10 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-500 text-indigo-600 dark:text-indigo-400 transition-all duration-300 border border-indigo-500/15 dark:border-indigo-500/25 shadow-sm hover:shadow-lg hover:shadow-indigo-500/25 hover:-translate-y-0.5"
+              className="group relative flex items-center gap-2.5 px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-300 bg-indigo-500/[0.04] dark:bg-indigo-500/[0.02] hover:bg-indigo-600 dark:hover:bg-indigo-500 text-indigo-600 hover:text-white dark:text-indigo-400 dark:hover:text-white border border-indigo-500/25 dark:border-indigo-500/15 shadow-sm hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:-translate-y-0.5 overflow-hidden"
             >
-              <ImageIcon className="h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
-              <span className="whitespace-nowrap">Images</span>
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-violet-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+              <div className="relative flex items-center gap-2.5">
+                <div className="flex h-5.5 w-5.5 items-center justify-center rounded-full bg-indigo-500/10 group-hover:bg-white/20 text-indigo-500 group-hover:text-white dark:text-indigo-400 dark:group-hover:text-white transition-colors duration-300">
+                  <ImageIcon className="h-3.5 w-3.5 group-hover:scale-110 transition-transform duration-300" />
+                </div>
+                <span className="whitespace-nowrap">Images</span>
+              </div>
             </button>
+
+            {/* Draw Badge */}
             <button
               onClick={handleDrawing}
               type="button"
-              className="group flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium bg-purple-500/5 dark:bg-purple-500/10 hover:bg-purple-500 hover:text-white dark:hover:bg-purple-500 text-purple-600 dark:text-purple-400 transition-all duration-300 border border-purple-500/15 dark:border-purple-500/25 shadow-sm hover:shadow-lg hover:shadow-purple-500/25 hover:-translate-y-0.5"
+              className="group relative flex items-center gap-2.5 px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-all duration-300 bg-purple-500/[0.04] dark:bg-purple-500/[0.02] hover:bg-purple-600 dark:hover:bg-purple-500 text-purple-600 hover:text-white dark:text-purple-400 dark:hover:text-white border border-purple-500/25 dark:border-purple-500/15 shadow-sm hover:shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:-translate-y-0.5 overflow-hidden"
             >
-              <Paintbrush className="h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
-              <span className="whitespace-nowrap">Draw</span>
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+              <div className="relative flex items-center gap-2.5">
+                <div className="flex h-5.5 w-5.5 items-center justify-center rounded-full bg-purple-500/10 group-hover:bg-white/20 text-purple-500 group-hover:text-white dark:text-purple-400 dark:group-hover:text-white transition-colors duration-300">
+                  <Paintbrush className="h-3.5 w-3.5 group-hover:scale-110 transition-transform duration-300" />
+                </div>
+                <span className="whitespace-nowrap">Draw</span>
+              </div>
             </button>
           </div>
 
