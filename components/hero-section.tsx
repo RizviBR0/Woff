@@ -428,13 +428,13 @@ export default function HeroSection() {
 
       {/* Main content wrapper */}
       <div className="relative mx-auto flex min-h-[calc(100vh-48px)] max-w-[1300px] items-center px-5 py-10 sm:px-10 lg:px-20">
-        <div className="grid w-full items-center gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
+        <div className="grid w-full items-center gap-10 md:grid-cols-[1.1fr_0.9fr] md:gap-8 lg:gap-16">
           {/* ─── Left Column: Conversion Area ─── */}
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="max-w-[540px]"
+            className="max-w-[540px] md:max-w-[460px] lg:max-w-[540px]"
           >
             {/* Badge */}
             <motion.div
@@ -448,7 +448,8 @@ export default function HeroSection() {
             {/* Headline */}
             <motion.h1
               variants={itemVariants}
-              className="max-w-[500px] text-4xl font-extrabold leading-[1.08] tracking-[-0.04em] sm:text-5xl lg:text-[56px] text-zinc-900 dark:text-white"
+              style={{ lineHeight: 1.15 }}
+              className="max-w-[500px] text-4xl font-extrabold tracking-[-0.04em] sm:text-5xl md:text-4xl lg:text-[56px] text-zinc-900 dark:text-white"
             >
               Drop anything.
               <br />
@@ -461,7 +462,7 @@ export default function HeroSection() {
             {/* Subtext */}
             <motion.p
               variants={itemVariants}
-              className="mt-5 max-w-[460px] text-[15px] leading-relaxed text-zinc-500 dark:text-white/55 sm:text-base"
+              className="mt-5 max-w-[460px] text-[15px] leading-relaxed text-zinc-500 dark:text-white/55 sm:text-base md:text-sm lg:text-base"
             >
               Create a temporary space for files, images, links, notes, and
               code. Share it with anyone using a simple link or room code.
@@ -515,7 +516,7 @@ export default function HeroSection() {
             {/* Compact Feature Cards */}
             <motion.div
               variants={itemVariants}
-              className="mt-10 grid gap-4 sm:grid-cols-3"
+              className="mt-10 grid gap-4 sm:grid-cols-3 md:grid-cols-1 lg:grid-cols-3"
             >
               <FeatureCard
                 icon={<Zap size={16} />}
@@ -549,14 +550,14 @@ export default function HeroSection() {
             variants={cardVariants}
             initial="hidden"
             animate="visible"
-            className="w-full flex justify-center lg:justify-end"
+            className="w-full flex justify-center md:justify-end"
             id="join-room-section"
           >
-            <div className="relative w-full max-w-[420px]">
+            <div className="relative w-full max-w-[420px] md:max-w-[340px] lg:max-w-[420px]">
               {/* Controlled glow behind card */}
               <div className="absolute -inset-6 rounded-[36px] bg-[#ff5a00]/8 dark:bg-[#ff5a00]/12 blur-3xl" />
 
-              <div className="relative rounded-[24px] border border-white/60 dark:border-white/[0.1] bg-white/40 dark:bg-white/[0.04] p-6 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.5)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.05),0_0_60px_rgba(255,90,0,0.05)] backdrop-blur-2xl transition-colors duration-300">
+              <div className="relative rounded-[24px] border border-white/60 dark:border-white/[0.1] bg-white/40 dark:bg-white/[0.04] p-6 sm:p-8 md:p-5 lg:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.5)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.05),0_0_60px_rgba(255,90,0,0.05)] backdrop-blur-2xl transition-colors duration-300">
                 {/* Panel heading */}
                 <div className="flex items-center justify-center gap-2.5 pb-5 mb-5 border-b border-zinc-200/60 dark:border-white/[0.06]">
                   <Users size={16} className="text-[#ff5a00]" />
