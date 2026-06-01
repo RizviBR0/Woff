@@ -146,6 +146,9 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* DNS prefetch for Supabase API */}
         <link rel="dns-prefetch" href="https://supabase.co" />
+        {/* DNS prefetch / preconnect for Picsum (blog cover images) */}
+        <link rel="preconnect" href="https://picsum.photos" />
+        <link rel="preconnect" href="https://fastly.picsum.photos" />
         {/* JSON-LD Structured Data */}
         <script
           type="application/ld+json"

@@ -5,6 +5,7 @@ import { SpaceContainer } from "@/components/space-container";
 import { cookies } from "next/headers";
 import { updateSpaceActivityBySlug } from "@/lib/actions";
 import type { Metadata } from "next";
+import { after } from "next/server";
 
 // Revalidate every 60 seconds for better caching
 export const revalidate = 60;
@@ -65,15 +66,20 @@ export async function generateMetadata({
 export default async function SpacePage({ params }: SpacePageProps) {
   const { slug } = await params;
 
-  // Fetch space + entries and update last activity in parallel!
-  const [data, _] = await Promise.all([
-    getSpaceAndEntries(slug),
-    updateSpaceActivityBySlug(slug),
-  ]);
+  const data = await getSpaceAndEntries(slug);
 
   if (!data) {
     notFound();
   }
+
+  // Defer database write to background, not blocking response
+  after(async () => {
+    try {
+      await updateSpaceActivityBySlug(slug);
+    } catch (e) {
+      console.error("Failed to update space activity:", e);
+    }
+  });
 
   const { space, entries } = data;
 

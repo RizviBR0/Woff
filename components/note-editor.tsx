@@ -65,12 +65,13 @@ import { compressImageAdaptive } from "@/lib/image-compression";
 
 interface NoteEditorProps {
   noteSlug: string;
+  initialNote?: Note | null;
 }
 
-export function NoteEditor({ noteSlug }: NoteEditorProps) {
+export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const router = useRouter();
-  const [note, setNote] = useState<Note | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [note, setNote] = useState<Note | null>(initialNote || null);
+  const [isLoading, setIsLoading] = useState(!initialNote);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">(
     "saved"
@@ -86,7 +87,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
   const [tempTitle, setTempTitle] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
-  const [lastSavedContent, setLastSavedContent] = useState("");
+  const [lastSavedContent, setLastSavedContent] = useState(initialNote?.content || "");
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
 
   const { theme, setTheme } = useTheme();
@@ -171,6 +172,12 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
 
   // Load note from server (via API route to avoid client-side server action calls)
   useEffect(() => {
+    if (initialNote) {
+      setLastSavedContent(initialNote.content || "");
+      setIsLoading(false);
+      return;
+    }
+
     const loadNote = async () => {
       setIsLoading(true);
       try {
@@ -225,7 +232,7 @@ export function NoteEditor({ noteSlug }: NoteEditorProps) {
     };
 
     loadNote();
-  }, [noteSlug, router]);
+  }, [noteSlug, router, initialNote]);
 
   // Helper function to generate short codes
   const generateShortCode = () => {
