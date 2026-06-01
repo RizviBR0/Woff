@@ -141,6 +141,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth" className={almarai.variable}>
       <head>
+        {/* Preconnect to Google Fonts CDN for faster font loading */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* DNS prefetch for Supabase API */}
+        <link rel="dns-prefetch" href="https://supabase.co" />
         {/* JSON-LD Structured Data */}
         <script
           type="application/ld+json"
@@ -148,12 +153,12 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {/* Google Analytics (GA4) */}
+        {/* Google Analytics (GA4) — lazyOnload to avoid blocking FCP/LCP */}
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
-          strategy="afterInteractive"
+          strategy="lazyOnload"
         />
-        <Script id="gtag-init" strategy="afterInteractive">
+        <Script id="gtag-init" strategy="lazyOnload">
           {`
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}

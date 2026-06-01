@@ -3,11 +3,17 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { Upload, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/navbar";
-import { HomepageSections } from "@/components/homepage-sections";
 import HeroSection from "@/components/hero-section";
 import { createSpace } from "@/lib/actions";
+
+// Lazy-load below-the-fold sections so they don't block FCP/LCP
+const HomepageSections = dynamic(() => import("@/components/homepage-sections").then(mod => ({ default: mod.HomepageSections })), {
+  ssr: false,
+});
+
 
 export default function HomePage() {
   const [mounted, setMounted] = useState(false);

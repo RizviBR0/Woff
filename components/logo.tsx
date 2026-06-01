@@ -11,21 +11,39 @@ interface LogoProps {
 }
 
 export function Logo({ width = 120, height = 40, className = "" }: LogoProps) {
-  const { theme, resolvedTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
-  // useEffect only runs on the client, so now we can safely show the UI
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Before mount: show both logos with CSS media query selection
+  // This paints the correct logo immediately on the server without waiting for JS
   if (!mounted) {
-    // Return a placeholder with the same dimensions to prevent layout shift
     return (
-      <div
-        className={`${className}`}
-        style={{ width: `${width}px`, height: `${height}px` }}
-      />
+      <div className={className} style={{ width: `${width}px`, height: `${height}px`, position: 'relative' }}>
+        {/* Light mode logo — hidden in dark mode */}
+        <Image
+          src="/logo_light.svg"
+          alt="Woff Logo"
+          width={width}
+          height={height}
+          className="block dark:hidden"
+          style={{ position: 'absolute', inset: 0 }}
+          priority
+        />
+        {/* Dark mode logo — hidden in light mode */}
+        <Image
+          src="/logo_dark.svg"
+          alt="Woff Logo"
+          width={width}
+          height={height}
+          className="hidden dark:block"
+          style={{ position: 'absolute', inset: 0 }}
+          priority
+        />
+      </div>
     );
   }
 

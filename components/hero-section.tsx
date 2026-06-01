@@ -15,46 +15,6 @@ import {
 } from "lucide-react";
 import { createSpace, validateRoomCode } from "@/lib/actions";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.05,
-    },
-  },
-};
-
-const itemVariants = {
-  hidden: { y: 24, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: {
-      type: "spring" as const,
-      stiffness: 90,
-      damping: 14,
-    },
-  },
-};
-
-const cardVariants = {
-  hidden: { x: 32, opacity: 0, scale: 0.96 },
-  visible: {
-    x: 0,
-    opacity: 1,
-    scale: 1,
-    transition: {
-      type: "spring" as const,
-      stiffness: 80,
-      damping: 15,
-      delay: 0.15,
-    },
-  },
-};
 
 export default function HeroSection() {
   const [pinDigits, setPinDigits] = useState<string[]>(Array(4).fill(""));
@@ -430,26 +390,21 @@ export default function HeroSection() {
       <div className="relative mx-auto flex min-h-[calc(100vh-48px)] max-w-[1300px] items-center px-5 py-10 sm:px-10 lg:px-20">
         <div className="grid w-full items-center gap-10 md:grid-cols-[1.1fr_0.9fr] md:gap-8 lg:gap-16">
           {/* ─── Left Column: Conversion Area ─── */}
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="max-w-[540px] md:max-w-[460px] lg:max-w-[540px]"
-          >
+          {/* CSS animations instead of framer-motion for instant server paint */}
+          <div className="max-w-[540px] md:max-w-[460px] lg:max-w-[540px] hero-stagger-container">
             {/* Badge */}
-            <motion.div
-              variants={itemVariants}
-              className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/25 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] backdrop-blur-md mb-7"
+            <div
+              className="hero-stagger-item inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/25 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] backdrop-blur-md mb-7"
+              style={{ animationDelay: '0ms' }}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
               No sign-up required
-            </motion.div>
+            </div>
 
-            {/* Headline */}
-            <motion.h1
-              variants={itemVariants}
-              style={{ lineHeight: 1.15 }}
-              className="max-w-[500px] text-4xl font-extrabold tracking-[-0.04em] sm:text-5xl md:text-4xl lg:text-[56px] text-zinc-900 dark:text-white"
+            {/* Headline — LCP element: renders immediately, no opacity:0 */}
+            <h1
+              className="hero-stagger-item max-w-[500px] text-4xl font-extrabold tracking-[-0.04em] sm:text-5xl md:text-4xl lg:text-[56px] text-zinc-900 dark:text-white"
+              style={{ lineHeight: 1.15, animationDelay: '80ms' }}
             >
               Drop anything.
               <br />
@@ -457,21 +412,21 @@ export default function HeroSection() {
               <span className="bg-gradient-to-r from-[#ff7d3b] via-[#ff5a00] to-[#ff3600] bg-clip-text text-transparent">
                 instantly.
               </span>
-            </motion.h1>
+            </h1>
 
             {/* Subtext */}
-            <motion.p
-              variants={itemVariants}
-              className="mt-5 max-w-[460px] text-[15px] leading-relaxed text-zinc-500 dark:text-white/55 sm:text-base md:text-sm lg:text-base"
+            <p
+              className="hero-stagger-item mt-5 max-w-[460px] text-[15px] leading-relaxed text-zinc-500 dark:text-white/55 sm:text-base md:text-sm lg:text-base"
+              style={{ animationDelay: '160ms' }}
             >
               Create a temporary space for files, images, links, notes, and
               code. Share it with anyone using a simple link or room code.
-            </motion.p>
+            </p>
 
             {/* CTA Buttons — directly under subtitle */}
-            <motion.div
-              variants={itemVariants}
-              className="mt-8 flex flex-wrap items-center gap-3"
+            <div
+              className="hero-stagger-item mt-8 flex flex-wrap items-center gap-3"
+              style={{ animationDelay: '240ms' }}
             >
               <button
                 onClick={handleCreateSpace}
@@ -511,12 +466,12 @@ export default function HeroSection() {
                 <Users size={18} />
                 Join Room
               </button>
-            </motion.div>
+            </div>
 
             {/* Compact Feature Cards */}
-            <motion.div
-              variants={itemVariants}
-              className="mt-10 grid gap-4 sm:grid-cols-3 md:grid-cols-1 lg:grid-cols-3"
+            <div
+              className="hero-stagger-item mt-10 grid gap-4 sm:grid-cols-3 md:grid-cols-1 lg:grid-cols-3"
+              style={{ animationDelay: '320ms' }}
             >
               <FeatureCard
                 icon={<Zap size={16} />}
@@ -533,24 +488,21 @@ export default function HeroSection() {
                 title="Instant access"
                 text="Create a room and share the link or room code."
               />
-            </motion.div>
+            </div>
 
             {/* Social proof / clarity line */}
-            <motion.p
-              variants={itemVariants}
-              className="mt-8 text-xs text-zinc-400 dark:text-white/35"
+            <p
+              className="hero-stagger-item mt-8 text-xs text-zinc-400 dark:text-white/35"
+              style={{ animationDelay: '400ms' }}
             >
               Temporary spaces for files, images, links, notes, and code. No
               account needed.
-            </motion.p>
-          </motion.div>
+            </p>
+          </div>
 
           {/* ─── Right Column: Product Mockup Panel ─── */}
-          <motion.div
-            variants={cardVariants}
-            initial="hidden"
-            animate="visible"
-            className="w-full flex justify-center md:justify-end"
+          <div
+            className="hero-card-enter w-full flex justify-center md:justify-end"
             id="join-room-section"
           >
             <div className="relative w-full max-w-[420px] md:max-w-[340px] lg:max-w-[420px]">
@@ -655,7 +607,7 @@ export default function HeroSection() {
                 </button>
               </div>
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>
