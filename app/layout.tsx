@@ -17,11 +17,11 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://woff.space";
 
 export const metadata: Metadata = {
   title: {
-    default: "Woff – Simple Shareable Spaces",
-    template: "%s | Woff",
+    default: "Woff Space: Instant Note Sharing Without Sign Up",
+    template: "%s | Woff Space",
   },
   description:
-    "The fastest way to share notes, files, images, and code snippets. Create an instant workspace in seconds — no sign-up, no friction.",
+    "Create a shareable space for notes, files, images, markdown, and code snippets in seconds. No login required.",
   keywords: [
     "file sharing",
     "note sharing",
@@ -58,16 +58,16 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: siteUrl,
-    siteName: "Woff",
-    title: "Woff – Simple Shareable Spaces",
+    siteName: "Woff Space",
+    title: "Woff Space: Instant Note Sharing Without Sign Up",
     description:
-      "Create an instant workspace to share notes, files, images, and code snippets. No sign-up required.",
+      "Create a shareable space for notes, files, images, markdown, and code snippets in seconds.",
     images: [
       {
         url: `${siteUrl}/og-image.png`,
         width: 1200,
         height: 630,
-        alt: "Woff – Simple Shareable Spaces",
+        alt: "Woff Space: Instant Note Sharing Without Sign Up",
       },
     ],
   },
@@ -75,9 +75,9 @@ export const metadata: Metadata = {
   // Twitter Card
   twitter: {
     card: "summary_large_image",
-    title: "Woff – Simple Shareable Spaces",
+    title: "Woff Space: Instant Note Sharing Without Sign Up",
     description:
-      "Instantly share notes, files, images, and code snippets. No sign-up, no friction.",
+      "Create a shareable space for notes, files, images, markdown, and code snippets in seconds.",
     images: [`${siteUrl}/og-image.png`],
     creator: "@woffspace",
   },
@@ -97,11 +97,11 @@ export const metadata: Metadata = {
 
   // Alternate / Canonical
   alternates: {
-    canonical: siteUrl,
+    canonical: "/",
   },
 
   // App-specific
-  applicationName: "Woff",
+  applicationName: "Woff Space",
   category: "productivity",
 };
 

@@ -60,6 +60,11 @@ export async function generateMetadata({
   return {
     title: space?.title ? `${space.title} - Woff` : `Space ${slug} - Woff`,
     description: "A shared space on Woff - simple shareable spaces",
+    robots: {
+      index: false,
+      follow: false,
+      nocache: true,
+    },
   };
 }
 

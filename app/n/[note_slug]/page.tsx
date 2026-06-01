@@ -18,6 +18,11 @@ export async function generateMetadata({
     description: note?.content 
       ? note.content.replace(/<[^>]*>/g, "").substring(0, 150)
       : "Rich text editor for notes",
+    robots: {
+      index: false,
+      follow: false,
+      nocache: true,
+    },
   };
 }
 
