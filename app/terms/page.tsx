@@ -48,7 +48,7 @@ export default function TermsPage() {
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-foreground">1. Acceptance of Terms</h2>
             <p className="text-muted-foreground leading-relaxed">
-              By accessing and using Woff Space (the "Service"), you agree to be bound by these terms. If you do not agree to all terms, please do not use the website or its facilities.
+              By accessing and using Woff Space (the &quot;Service&quot;), you agree to be bound by these terms. If you do not agree to all terms, please do not use the website or its facilities.
             </p>
           </div>
 
