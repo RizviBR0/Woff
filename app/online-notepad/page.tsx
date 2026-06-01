@@ -1,15 +1,15 @@
-import HomePage from "../page";
+import { OnlineNotepadClient } from "@/components/online-notepad-client";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Online Notepad - Share Notes & Text Instantly | Woff Space",
+  title: "Online Notepad With Shareable Link - Woff Space",
   description:
-    "Free online notepad to write, save, and share text notes instantly without registration. Clean, fast, secure, and accessible on any device.",
+    "Use Woff Space as a fast online notepad with a shareable link. Write, save, and share notes instantly without signup. Free, secure, and cross-device.",
   alternates: {
     canonical: "/online-notepad",
   },
 };
 
 export default function Page() {
-  return <HomePage />;
+  return <OnlineNotepadClient />;
 }
