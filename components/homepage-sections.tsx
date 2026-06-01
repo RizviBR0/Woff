@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { ArrowRight, Mail, Heart, Calendar } from "lucide-react";
+import { Footer } from "@/components/footer";
 
 const BentoGrid = dynamic(() => import("@/components/bento-grid"), {
   ssr: true,
@@ -136,21 +137,8 @@ export function HomepageSections() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-12 border-t border-border bg-background">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2 text-muted-foreground font-medium">
-              Made with
-              <Heart className="w-5 h-5 text-red-500 fill-current" />
-              by the Woff team
-            </div>
-            <div className="text-sm text-muted-foreground font-medium">
-              © 2026 Woff. Simple shareable spaces.
-            </div>
-          </div>
-        </div>
-      </footer>
+      {/* Unified Premium Footer */}
+      <Footer />
     </>
   );
 }

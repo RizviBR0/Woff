@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { blogPosts } from "@/lib/blog";
 import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
 
 export const metadata = {
   title: "Woff Blog • Product Updates, Tips, Stories",
@@ -190,6 +191,7 @@ export default function BlogPage() {
           }}
         />
       </section>
+      <Footer />
     </div>
   );
 }
