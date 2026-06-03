@@ -108,7 +108,7 @@ export function OnlineNotepadClient() {
           Woff Space is the fastest way to write, save, and share text notes
           online.
           <br className="hidden sm:block" />
-          Create a private, secure space in one click with zero sign-up
+          Create a secure space in one click with zero sign-up
           required.
         </p>
 

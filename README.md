@@ -1,157 +1,156 @@
-# Woff - Simple Shareable Spaces
+<div align="center">
 
-Woff is a minimal document sharing application where users can create spaces for text, images, PDFs, and other files. Each space gets a unique short URL for easy sharing.
+# 🟠 Woff Space
 
-## Features
+**Instant sharing for files, notes, images, and code — no sign-up required.**
 
-- **Instant Spaces**: Visit woff.space to automatically create a new space
-- **Short URLs**: Each space gets a unique short URL like `woff.space/r/7aB9K`
-- **Multiple Content Types**: Share text, images, PDFs, and files
-- **Minimal Design**: Clean, distraction-free interface using ShadCN/UI
-- **Real-time Updates**: See new entries appear instantly (planned)
-- **Device-based Authentication**: No signup required, spaces are tied to your device
+[![Live](https://img.shields.io/badge/Live-woff.space-ff5a00?style=for-the-badge&logo=vercel&logoColor=white)](https://woff.space)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)](https://nextjs.org)
+[![Supabase](https://img.shields.io/badge/Supabase-Database-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 
-## Getting Started
+</div>
+
+<div align="center">
+  <img src="public/screenshot_woff_light.jpeg" alt="Woff Space Homepage" width="800" />
+</div>
+<br/>
+<div align="center">
+  <img src="public/screenshot_woff_dark.jpeg" alt="Woff Space Homepage" width="800" />
+</div>
+
+---
+
+## 📖 Overview
+
+**Woff Space** is a minimal, zero-friction sharing platform. Create a temporary space in one click, drop in files, images, notes, or code, and share it instantly via a short room code or link. No accounts, no verification — just fast, secure sharing.
+
+🔗 **Live**: [https://woff.space](https://woff.space)
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer               | Technology                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------------- |
+| **Framework**       | [Next.js 15](https://nextjs.org) (App Router)                                                 |
+| **Language**        | [TypeScript 5](https://www.typescriptlang.org)                                                |
+| **Styling**         | [Tailwind CSS 3](https://tailwindcss.com)                                                     |
+| **UI Components**   | [Radix UI](https://www.radix-ui.com) + [ShadCN/UI](https://ui.shadcn.com)                     |
+| **Database & Auth** | [Supabase](https://supabase.com) (PostgreSQL + Storage + RLS)                                 |
+| **Animations**      | [Framer Motion](https://www.framer.com/motion/)                                               |
+| **Icons**           | [Lucide React](https://lucide.dev) + [React Icons](https://react-icons.github.io/react-icons) |
+| **Deployment**      | [Vercel](https://vercel.com)                                                                  |
+
+---
+
+## ✨ Features
+
+- **Instant Spaces** — Create a shareable space in one click, no sign-up
+- **4-Digit Room Code** — Join any space with a simple 4-digit code
+- **Multi-Content Support** — Share text, images, files, PDFs, and code snippets
+- **Rich Note Editor** — Full-featured editor with slash commands, formatting, and font options
+- **Drag & Drop Upload** — Drop files anywhere on the page to share
+- **QR Code Sharing** — Generate and scan QR codes to share/join spaces
+- **Device-Based Auth** — Sessions tied to your device via secure cookies
+- **Dark/Light Theme** — System-aware theme with manual toggle
+- **Online Notepad** — Dedicated notepad with shareable link
+- **SEO Optimized** — Structured data, meta tags, sitemap, and blog
+- **Responsive Design** — Works across desktop, tablet, and mobile
+- **Analytics** — Google Analytics + Vercel Speed Insights
+
+---
+
+## 📦 Dependencies
+
+### Core
+
+| Package                 | Purpose                          |
+| ----------------------- | -------------------------------- |
+| `next`                  | React framework (App Router)     |
+| `react` / `react-dom`   | UI library                       |
+| `typescript`            | Type safety                      |
+| `@supabase/supabase-js` | Database, auth, and file storage |
+
+### UI & Styling
+
+| Package                        | Purpose                                                          |
+| ------------------------------ | ---------------------------------------------------------------- |
+| `tailwindcss`                  | Utility-first CSS                                                |
+| `@radix-ui/*`                  | Accessible primitives (Dialog, Dropdown, Popover, Tooltip, etc.) |
+| `class-variance-authority`     | Component variant management                                     |
+| `clsx` + `tailwind-merge`      | Class name utilities                                             |
+| `framer-motion`                | Animations and transitions                                       |
+| `lucide-react` / `react-icons` | Icon libraries                                                   |
+| `next-themes`                  | Theme management                                                 |
+| `sonner`                       | Toast notifications                                              |
+
+### Utilities
+
+| Package                           | Purpose                    |
+| --------------------------------- | -------------------------- |
+| `nanoid`                          | Short unique ID generation |
+| `qrcode` / `qr-scanner`           | QR generation and scanning |
+| `date-fns`                        | Date formatting            |
+| `html2canvas` / `jspdf` / `jszip` | Export/download utilities  |
+| `@vercel/speed-insights`          | Performance monitoring     |
+
+### Dev
+
+| Package                         | Purpose            |
+| ------------------------------- | ------------------ |
+| `eslint` + `eslint-config-next` | Linting            |
+| `playwright`                    | End-to-end testing |
+| `postcss`                       | CSS processing     |
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- npm or yarn
-- Supabase account
+- **Node.js** 18+
+- **npm** (or yarn/pnpm)
+- **Supabase** account ([supabase.com](https://supabase.com))
 
 ### Installation
 
-1. Clone the repository:
+1. **Clone the repository**
 
 ```bash
-git clone <repository-url>
-cd woff
+git clone https://github.com/RizviBR0/Woff.git
+cd Woff
 ```
 
-2. Install dependencies:
+2. **Install dependencies**
 
 ```bash
 npm install
 ```
 
-3. Set up environment variables:
-   Copy `.env.local` and add your Supabase credentials:
+3. **Configure environment variables**
+
+Create a `.env.local` file in the root:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url_here
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-4. Set up the database:
+4. **Set up the database**
 
-- Run the SQL commands from `database-schema.md` in your Supabase SQL editor
-- This will create all necessary tables and Row Level Security policies
+Run the SQL schema in your Supabase SQL editor to create all tables and Row Level Security policies.
 
-5. Start the development server:
+5. **Start the dev server**
 
 ```bash
 npm run dev
 ```
 
-The application will be available at `http://localhost:3000`.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Architecture
+<div align="center">
 
-### Frontend
+Made with 🧡
 
-- **Next.js 14+** with App Router
-- **TypeScript** for type safety
-- **Tailwind CSS** for styling
-- **ShadCN/UI** for component library
-- **Lucide React** for icons
-
-### Backend
-
-- **Supabase** for database and authentication
-- **Server Actions** for API endpoints
-- **Row Level Security** for data protection
-
-### Database Schema
-
-The application uses these main tables:
-
-- `spaces` - Individual shareable spaces
-- `entries` - Content items within spaces (text, images, files)
-- `assets` - File metadata and storage references
-- `views` - Analytics data
-- `device_sessions` - Device-based authentication
-
-## Routes
-
-- `GET /` - Creates new space and redirects to `/r/:slug`
-- `GET /r/:slug` - View and interact with a space
-- `GET /v/:slug` - Read-only view for public sharing (planned)
-
-## Usage
-
-1. **Creating a Space**: Visit the root URL to automatically create a new space
-2. **Adding Content**: Use the composer to add text, or click the plus icon for files
-3. **Sharing**: Use the Share button to copy the space URL
-4. **Settings**: Use Options to control visibility and posting permissions
-
-## Development
-
-### Project Structure
-
-```
-app/
-├── globals.css          # Global styles
-├── layout.tsx          # Root layout
-├── page.tsx            # Homepage (redirects to new space)
-└── r/[slug]/page.tsx   # Space view page
-
-components/
-├── ui/                 # ShadCN/UI components
-├── space-container.tsx # Main space interface
-├── composer.tsx        # Text/file input component
-└── entry-card.tsx      # Individual content display
-
-lib/
-├── actions.ts          # Server actions
-├── supabase.ts         # Supabase client
-├── slug.ts             # URL generation utilities
-└── utils.ts            # General utilities
-```
-
-### Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint
-
-## Deployment
-
-The application is designed to be deployed on Vercel with minimal configuration:
-
-1. Connect your repository to Vercel
-2. Add environment variables in Vercel dashboard
-3. Deploy automatically on push to main branch
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and linting
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Roadmap
-
-- [ ] File upload functionality
-- [ ] Real-time updates with Supabase Realtime
-- [ ] PDF thumbnail generation
-- [ ] Image optimization
-- [ ] Public sharing improvements
-- [ ] User authentication (optional)
-- [ ] Custom domains
-- [ ] Analytics dashboard
+</div>
