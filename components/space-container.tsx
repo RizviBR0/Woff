@@ -277,9 +277,16 @@ export function SpaceContainer({
         locallyHandledIdsRef.current.delete(realEntry.id);
       }, 10000);
 
-      setEntries((prev) =>
-        prev.map((entry) => (entry.id === placeholderId ? realEntry : entry)),
-      );
+      setEntries((prev) => {
+        // First, remove any duplicate that real-time may have already inserted
+        const withoutRealtimeDup = prev.filter(
+          (entry) => entry.id !== realEntry.id,
+        );
+        // Then replace the placeholder with the real entry
+        return withoutRealtimeDup.map((entry) =>
+          entry.id === placeholderId ? realEntry : entry,
+        );
+      });
     },
     [],
   );

@@ -73,6 +73,7 @@ export function Navbar() {
     setIsCreating(true);
     try {
       const space = await createSpace();
+      router.prefetch(`/${space.slug}`);
       router.push(`/${space.slug}`);
     } catch (err) {
       console.error("Failed to create space:", err);

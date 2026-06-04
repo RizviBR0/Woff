@@ -144,8 +144,10 @@ export default function RootLayout({
         {/* Preconnect to Google Fonts CDN for faster font loading */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* DNS prefetch for Supabase API */}
-        <link rel="dns-prefetch" href="https://supabase.co" />
+        {/* Preconnect to Supabase project (DNS + TCP + TLS early) */}
+        {process.env.NEXT_PUBLIC_SUPABASE_URL && (
+          <link rel="preconnect" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
+        )}
         {/* DNS prefetch / preconnect for Picsum (blog cover images) */}
         <link rel="preconnect" href="https://picsum.photos" />
         <link rel="preconnect" href="https://fastly.picsum.photos" />

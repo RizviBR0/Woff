@@ -3,10 +3,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Client-side Supabase client for real-time and client operations
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Singleton instance for client-side Supabase client
+// Singleton instance for client-side Supabase client (with realtime)
 let clientSupabaseInstance: SupabaseClient | null = null;
 
 // Client-side Supabase client with singleton pattern to avoid creating multiple instances
@@ -24,16 +21,13 @@ export const createClientSupabaseClient = () => {
   return clientSupabaseInstance;
 };
 
-// Singleton instance for server-side Supabase client
-let serverSupabaseInstance: SupabaseClient | null = null;
+// Re-export singleton for backward compatibility (client-side only)
+export const supabase = createClientSupabaseClient();
 
-// Server-side Supabase client with device ID context
+// Server-side Supabase client — fresh per request to avoid leaking state
+// across serverless invocations. The underlying Node.js HTTP agent pools
+// TCP connections, so creating a new JS client is cheap.
 export async function createServerSupabaseClient() {
-  // For now, just return the basic client
-  // RLS policies will be simplified to allow operations
-  if (serverSupabaseInstance) {
-    return serverSupabaseInstance;
-  }
-  serverSupabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
-  return serverSupabaseInstance;
+  return createClient(supabaseUrl, supabaseAnonKey);
 }
+

@@ -1,8 +1,7 @@
 "use client";
 
-import { createClient } from "@supabase/supabase-js";
+// Re-export the singleton client instance from supabase.ts to avoid creating
+// a duplicate Supabase instance (and duplicate WebSocket connections).
+import { createClientSupabaseClient } from "./supabase";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabaseBrowser = createClient(supabaseUrl, supabaseAnonKey);
+export const supabaseBrowser = createClientSupabaseClient();

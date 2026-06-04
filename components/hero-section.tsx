@@ -63,6 +63,8 @@ export default function HeroSection() {
     try {
       const space = await createSpace();
       localStorage.setItem("last_created_space", space.slug);
+      // Prefetch the room page assets before navigating for faster transition
+      router.prefetch(`/${space.slug}`);
       router.push(`/${space.slug}`);
     } catch (err) {
       console.error("Failed to create space:", err);

@@ -9,9 +9,15 @@ const nextConfig = {
     optimizePackageImports: [
       "lucide-react",
       "date-fns",
+      "react-icons",
+      "sonner",
+      "@supabase/supabase-js",
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
       "@radix-ui/react-popover",
+      "@radix-ui/react-tooltip",
+      "@radix-ui/react-scroll-area",
+      "@radix-ui/react-progress",
     ],
   },
   images: {
@@ -23,6 +29,10 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "i.pravatar.cc",
+      },
+      {
+        protocol: "https",
+        hostname: "goitdofpzjjvwgxoykyy.supabase.co",
       },
     ],
     // Optimize image loading
