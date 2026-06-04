@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Trash2,
   Loader2,
+  MoreVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -87,64 +88,51 @@ export const EntryCard = memo(function EntryCard({
     }
   };
 
-  const DeleteButton = () => {
-    if (!isMine) return null;
-    return (
-      <AlertDialog>
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
-          <AlertDialogTrigger asChild>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 rounded-full text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
-              disabled={isDeleting}
-              title="Delete message"
-            >
-              {isDeleting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-red-500" />
-              ) : (
-                <Trash2 className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </AlertDialogTrigger>
-        </div>
-        <AlertDialogContent className="border-red-500/20 dark:border-red-500/30">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground dark:text-foreground font-semibold flex items-center gap-2">
-              <span className="text-red-500">⚠️</span> Delete Message
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              Are you sure you want to permanently delete this message? This action cannot be undone and will delete any associated files.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="mt-4 gap-2 sm:gap-0">
-            <AlertDialogCancel disabled={isDeleting} className="border-border hover:bg-accent">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-500 hover:bg-red-600 text-white font-medium shadow-[0_0_10px_rgba(239,68,68,0.2)] focus:ring-red-500 h-9 px-4 rounded-md inline-flex items-center justify-center"
-              onClick={handleConfirmDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin animate-spin-fast" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    );
+  // Custom menus and dialog definitions
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  // Close context menu on click or scroll
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClose = () => setContextMenu(null);
+    window.addEventListener("click", handleClose, { passive: true });
+    window.addEventListener("scroll", handleClose, { passive: true });
+    return () => {
+      window.removeEventListener("click", handleClose);
+      window.removeEventListener("scroll", handleClose);
+    };
+  }, [contextMenu]);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    // If it's a placeholder, don't show context menu
+    if (entry.id.startsWith("placeholder-")) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const menuWidth = 180;
+    const menuHeight = 220; // estimate max height
+
+    let x = e.clientX;
+    let y = e.clientY;
+
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10;
+    }
+
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 10;
+    }
+
+    setContextMenu({ x, y });
   };
 
   const isMine =
     !!entry.created_by_device_id &&
     !!currentDeviceId &&
     entry.created_by_device_id === currentDeviceId;
+
   const nameLabel = isMine
     ? "You"
     : displayNameForDevice(entry.created_by_device_id || entry.id);
@@ -213,32 +201,6 @@ export const EntryCard = memo(function EntryCard({
       </div>
     </div>
   ) : null;
-
-  // Check if note is locked (only for note entries)
-  useEffect(() => {
-    const checkNoteLock = async () => {
-      if (entry.text && entry.text.startsWith("NOTE:")) {
-        const noteData = entry.text.replace("NOTE:", "").split(":");
-        const noteSlug = noteData[0];
-
-        try {
-          const res = await fetch(`/api/notes/${noteSlug}`);
-          if (res.ok) {
-            const note = await res.json();
-            if (note) {
-              setIsNoteLocked(!!note.is_locked);
-            }
-          }
-          setNoteLoaded(true);
-        } catch (error) {
-          /* console.error("Failed to check note lock status:", error); */
-          setNoteLoaded(true);
-        }
-      }
-    };
-
-    checkNoteLock();
-  }, [entry.text]);
 
   const formatTime = (dateString: string) => {
     try {
@@ -334,6 +296,437 @@ export const EntryCard = memo(function EntryCard({
       window.open(url, "_blank");
     }
   };
+
+  // Parse photos data if it is a PHOTOS entry
+  const photosData = (() => {
+    if (!entry.text || !entry.text.startsWith("PHOTOS:")) return [];
+    const photosDataRaw = entry.text.replace("PHOTOS:", "");
+    let photos: string[] = [];
+    try {
+      if (photosDataRaw.trim().startsWith("[")) {
+        const parsed = JSON.parse(photosDataRaw);
+        if (Array.isArray(parsed)) {
+          photos = parsed.filter(
+            (v) => typeof v === "string" && v.startsWith("data:image")
+          );
+        }
+      } else {
+        photos = photosDataRaw
+          .split(",")
+          .map((u) => u.trim())
+          .filter((u) => u.startsWith("data:image"));
+      }
+    } catch {
+      photos = photosDataRaw
+        .split(",")
+        .map((u) => u.trim())
+        .filter((u) => u.startsWith("data:image"));
+    }
+    return Array.from(new Set(photos));
+  })();
+
+  // Parse note info if it is a NOTE entry
+  const noteInfo = (() => {
+    if (!entry.text || !entry.text.startsWith("NOTE:")) return null;
+    const noteData = entry.text.replace("NOTE:", "").split(":");
+    return {
+      slug: noteData[0],
+      publicCode: noteData[1],
+      title: noteData[2] || "Untitled Note",
+    };
+  })();
+
+  const downloadAllAsZip = async () => {
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+
+      photosData.forEach((dataUrl, index) => {
+        if (dataUrl.startsWith("data:image/")) {
+          const base64Data = dataUrl.split(",")[1];
+          const mimeType = dataUrl.split(";")[0].split(":")[1];
+          const extension =
+            mimeType === "image/jpeg"
+              ? "jpg"
+              : mimeType === "image/png"
+                ? "png"
+                : mimeType === "image/gif"
+                  ? "gif"
+                  : "jpg";
+          zip.file(`photo-${index + 1}.${extension}`, base64Data, {
+            base64: true,
+          });
+        }
+      });
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `photos-${entry.id}.zip`;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      /* console.error("Failed to create zip:", error); */
+    }
+  };
+
+  const downloadNotePDF = async () => {
+    if (!noteInfo) return;
+    try {
+      // Fetch note content
+      const res = await fetch(`/api/notes/${noteInfo.slug}`);
+      if (!res.ok) throw new Error("Failed to fetch note");
+      const note = await res.json();
+
+      // Dynamic import jsPDF
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF();
+
+      // Add title
+      doc.setFontSize(20);
+      doc.setFont("helvetica", "bold");
+      doc.text(note.title || noteInfo.title, 20, 20);
+
+      // Convert HTML content to plain text
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = note.content || "";
+      const textContent = tempDiv.textContent || tempDiv.innerText || "";
+
+      // Add content with word wrapping
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      const lines = doc.splitTextToSize(textContent, 170);
+      doc.text(lines, 20, 35);
+
+      // Save PDF
+      doc.save(`${note.title || noteInfo.title}.pdf`);
+    } catch (error) {
+      /* console.error("Failed to download PDF:", error); */
+    }
+  };
+
+  const downloadNoteMarkdown = async () => {
+    if (!noteInfo) return;
+    try {
+      // Fetch note content
+      const res = await fetch(`/api/notes/${noteInfo.slug}`);
+      if (!res.ok) throw new Error("Failed to fetch note");
+      const note = await res.json();
+
+      // Convert HTML to Markdown (simplified)
+      const content = note.content || "";
+      const markdown = content
+        .replace(/<h1[^>]*>(.*?)<\/h1>/gi, "# $1\n\n")
+        .replace(/<h2[^>]*>(.*?)<\/h2>/gi, "## $1\n\n")
+        .replace(/<h3[^>]*>(.*?)<\/h3>/gi, "### $1\n\n")
+        .replace(/<h4[^>]*>(.*?)<\/h4>/gi, "#### $1\n\n")
+        .replace(/<p[^>]*>(.*?)<\/p>/gi, "$1\n\n")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<li[^>]*>(.*?)<\/li>/gi, "- $1\n")
+        .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, "> $1\n\n")
+        .replace(
+          /<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gi,
+          "```\n$1\n```\n\n",
+        )
+        .replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`")
+        .replace(/<strong[^>]*>(.*?)<\/strong>/gi, "**$1**")
+        .replace(/<b[^>]*>(.*?)<\/b>/gi, "**$1**")
+        .replace(/<em[^>]*>(.*?)<\/em>/gi, "*$1*")
+        .replace(/<i[^>]*>(.*?)<\/i>/gi, "*$1*")
+        .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
+        .replace(/<hr\s*\/?>/gi, "---\n\n")
+        .replace(/<[^>]*>/g, "") // Remove remaining HTML tags
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/\n{3,}/g, "\n\n"); // Clean up extra newlines
+
+      const fullMarkdown = `# ${note.title || noteInfo.title}\n\n${markdown}`;
+
+      // Download as .md file
+      const blob = new Blob([fullMarkdown], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${note.title || noteInfo.title}.md`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      /* console.error("Failed to download Markdown:", error); */
+    }
+  };
+
+  const handleDownloadAllZip = async () => {
+    const items = entry.meta?.items || [];
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      for (const item of items) {
+        const res = await fetch(item.url);
+        const blob = await res.blob();
+        zip.file(item.name || "file", blob);
+      }
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `files-${entry.id}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      /* console.error("ZIP download failed", e); */
+    }
+  };
+
+  const getMenuOptions = () => {
+    const options = [];
+
+    // 1. Text options
+    if (entry.kind === "text" && entry.text) {
+      if (entry.text.startsWith("DRAWING:")) {
+        const dataUrl = entry.text.replace("DRAWING:", "");
+        options.push(
+          {
+            label: "View Drawing",
+            icon: <Eye className="h-4 w-4" />,
+            onClick: () => handleView(dataUrl),
+          },
+          {
+            label: "Download Drawing",
+            icon: <Download className="h-4 w-4" />,
+            onClick: () => handleDownload(dataUrl, `drawing-${entry.id}.png`),
+          }
+        );
+      } else if (entry.text.startsWith("PHOTO:")) {
+        const dataUrl = entry.text.replace("PHOTO:", "");
+        options.push(
+          {
+            label: "View Photo",
+            icon: <Eye className="h-4 w-4" />,
+            onClick: () => handleView(dataUrl),
+          },
+          {
+            label: "Download Photo",
+            icon: <Download className="h-4 w-4" />,
+            onClick: () => handleDownload(dataUrl, `photo-${entry.id}.jpg`),
+          }
+        );
+      } else if (entry.text.startsWith("PHOTOS:")) {
+        options.push(
+          {
+            label: "View Gallery",
+            icon: <Eye className="h-4 w-4" />,
+            onClick: () => handleViewMultiple(photosData, 0),
+          },
+          {
+            label: "Download ZIP",
+            icon: <Download className="h-4 w-4" />,
+            onClick: downloadAllAsZip,
+          }
+        );
+      } else if (entry.text.startsWith("NOTE:") && noteInfo) {
+        options.push(
+          {
+            label: "Edit Note",
+            icon: <Edit className="h-4 w-4" />,
+            onClick: () => window.open(`/n/${noteInfo.slug}`, "_blank"),
+          },
+          {
+            label: "Open Note",
+            icon: <ExternalLink className="h-4 w-4" />,
+            onClick: () => window.open(`/n/${noteInfo.slug}`, "_blank"),
+          },
+          {
+            label: "Download PDF",
+            icon: <FileText className="h-4 w-4" />,
+            onClick: downloadNotePDF,
+          },
+          {
+            label: "Download MD",
+            icon: <FileText className="h-4 w-4" />,
+            onClick: downloadNoteMarkdown,
+          }
+        );
+      } else {
+        // Regular text
+        options.push({
+          label: copied ? "Copied!" : "Copy Text",
+          icon: copied ? <Check className="h-4 w-4 text-green-600 dark:text-green-400" /> : <Copy className="h-4 w-4" />,
+          onClick: () => handleCopyText(entry.text || ""),
+        });
+      }
+    }
+
+    // 2. File options
+    if (entry.kind === "file" && entry.meta?.type === "files") {
+      const items = entry.meta.items || [];
+      if (items.length === 1) {
+        options.push({
+          label: "Download File",
+          icon: <Download className="h-4 w-4" />,
+          onClick: () => downloadFileUrl(items[0].url, items[0].name),
+        });
+      } else if (items.length > 1) {
+        options.push({
+          label: "Download ZIP",
+          icon: <Download className="h-4 w-4" />,
+          onClick: handleDownloadAllZip,
+        });
+      }
+    }
+
+    // 2b. Message-style file attachment options (fallback card)
+    if (entry.kind === "image") {
+      const placeholderImageUrl =
+        "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzQ5NzlmZiIvPjx0ZXh0IHg9IjE1MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U2FtcGxlIEltYWdlPC90ZXh0Pjwvc3ZnPg==";
+      options.push(
+        {
+          label: "View Image",
+          icon: <Eye className="h-4 w-4" />,
+          onClick: () => handleView(placeholderImageUrl),
+        },
+        {
+          label: "Download Image",
+          icon: <Download className="h-4 w-4" />,
+          onClick: () => handleDownload(placeholderImageUrl, `image-${entry.id}.svg`),
+        }
+      );
+    }
+
+    // 3. Delete option for owner
+    if (isMine) {
+      options.push({
+        label: "Delete Message",
+        icon: <Trash2 className="h-4 w-4 text-red-500" />,
+        onClick: () => setDeleteDialogOpen(true),
+        destructive: true,
+      });
+    }
+
+    return options;
+  };
+
+
+  const ActionsMenu = () => {
+    const menuOptions = getMenuOptions();
+    if (menuOptions.length === 0) return null;
+
+    return (
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200 z-20">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-zinc-200/50 dark:hover:bg-white/10 transition-colors"
+              title="Message options"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 bg-white/95 dark:bg-[#151518]/95 backdrop-blur-xl border border-zinc-200 dark:border-white/[0.08] shadow-[0_10px_30px_rgba(0,0,0,0.15)] rounded-xl p-1 z-[999]">
+            {menuOptions.map((opt, i) => (
+              <DropdownMenuItem
+                key={i}
+                onClick={opt.onClick}
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
+                  opt.destructive
+                    ? "text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20"
+                    : "text-zinc-700 hover:text-zinc-950 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:text-white dark:hover:bg-white/5"
+                }`}
+              >
+                {opt.icon}
+                <span>{opt.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    );
+  };
+
+  const ContextMenu = () => {
+    if (!contextMenu) return null;
+    const menuOptions = getMenuOptions();
+    if (menuOptions.length === 0) return null;
+
+    return (
+      <div
+        className="fixed z-[9999] min-w-[180px] overflow-hidden rounded-xl border border-zinc-200 dark:border-white/[0.08] bg-white/95 dark:bg-[#151518]/95 backdrop-blur-xl p-1.5 shadow-[0_10px_35px_rgba(0,0,0,0.15)] dark:shadow-[0_10px_35px_rgba(0,0,0,0.3)] animate-in fade-in zoom-in-95 duration-100"
+        style={{
+          top: contextMenu.y,
+          left: contextMenu.x,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {menuOptions.map((opt, i) => (
+          <button
+            key={i}
+            onClick={() => {
+              opt.onClick();
+              setContextMenu(null);
+            }}
+            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium rounded-lg cursor-pointer transition-colors ${
+              opt.destructive
+                ? "text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20"
+                : "text-zinc-700 hover:text-zinc-950 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:text-white dark:hover:bg-white/5"
+            }`}
+          >
+            {opt.icon}
+            <span>{opt.label}</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  const Dialogs = () => (
+    <>
+      <ContextMenu />
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="border-red-500/20 dark:border-red-500/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground dark:text-foreground font-semibold flex items-center gap-2">
+              <span className="text-red-500">⚠️</span> Delete Message
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Are you sure you want to permanently delete this message? This action cannot be undone and will delete any associated files.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4 gap-2 sm:gap-0">
+            <AlertDialogCancel disabled={isDeleting} className="border-border hover:bg-accent">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600 text-white font-medium shadow-[0_0_10px_rgba(239,68,68,0.2)] focus:ring-red-500 h-9 px-4 rounded-md inline-flex items-center justify-center"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin animate-spin-fast" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+
+
 
   const globalViewerModal = (
     <GlobalImageViewer 
@@ -738,9 +1131,10 @@ export const EntryCard = memo(function EntryCard({
         <>
           <div
             id={`entry-${entry.id}`}
+            onContextMenu={handleContextMenu}
             className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
           >
-            <DeleteButton />
+            <ActionsMenu />
             {/* Loading overlay for optimistic UI */}
             {loadingOverlay}
 
@@ -767,10 +1161,6 @@ export const EntryCard = memo(function EntryCard({
 
               {/* Drawing content */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>🎨</span>
-                  <span>Drawing</span>
-                </div>
                 <div className="mt-2 w-full flex">
                   <div className="relative max-w-full rounded-2xl overflow-hidden border border-border/30 shadow-sm cursor-pointer hover:shadow-md hover:ring-2 hover:ring-primary/20 transition-all bg-white dark:bg-neutral-900 group flex items-center justify-center p-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -810,6 +1200,7 @@ export const EntryCard = memo(function EntryCard({
             </div>
           </div>
           {globalViewerModal}
+          <Dialogs />
         </>
       );
     }
@@ -821,9 +1212,10 @@ export const EntryCard = memo(function EntryCard({
         <>
           <div
             id={`entry-${entry.id}`}
+            onContextMenu={handleContextMenu}
             className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
           >
-            <DeleteButton />
+            <ActionsMenu />
             {/* Loading overlay for optimistic UI */}
             {loadingOverlay}
 
@@ -850,10 +1242,6 @@ export const EntryCard = memo(function EntryCard({
 
               {/* Photo content */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>📷</span>
-                  <span>Photo</span>
-                </div>
                 <div className="mt-2 w-full flex">
                   <div className="relative max-w-full rounded-2xl overflow-hidden border border-border/30 shadow-sm cursor-pointer hover:shadow-md hover:ring-2 hover:ring-primary/20 hover:opacity-[0.98] transition-all bg-muted/10 group flex items-center justify-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -893,76 +1281,13 @@ export const EntryCard = memo(function EntryCard({
             </div>
           </div>
           {globalViewerModal}
+          <Dialogs />
         </>
       );
     }
 
     // Check if this is multiple photos
     if (entry.text.startsWith("PHOTOS:")) {
-      const photosDataRaw = entry.text.replace("PHOTOS:", "");
-      let photosData: string[] = [];
-      // Prefer JSON format (new) fallback to legacy comma separated
-      try {
-        if (photosDataRaw.trim().startsWith("[")) {
-          const parsed = JSON.parse(photosDataRaw);
-          if (Array.isArray(parsed)) {
-            photosData = parsed.filter(
-              (v) => typeof v === "string" && v.startsWith("data:image"),
-            );
-          }
-        } else {
-          photosData = photosDataRaw
-            .split(",")
-            .map((u) => u.trim())
-            .filter((u) => u.startsWith("data:image"));
-        }
-      } catch {
-        photosData = photosDataRaw
-          .split(",")
-          .map((u) => u.trim())
-          .filter((u) => u.startsWith("data:image"));
-      }
-      // Deduplicate identical data URLs (defensive against double insertion)
-      photosData = Array.from(new Set(photosData));
-
-      const downloadAllAsZip = async () => {
-        try {
-          const JSZip = (await import("jszip")).default;
-          const zip = new JSZip();
-
-          photosData.forEach((dataUrl, index) => {
-            if (dataUrl.startsWith("data:image/")) {
-              const base64Data = dataUrl.split(",")[1];
-              const mimeType = dataUrl.split(";")[0].split(":")[1];
-              const extension =
-                mimeType === "image/jpeg"
-                  ? "jpg"
-                  : mimeType === "image/png"
-                    ? "png"
-                    : mimeType === "image/gif"
-                      ? "gif"
-                      : "jpg";
-              zip.file(`photo-${index + 1}.${extension}`, base64Data, {
-                base64: true,
-              });
-            }
-          });
-
-          const content = await zip.generateAsync({ type: "blob" });
-          const url = URL.createObjectURL(content);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = `photos-${entry.id}.zip`;
-          link.style.display = "none";
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        } catch (error) {
-          /* console.error("Failed to create zip:", error); */
-        }
-      };
-
       const displayedPhotos = photosData.slice(0, 5);
       const remainingCount = photosData.length - 5;
 
@@ -970,9 +1295,10 @@ export const EntryCard = memo(function EntryCard({
         <>
           <div
             id={`entry-${entry.id}`}
+            onContextMenu={handleContextMenu}
             className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
           >
-            <DeleteButton />
+            <ActionsMenu />
             {/* Loading overlay for optimistic UI */}
             {loadingOverlay}
 
@@ -999,14 +1325,6 @@ export const EntryCard = memo(function EntryCard({
 
               {/* Photos content */}
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>📷</span>
-                  <span>
-                    {photosData.length === 1
-                      ? "1 Photo"
-                      : `${photosData.length} Photos`}
-                  </span>
-                </div>
                 <div
                   className="relative mt-2 max-w-xl cursor-pointer"
                   onMouseEnter={() => setHovering(true)}
@@ -1093,112 +1411,23 @@ export const EntryCard = memo(function EntryCard({
             </div>
           </div>
           {globalViewerModal}
+          <Dialogs />
         </>
       );
     }
 
     // Check if this is a note
-    if (entry.text.startsWith("NOTE:")) {
-      const noteData = entry.text.replace("NOTE:", "").split(":");
-      const noteSlug = noteData[0];
-      const publicCode = noteData[1];
-      const noteTitle = noteData[2] || "Untitled Note";
-
-      // Download note as PDF
-      const downloadNotePDF = async () => {
-        try {
-          // Fetch note content
-          const res = await fetch(`/api/notes/${noteSlug}`);
-          if (!res.ok) throw new Error("Failed to fetch note");
-          const note = await res.json();
-
-          // Dynamic import jsPDF
-          const { jsPDF } = await import("jspdf");
-          const doc = new jsPDF();
-
-          // Add title
-          doc.setFontSize(20);
-          doc.setFont("helvetica", "bold");
-          doc.text(note.title || noteTitle, 20, 20);
-
-          // Convert HTML content to plain text
-          const tempDiv = document.createElement("div");
-          tempDiv.innerHTML = note.content || "";
-          const textContent = tempDiv.textContent || tempDiv.innerText || "";
-
-          // Add content with word wrapping
-          doc.setFontSize(12);
-          doc.setFont("helvetica", "normal");
-          const lines = doc.splitTextToSize(textContent, 170);
-          doc.text(lines, 20, 35);
-
-          // Save PDF
-          doc.save(`${note.title || noteTitle}.pdf`);
-        } catch (error) {
-          /* console.error("Failed to download PDF:", error); */
-        }
-      };
-
-      // Download note as Markdown
-      const downloadNoteMarkdown = async () => {
-        try {
-          // Fetch note content
-          const res = await fetch(`/api/notes/${noteSlug}`);
-          if (!res.ok) throw new Error("Failed to fetch note");
-          const note = await res.json();
-
-          // Convert HTML to Markdown (simplified)
-          const content = note.content || "";
-          const markdown = content
-            .replace(/<h1[^>]*>(.*?)<\/h1>/gi, "# $1\n\n")
-            .replace(/<h2[^>]*>(.*?)<\/h2>/gi, "## $1\n\n")
-            .replace(/<h3[^>]*>(.*?)<\/h3>/gi, "### $1\n\n")
-            .replace(/<h4[^>]*>(.*?)<\/h4>/gi, "#### $1\n\n")
-            .replace(/<p[^>]*>(.*?)<\/p>/gi, "$1\n\n")
-            .replace(/<br\s*\/?>/gi, "\n")
-            .replace(/<li[^>]*>(.*?)<\/li>/gi, "- $1\n")
-            .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, "> $1\n\n")
-            .replace(
-              /<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/gi,
-              "```\n$1\n```\n\n",
-            )
-            .replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`")
-            .replace(/<strong[^>]*>(.*?)<\/strong>/gi, "**$1**")
-            .replace(/<b[^>]*>(.*?)<\/b>/gi, "**$1**")
-            .replace(/<em[^>]*>(.*?)<\/em>/gi, "*$1*")
-            .replace(/<i[^>]*>(.*?)<\/i>/gi, "*$1*")
-            .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
-            .replace(/<hr\s*\/?>/gi, "---\n\n")
-            .replace(/<[^>]*>/g, "") // Remove remaining HTML tags
-            .replace(/&nbsp;/g, " ")
-            .replace(/&amp;/g, "&")
-            .replace(/&lt;/g, "<")
-            .replace(/&gt;/g, ">")
-            .replace(/\n{3,}/g, "\n\n"); // Clean up extra newlines
-
-          const fullMarkdown = `# ${note.title || noteTitle}\n\n${markdown}`;
-
-          // Download as .md file
-          const blob = new Blob([fullMarkdown], { type: "text/markdown" });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = `${note.title || noteTitle}.md`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        } catch (error) {
-          /* console.error("Failed to download Markdown:", error); */
-        }
-      };
+    if (entry.text.startsWith("NOTE:") && noteInfo) {
+      const { slug: noteSlug, title: noteTitle } = noteInfo;
 
       return (
-        <div
-          id={`entry-${entry.id}`}
-          className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
-        >
-          <DeleteButton />
+        <>
+          <div
+            id={`entry-${entry.id}`}
+            onContextMenu={handleContextMenu}
+            className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+          >
+            <ActionsMenu />
           {/* Loading overlay for optimistic UI */}
           {loadingOverlay}
 
@@ -1225,10 +1454,6 @@ export const EntryCard = memo(function EntryCard({
 
             {/* Note content */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>📝</span>
-                <span>Note</span>
-              </div>
               <div className="relative">
                 <div
                   className="flex items-center gap-3 p-3 bg-background rounded-lg border border-border/20 cursor-pointer hover:bg-accent/50 transition-colors"
@@ -1302,16 +1527,20 @@ export const EntryCard = memo(function EntryCard({
             </div>
           </div>
         </div>
+        <Dialogs />
+      </>
       );
     }
 
     // Regular text message
     return (
-      <div
-        id={`entry-${entry.id}`}
-        className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
-      >
-        <DeleteButton />
+      <>
+        <div
+          id={`entry-${entry.id}`}
+          onContextMenu={handleContextMenu}
+          className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+        >
+          <ActionsMenu />
         {/* Loading overlay for optimistic UI */}
         {loadingOverlay}
 
@@ -1336,7 +1565,37 @@ export const EntryCard = memo(function EntryCard({
 
           {/* Message text */}
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/90 dark:text-foreground/95">
-            {entry.text}
+            {(() => {
+              if (!entry.text) return "";
+              
+              // URL matching regex: matches http://, https://, and www. links
+              const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+              const parts = entry.text.split(urlRegex);
+              if (parts.length === 1) {
+                return entry.text;
+              }
+              
+              return parts.map((part, index) => {
+                const lowerPart = part.toLowerCase();
+                const isUrl = lowerPart.startsWith("http://") || lowerPart.startsWith("https://") || lowerPart.startsWith("www.");
+                
+                if (isUrl) {
+                  const href = lowerPart.startsWith("www.") ? `https://${part}` : part;
+                  return (
+                    <a
+                      key={index}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#ff5a00] hover:text-[#ff3600] dark:text-[#ff7d3b] dark:hover:text-[#ff5a00] underline font-medium transition-colors break-all"
+                    >
+                      {part}
+                    </a>
+                  );
+                }
+                return part;
+              });
+            })()}
           </p>
 
           {/* Action button - shown on hover */}
@@ -1365,7 +1624,9 @@ export const EntryCard = memo(function EntryCard({
             </Button>
           </div>
         </div>
-      </div>
+        </div>
+        <Dialogs />
+      </>
     );
   }
 
@@ -1378,28 +1639,7 @@ export const EntryCard = memo(function EntryCard({
       url: string;
     }> = entry.meta.items || [];
 
-    const handleDownloadAllZip = async () => {
-      try {
-        const JSZip = (await import("jszip")).default;
-        const zip = new JSZip();
-        for (const item of items) {
-          const res = await fetch(item.url);
-          const blob = await res.blob();
-          zip.file(item.name || "file", blob);
-        }
-        const zipBlob = await zip.generateAsync({ type: "blob" });
-        const url = URL.createObjectURL(zipBlob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `files-${entry.id}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        /* console.error("ZIP download failed", e); */
-      }
-    };
+
 
     // Helper to check if file is an image
     const isImage = (type: string, name: string) => {
@@ -1417,9 +1657,10 @@ export const EntryCard = memo(function EntryCard({
       <>
         <div
         id={`entry-${entry.id}`}
+        onContextMenu={handleContextMenu}
         className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
       >
-        <DeleteButton />
+        <ActionsMenu />
         {/* Loading overlay for optimistic UI */}
         {loadingOverlay}
 
@@ -1444,18 +1685,6 @@ export const EntryCard = memo(function EntryCard({
 
           {/* Files content */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>{icon}</span>
-              <span>
-                {items.length > 1
-                  ? allImages
-                    ? "Images"
-                    : "Files"
-                  : allImages
-                    ? "Image"
-                    : "File"}
-              </span>
-            </div>
 
             {/* Display files as a list with thumbnails for images */}
             <div className="divide-y rounded-md border border-border/20 bg-background">
@@ -1553,17 +1782,20 @@ export const EntryCard = memo(function EntryCard({
         </div>
       </div>
       {globalViewerModal}
+      <Dialogs />
     </>
     );
   }
 
   // Message-style file attachments
   return (
-    <div
-      id={`entry-${entry.id}`}
-      className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
-    >
-      <DeleteButton />
+    <>
+      <div
+        id={`entry-${entry.id}`}
+        onContextMenu={handleContextMenu}
+        className="group relative flex items-start gap-3 mb-4 hover:bg-accent/30 dark:hover:bg-accent/20 px-3 py-2 rounded-lg transition-colors"
+      >
+        <ActionsMenu />
       {/* Loading overlay for optimistic UI */}
       {loadingOverlay}
 
@@ -1663,7 +1895,9 @@ export const EntryCard = memo(function EntryCard({
           </div>
         )}
       </div>
+      </div>
       {globalViewerModal}
-    </div>
+      <Dialogs />
+    </>
   );
 });

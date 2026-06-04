@@ -5,13 +5,11 @@ const nextConfig = {
       allowedOrigins: ["localhost:3000", "http://localhost:3000"],
       bodySizeLimit: "5mb",
     },
-    // Enable optimized package imports for smaller bundles
     optimizePackageImports: [
       "lucide-react",
       "date-fns",
       "react-icons",
       "sonner",
-      "@supabase/supabase-js",
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
       "@radix-ui/react-popover",
