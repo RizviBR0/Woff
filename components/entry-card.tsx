@@ -17,6 +17,7 @@ import {
   Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1484,9 +1485,10 @@ export const EntryCard = memo(function EntryCard({
             {/* Note content */}
             <div className="space-y-2">
               <div className="relative">
-                <div
+                <Link
+                  href={`/n/${noteSlug}`}
+                  prefetch
                   className="flex items-center gap-3 p-3 bg-background rounded-lg border border-border/20 cursor-pointer hover:bg-accent/50 transition-colors"
-                  onClick={() => window.open(`/n/${noteSlug}`, "_blank")}
                 >
                   <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center flex-shrink-0 shadow-sm">
                     <FileText className="h-5 w-5 text-primary-foreground" />
@@ -1506,29 +1508,23 @@ export const EntryCard = memo(function EntryCard({
                       Rich text note • Click to edit
                     </div>
                   </div>
-                </div>
+                </Link>
               </div>
             </div>
 
             {/* Action buttons */}
             <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-xs"
-                onClick={() => window.open(`/n/${noteSlug}`, "_blank")}
-              >
-                <Edit className="h-3 w-3 mr-1" />
-                Edit
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" asChild>
+                <Link href={`/n/${noteSlug}`} prefetch>
+                  <Edit className="h-3 w-3 mr-1" />
+                  Edit
+                </Link>
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-xs"
-                onClick={() => window.open(`/n/${noteSlug}`, "_blank")}
-              >
-                <ExternalLink className="h-3 w-3 mr-1" />
-                Open
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" asChild>
+                <Link href={`/n/${noteSlug}`} prefetch>
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  Open
+                </Link>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

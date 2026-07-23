@@ -70,6 +70,20 @@ interface NoteEditorProps {
 
 type SaveState = "saved" | "unsaved" | "saving" | "error" | "offline";
 
+function getClipboardImages(data: DataTransfer | null): File[] {
+  const itemFiles = Array.from(data?.items || [])
+    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+  return (
+    itemFiles.length > 0
+      ? itemFiles
+      : Array.from(data?.files || []).filter((file) =>
+          file.type.startsWith("image/"),
+        )
+  );
+}
+
 function ToolbarButton({
   label,
   active,
@@ -115,6 +129,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const [qrCode, setQrCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [stats, setStats] = useState({ words: 0, characters: 0 });
   const imageInputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -172,9 +187,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     editorProps: {
       handlePaste(_view, event) {
         if (!canEdit) return false;
-        const images = Array.from(event.clipboardData?.files || []).filter((file) =>
-          file.type.startsWith("image/"),
-        );
+        const images = getClipboardImages(event.clipboardData);
         if (!images.length) return false;
         event.preventDefault();
         pasteImageHandlerRef.current(images);
@@ -439,6 +452,78 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     };
   }, [uploadInlineImages]);
 
+  useEffect(() => {
+    if (!canEdit || !editor) return;
+
+    let dragDepth = 0;
+    const containsFiles = (event: DragEvent) =>
+      Array.from(event.dataTransfer?.types || []).includes("Files");
+
+    const onPaste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented) return;
+      const images = getClipboardImages(event.clipboardData);
+      if (!images.length) return;
+      event.preventDefault();
+      void uploadInlineImages(images);
+    };
+    const onDragEnter = (event: DragEvent) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      dragDepth += 1;
+      setIsDraggingImage(true);
+    };
+    const onDragOver = (event: DragEvent) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    };
+    const onDragLeave = (event: DragEvent) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (event.relatedTarget === null) dragDepth = 0;
+      if (dragDepth === 0) setIsDraggingImage(false);
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      setIsDraggingImage(false);
+
+      const files = Array.from(event.dataTransfer?.files || []);
+      const images = files.filter((file) => file.type.startsWith("image/"));
+      if (!images.length) {
+        toast.error("Only images can be dropped into a note");
+        return;
+      }
+      if (images.length !== files.length) {
+        toast.info("Only image files were added to the note");
+      }
+
+      const position = editor.view.posAtCoords({
+        left: event.clientX,
+        top: event.clientY,
+      })?.pos;
+      if (position !== undefined) {
+        editor.chain().focus().setTextSelection(position).run();
+      }
+      void uploadInlineImages(images);
+    };
+
+    window.addEventListener("paste", onPaste);
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("paste", onPaste);
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [canEdit, editor, uploadInlineImages]);
+
   const saveLabel = useMemo(() => {
     switch (saveState) {
       case "saving":
@@ -475,6 +560,19 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-muted/20">
+      {isDraggingImage && canEdit && (
+        <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-background/90 p-6 backdrop-blur">
+          <div className="rounded-3xl border-2 border-dashed border-orange-500 bg-background px-10 py-8 text-center shadow-2xl">
+            <ImagePlus className="mx-auto h-7 w-7 text-orange-600" />
+            <p className="mt-3 text-base font-semibold text-orange-600">
+              Drop images into this note
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Release anywhere to insert them
+            </p>
+          </div>
+        </div>
+      )}
       <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
           <Link

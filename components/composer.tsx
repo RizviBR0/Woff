@@ -20,7 +20,7 @@ import {
   createEntry,
   createNoteEntry,
   createUploadedEntry,
-  createUploadIntent,
+  createUploadIntents,
 } from "@/lib/actions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import type { Entry } from "./entry-card";
@@ -129,30 +129,48 @@ export function Composer({
   const uploadOne = useCallback(
     async (
       file: File,
+      intent: { path: string; bucket: string },
+      accessToken: string,
       uploadedByIndex: number[],
       index: number,
       onProgress: () => void,
     ) => {
-      const intent = await createUploadIntent(spaceId, {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      });
-      const {
-        data: { session },
-      } = await supabaseBrowser.auth.getSession();
-      if (!session) throw new Error("Your anonymous session expired");
-
-      const endpoint = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/upload/resumable`;
+      const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!apiKey) throw new Error("Upload service is not configured");
+      if (!projectUrl || !apiKey) throw new Error("Upload service is not configured");
+      const parsedUrl = new URL(projectUrl);
+      const projectId = parsedUrl.hostname.endsWith(".supabase.co")
+        ? parsedUrl.hostname.split(".")[0]
+        : null;
+      const storageOrigin = projectId
+        ? `https://${projectId}.storage.supabase.co`
+        : parsedUrl.origin;
+      const endpoint = `${storageOrigin}/storage/v1/upload/resumable`;
 
       await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        let noProgressTimer: ReturnType<typeof setTimeout>;
+        const finish = (callback: () => void) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(noProgressTimer);
+          activeUploadsRef.current.delete(upload);
+          callback();
+        };
+        const resetNoProgressTimer = () => {
+          clearTimeout(noProgressTimer);
+          noProgressTimer = setTimeout(() => {
+            void upload.abort(true);
+            finish(() =>
+              reject(new Error("Upload stopped making progress. Check your connection and retry.")),
+            );
+          }, 60_000);
+        };
         const upload = new tus.Upload(file, {
           endpoint,
-          retryDelays: [0, 1000, 3000, 5000],
+          retryDelays: [0, 3000, 5000, 10_000, 20_000],
           headers: {
-            authorization: `Bearer ${session.access_token}`,
+            authorization: `Bearer ${accessToken}`,
             apikey: apiKey,
           },
           uploadDataDuringCreation: true,
@@ -165,21 +183,21 @@ export function Composer({
             cacheControl: "3600",
           },
           onError(error) {
-            activeUploadsRef.current.delete(upload);
-            reject(error);
+            finish(() => reject(error));
           },
           onProgress(bytesUploaded) {
             uploadedByIndex[index] = bytesUploaded;
+            resetNoProgressTimer();
             onProgress();
           },
           onSuccess() {
             uploadedByIndex[index] = file.size;
             onProgress();
-            activeUploadsRef.current.delete(upload);
-            resolve();
+            finish(resolve);
           },
         });
         activeUploadsRef.current.add(upload);
+        resetNoProgressTimer();
         upload.start();
       });
 
@@ -192,7 +210,7 @@ export function Composer({
         ...(await getImageDimensions(file)),
       };
     },
-    [spaceId],
+    [],
   );
 
   const runUpload = useCallback(
@@ -264,17 +282,37 @@ export function Composer({
 
       const uploaded: Awaited<ReturnType<typeof uploadOne>>[] = new Array(files.length);
       let nextIndex = 0;
-      const worker = async () => {
-        while (!cancelledRef.current) {
-          const index = nextIndex++;
-          if (index >= files.length) return;
-          uploaded[index] = await uploadOne(files[index], uploadedByIndex, index, reportProgress);
-        }
-      };
 
       try {
+        const [intents, authResult] = await Promise.all([
+          createUploadIntents(
+            spaceId,
+            files.map((file) => ({
+              name: file.name,
+              size: file.size,
+              type: file.type,
+            })),
+          ),
+          supabaseBrowser.auth.getSession(),
+        ]);
+        const session = authResult.data.session;
+        if (!session) throw new Error("Your anonymous session expired. Refresh and retry.");
+
         const workerResults = await Promise.allSettled(
-          Array.from({ length: Math.min(CONCURRENT_UPLOADS, files.length) }, worker),
+          Array.from({ length: Math.min(CONCURRENT_UPLOADS, files.length) }, async () => {
+            while (!cancelledRef.current) {
+              const index = nextIndex++;
+              if (index >= files.length) return;
+              uploaded[index] = await uploadOne(
+                files[index],
+                intents[index],
+                session.access_token,
+                uploadedByIndex,
+                index,
+                reportProgress,
+              );
+            }
+          }),
         );
         const uploadedPaths = uploaded
           .filter(Boolean)
@@ -428,13 +466,64 @@ export function Composer({
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
-      const files = [...(event.clipboardData?.files || [])];
+      const itemFiles = Array.from(event.clipboardData?.items || [])
+        .filter((item) => item.kind === "file")
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => Boolean(file));
+      const files =
+        itemFiles.length > 0
+          ? itemFiles
+          : Array.from(event.clipboardData?.files || []);
       if (!files.length) return;
       event.preventDefault();
       receiveFiles(files);
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
+  }, [receiveFiles]);
+
+  useEffect(() => {
+    let dragDepth = 0;
+    const containsFiles = (event: DragEvent) =>
+      Array.from(event.dataTransfer?.types || []).includes("Files");
+
+    const onDragEnter = (event: DragEvent) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      dragDepth += 1;
+      setIsDragging(true);
+    };
+    const onDragOver = (event: DragEvent) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    };
+    const onDragLeave = (event: DragEvent) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (event.relatedTarget === null) dragDepth = 0;
+      if (dragDepth === 0) setIsDragging(false);
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!containsFiles(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      setIsDragging(false);
+      const files = Array.from(event.dataTransfer?.files || []);
+      if (files.length) receiveFiles(files);
+    };
+
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+    };
   }, [receiveFiles]);
 
   return (
@@ -449,19 +538,6 @@ export function Composer({
             ? "border-orange-500 ring-4 ring-orange-500/10"
             : ""
         }`}
-        onDragEnter={(event) => {
-          event.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragOver={(event) => event.preventDefault()}
-        onDragLeave={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDragging(false);
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          setIsDragging(false);
-          if (event.dataTransfer.files.length) receiveFiles(event.dataTransfer.files);
-        }}
       >
         {centered && (
           <>
@@ -496,8 +572,13 @@ export function Composer({
         )}
 
         {isDragging && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center rounded-[inherit] bg-background/90 text-sm font-semibold text-orange-600 backdrop-blur">
-            Drop files to upload
+          <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-background/90 p-6 backdrop-blur">
+            <div className="rounded-3xl border-2 border-dashed border-orange-500 bg-background px-10 py-8 text-center shadow-2xl">
+              <p className="text-base font-semibold text-orange-600">Drop files to upload</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Release anywhere in this space
+              </p>
+            </div>
           </div>
         )}
 

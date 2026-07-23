@@ -3,6 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
+  const needsIdentity =
+    /^\/\d{4}(?:\/|$)/.test(request.nextUrl.pathname) ||
+    request.nextUrl.pathname.startsWith("/n/");
+  // Marketing and information pages do not query protected room data. Avoid an
+  // Auth network request on every asset-free page navigation.
+  if (!needsIdentity) return response;
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -23,16 +30,8 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // Room/note pages need identity before Server Components read through RLS.
-  // Marketing pages create it lazily only when a Server Action is used.
-  const needsIdentity =
-    /^\/\d{4}(?:\/|$)/.test(request.nextUrl.pathname) ||
-    request.nextUrl.pathname.startsWith("/n/");
-  if (!user && needsIdentity) {
+  const { data: claimsResult } = await supabase.auth.getClaims();
+  if (!claimsResult?.claims.sub) {
     await supabase.auth.signInAnonymously();
   }
 

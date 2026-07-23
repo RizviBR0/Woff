@@ -12,13 +12,10 @@ interface NotePageProps {
 export async function generateMetadata({
   params,
 }: NotePageProps): Promise<Metadata> {
-  const { note_slug } = await params;
-  const note = await getNote(note_slug);
+  await params;
   return {
-    title: note?.title ? `${note.title} • Woff` : "Editing Note • Woff",
-    description: note?.content 
-      ? note.content.replace(/<[^>]*>/g, "").substring(0, 150)
-      : "Rich text editor for notes",
+    title: "Editing Note • Woff",
+    description: "Rich text editor for a shared Woff note",
     robots: {
       index: false,
       follow: false,

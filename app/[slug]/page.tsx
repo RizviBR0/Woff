@@ -25,35 +25,17 @@ async function getSpaceAndEntries(slug: string) {
     });
   }
 
-  const { data: joined, error: joinError } = await supabase.rpc("join_space", {
+  const { data: opened, error } = await supabase.rpc("open_space", {
     p_slug: slug,
     p_display_name: displayNameForDevice(user.id),
   });
-  if (joinError || !joined) return null;
+  if (error || !opened?.space) return null;
 
-  const { data: space, error } = await supabase
-    .from("spaces")
-    .select(
-      `id, slug, title, creator_device_id, visibility, allow_public_post,
-       created_at, last_activity_at, expires_at, is_pro,
-       entries (
-         id, space_id, kind, text, meta, created_by_device_id, created_at
-       )`,
-    )
-    .eq("slug", slug)
-    .single();
-
-  if (error || !space) return null;
-
-  const { entries, ...spaceData } = space;
   return {
     currentUserId: user.id,
     displayName: displayNameForDevice(user.id),
-    space: spaceData,
-    entries: [...(entries || [])].sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    ),
+    space: opened.space,
+    entries: opened.entries || [],
   };
 }
 

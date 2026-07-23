@@ -68,6 +68,8 @@ export interface UploadIntent {
   maxBytes: number;
 }
 
+type UploadIntentInput = { name: string; size: number; type: string };
+
 const allowedHtmlTags = [
   "p",
   "br",
@@ -270,43 +272,50 @@ export async function createEntry(
 
 export async function createUploadIntent(
   spaceId: string,
-  file: { name: string; size: number; type: string },
+  file: UploadIntentInput,
 ): Promise<UploadIntent> {
+  const [intent] = await createUploadIntents(spaceId, [file]);
+  return intent;
+}
+
+export async function createUploadIntents(
+  spaceId: string,
+  files: UploadIntentInput[],
+): Promise<UploadIntent[]> {
   const { supabase } = await requireAnonymousUser();
 
-  if (!file.name || file.name.length > 255) {
-    throw new Error("Invalid file name");
+  if (files.length < 1 || files.length > MAX_FILES_PER_ENTRY) {
+    throw new Error(`Upload between 1 and ${MAX_FILES_PER_ENTRY} files`);
   }
-  if (!Number.isFinite(file.size) || file.size <= 0 || file.size > MAX_UPLOAD_BYTES) {
-    throw new Error("Files must be smaller than 20 MB");
+  for (const file of files) {
+    if (!file.name || file.name.length > 255) {
+      throw new Error("Invalid file name");
+    }
+    if (!Number.isFinite(file.size) || file.size <= 0 || file.size > MAX_UPLOAD_BYTES) {
+      throw new Error("Files must be smaller than 20 MB");
+    }
   }
 
-  const { data: membership } = await supabase
-    .from("space_members")
-    .select("space_id")
-    .eq("space_id", spaceId)
-    .maybeSingle();
-
-  if (!membership) throw new Error("Join this room before uploading");
-
-  const path = `${spaceId}/${safeFileName(file.name)}`;
+  const reservations = files.map((file) => ({
+    path: `${spaceId}/${safeFileName(file.name)}`,
+    size: file.size,
+    mime: file.type || "application/octet-stream",
+  }));
   const { data: reserved, error: reserveError } = await supabase.rpc(
-    "reserve_upload",
+    "reserve_upload_batch",
     {
       p_space_id: spaceId,
-      p_path: path,
-      p_size: file.size,
-      p_mime: file.type || "application/octet-stream",
+      p_files: reservations,
     },
   );
   if (reserveError) throw new Error(`Unable to reserve upload: ${reserveError.message}`);
   if (!reserved) throw new Error("This space has reached its storage limit");
 
-  return {
+  return reservations.map(({ path }) => ({
     path,
     bucket: "files",
     maxBytes: MAX_UPLOAD_BYTES,
-  };
+  }));
 }
 
 export async function createUploadedEntry(
@@ -385,34 +394,23 @@ export async function createNoteEntry(
   spaceId: string,
   title = "Untitled Note",
 ): Promise<{ noteSlug: string; publicCode: string; entryId: string }> {
-  const { supabase, user } = await requireAnonymousUser();
-  await assertRateLimit(supabase, "create_note", 10);
+  const { supabase } = await requireAnonymousUser();
   const noteSlug = noteId();
   const publicCode = noteId();
   const cleanTitle = title.trim().slice(0, 120) || "Untitled Note";
 
-  const entry = await createEntry(spaceId, "text", `NOTE:${noteSlug}`, {
-    type: "note",
-    note_slug: noteSlug,
-    public_code: publicCode,
-    title: cleanTitle,
-    is_locked: false,
+  const { data, error } = await supabase.rpc("create_note_entry", {
+    p_space_id: spaceId,
+    p_note_slug: noteSlug,
+    p_public_code: publicCode,
+    p_title: cleanTitle,
   });
-
-  const { error } = await supabase.from("notes").insert({
-    entry_id: entry.id,
-    slug: noteSlug,
-    public_code: publicCode,
-    title: cleanTitle,
-    created_by_user_id: user.id,
-  });
-
-  if (error) {
-    await supabase.from("entries").delete().eq("id", entry.id);
-    throw new Error(`Unable to create note: ${error.message}`);
-  }
-
-  return { noteSlug, publicCode, entryId: entry.id };
+  if (error || !data) throw new Error(`Unable to create note: ${error?.message || "Unknown error"}`);
+  return {
+    noteSlug: data.note_slug,
+    publicCode: data.public_code,
+    entryId: data.entry_id,
+  };
 }
 
 export async function updateNote(
@@ -512,6 +510,34 @@ export async function updateNote(
 
 export async function getNote(noteSlug: string): Promise<Note | null> {
   const { supabase, user } = await requireAnonymousUser();
+  const { data: openedNote, error: openError } = await supabase.rpc("open_note", {
+    p_note_slug: noteSlug,
+    p_display_name: displayNameForDevice(user.id),
+  });
+  if (openError) throw new Error(`Unable to open note: ${openError.message}`);
+  if (openedNote) {
+    return {
+      id: openedNote.id,
+      slug: openedNote.slug,
+      title: openedNote.title,
+      content: sanitizeNoteHtml(openedNote.content_html || ""),
+      content_json: openedNote.content_json,
+      public_code: openedNote.public_code,
+      visibility: openedNote.visibility,
+      font_family: openedNote.font_family,
+      space_id: openedNote.space_id,
+      space_slug: openedNote.space_slug,
+      created_by_device_id: openedNote.created_by_device_id,
+      created_at: openedNote.created_at,
+      updated_at: openedNote.updated_at,
+      is_locked: openedNote.is_locked,
+      is_owner: openedNote.is_owner,
+      version: openedNote.version,
+    };
+  }
+
+  // Legacy notes that have not yet been migrated still use the original room
+  // entry lookup below.
   const { data: joinedSpaceSlug } = await supabase.rpc("join_note", {
     p_note_slug: noteSlug,
     p_display_name: displayNameForDevice(user.id),
@@ -523,33 +549,6 @@ export async function getNote(noteSlug: string): Promise<Note | null> {
       p_slug: joinedSpaceSlug,
       p_legacy_device_id: legacyDeviceId,
     });
-  }
-
-  const { data: note } = await supabase
-    .from("notes")
-    .select("*, entries!inner(space_id, created_by_device_id, spaces!inner(slug))")
-    .eq("slug", noteSlug)
-    .maybeSingle();
-
-  if (note) {
-    return {
-      id: note.id,
-      slug: note.slug,
-      title: note.title,
-      content: sanitizeNoteHtml(note.content_html || ""),
-      content_json: note.content_json,
-      public_code: note.public_code,
-      visibility: note.visibility,
-      font_family: note.font_family,
-      space_id: (note.entries as any).space_id,
-      space_slug: (note.entries as any).spaces?.slug,
-      created_by_device_id: (note.entries as any).created_by_device_id,
-      created_at: note.created_at,
-      updated_at: note.updated_at,
-      is_locked: note.is_locked,
-      is_owner: note.created_by_user_id === user.id,
-      version: note.version,
-    };
   }
 
   // Locked notes are intentionally hidden by RLS. Their non-secret metadata is

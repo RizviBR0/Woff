@@ -43,14 +43,14 @@ export async function createServerSupabaseClient() {
 
 export async function requireAnonymousUser() {
   const supabase = await createServerSupabaseClient();
-  let {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  const { data: claimsResult, error: claimsError } = await supabase.auth.getClaims();
+  const subject = claimsResult?.claims.sub;
+  let user: { id: string } | null = subject ? { id: subject } : null;
+  let error = claimsError;
 
   if (error || !user) {
     const { data, error: signInError } = await supabase.auth.signInAnonymously();
-    user = data.user;
+    user = data.user ? { id: data.user.id } : null;
     error = signInError;
   }
 
