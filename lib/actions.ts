@@ -16,7 +16,7 @@ const noteId = customAlphabet(
 );
 const MAX_TEXT_LENGTH = 50_000;
 const MAX_META_BYTES = 250_000;
-const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const MAX_FILES_PER_ENTRY = 20;
 
 export interface Space {
@@ -292,7 +292,7 @@ export async function createUploadIntents(
       throw new Error("Invalid file name");
     }
     if (!Number.isFinite(file.size) || file.size <= 0 || file.size > MAX_UPLOAD_BYTES) {
-      throw new Error("Files cannot be larger than 200 MB");
+      throw new Error("Files cannot be larger than 50 MB");
     }
   }
 

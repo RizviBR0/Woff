@@ -379,9 +379,9 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       toast.error("Only images can be pasted into a note");
       return;
     }
-    const tooLarge = files.find((file) => file.size > 200 * 1024 * 1024);
+    const tooLarge = files.find((file) => file.size > 50 * 1024 * 1024);
     if (tooLarge) {
-      toast.error(`${tooLarge.name || "An image"} is larger than 200 MB`);
+      toast.error(`${tooLarge.name || "An image"} is larger than 50 MB`);
       return;
     }
     setIsUploadingImage(true);
