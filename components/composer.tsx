@@ -434,9 +434,15 @@ export function Composer({
   return (
     <>
       <div
-        className={`relative rounded-2xl border bg-background/95 shadow-xl shadow-black/5 backdrop-blur ${
-          isDragging ? "border-orange-500 ring-4 ring-orange-500/10" : "border-border"
-        } ${centered ? "p-3 sm:p-4" : "p-2 sm:p-3"}`}
+        className={`group relative transition-all duration-300 ${
+          centered
+            ? "overflow-hidden rounded-[28px] border border-black/10 bg-white/95 shadow-[0_20px_65px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-white/[0.12] dark:bg-[#0b0b0b]/80 dark:shadow-[0_24px_80px_rgba(0,0,0,0.4)]"
+            : "rounded-[24px] border border-zinc-200/85 bg-white/90 px-3.5 py-2.5 shadow-xl shadow-black/5 backdrop-blur-xl hover:border-zinc-300 hover:shadow-2xl hover:shadow-black/10 dark:border-zinc-800/80 dark:bg-zinc-950/90 dark:hover:border-zinc-700/80"
+        } ${
+          isDragging
+            ? "border-orange-500 ring-4 ring-orange-500/10"
+            : ""
+        }`}
         onDragEnter={(event) => {
           event.preventDefault();
           setIsDragging(true);
@@ -451,14 +457,50 @@ export function Composer({
           if (event.dataTransfer.files.length) receiveFiles(event.dataTransfer.files);
         }}
       >
+        {centered && (
+          <>
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(255,90,0,0.12),transparent_45%),radial-gradient(circle_at_70%_0%,rgba(255,90,0,0.08),transparent_34%),radial-gradient(circle_at_100%_100%,rgba(255,90,0,0.06),transparent_30%)] dark:bg-[radial-gradient(circle_at_0%_0%,rgba(255,90,0,0.22),transparent_45%),radial-gradient(circle_at_70%_0%,rgba(255,90,0,0.18),transparent_34%),radial-gradient(circle_at_100%_100%,rgba(255,90,0,0.12),transparent_30%)]" />
+            <svg
+              className="pointer-events-none absolute left-0 top-0 z-10 h-48 w-48"
+              viewBox="0 0 192 192"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M 1,192 L 1,29 A 28,28 0 0,1 29,1 L 192,1"
+                stroke="url(#composer-orange-glow)"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <defs>
+                <linearGradient
+                  id="composer-orange-glow"
+                  x1="0"
+                  y1="0"
+                  x2="192"
+                  y2="192"
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <stop offset="0%" stopColor="#f97316" stopOpacity="0.7" />
+                  <stop offset="55%" stopColor="#f59e0b" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </>
+        )}
+
         {isDragging && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-background/90 text-sm font-semibold text-orange-600 backdrop-blur">
+          <div className="absolute inset-0 z-30 flex items-center justify-center rounded-[inherit] bg-background/90 text-sm font-semibold text-orange-600 backdrop-blur">
             Drop files to upload
           </div>
         )}
 
         {batch && (
-          <div className="mb-2 rounded-xl border border-border bg-muted/40 p-3">
+          <div
+            className={`relative z-20 rounded-xl border border-border bg-background/80 p-3 ${
+              centered ? "mx-5 mt-5 sm:mx-7" : "mb-2"
+            }`}
+          >
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold">
@@ -519,16 +561,26 @@ export function Composer({
           }}
           rows={centered ? 4 : 2}
           maxLength={50_000}
-          placeholder="Write something…"
-          className="max-h-48 min-h-[52px] w-full resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground/70"
+          placeholder={centered ? "What's on your mind?" : "Write something…"}
+          className={`relative z-10 w-full resize-none bg-transparent outline-none ${
+            centered
+              ? "min-h-[180px] px-8 pb-3 pt-7 text-lg leading-relaxed text-neutral-900 placeholder:text-neutral-500/50 sm:px-10 sm:pt-8 sm:text-xl dark:text-white dark:placeholder:text-white/35"
+              : "max-h-36 min-h-[42px] px-1 py-1 text-[15px] leading-relaxed text-zinc-850 caret-orange-500 placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          }`}
           aria-label="Message"
         />
 
-        <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+        <div
+          className={`relative z-20 flex items-center justify-between gap-2 ${
+            centered
+              ? "border-t border-black/[0.06] px-5 pb-4 pt-3 sm:px-7 dark:border-white/[0.08]"
+              : "pt-1"
+          }`}
+        >
           <div className="flex items-center gap-1">
             <button
               onClick={() => photoInputRef.current?.click()}
-              className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
               aria-label="Upload photos"
             >
               <ImageIcon className="h-4 w-4" />
@@ -536,7 +588,7 @@ export function Composer({
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
               aria-label="Upload files"
             >
               <Paperclip className="h-4 w-4" />
@@ -544,7 +596,7 @@ export function Composer({
             </button>
             <button
               onClick={() => setDrawingOpen(true)}
-              className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
               aria-label="Open drawing canvas"
             >
               <PenLine className="h-4 w-4" />
@@ -552,7 +604,7 @@ export function Composer({
             </button>
             <button
               onClick={() => void createNote()}
-              className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
               aria-label="Create note"
             >
               <FileText className="h-4 w-4" />
@@ -562,7 +614,7 @@ export function Composer({
           <button
             onClick={() => void sendText()}
             disabled={!text.trim() || isPosting}
-            className="flex h-9 items-center gap-2 rounded-xl bg-orange-500 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
+            className="cta-button-glow flex h-9 items-center gap-2 rounded-xl px-3.5 text-xs font-semibold text-white shadow-[0_4px_12px_rgba(255,90,0,0.2)] transition hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
           >
             {isPosting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             <span className="hidden sm:inline">Send</span>

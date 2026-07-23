@@ -83,6 +83,7 @@ export function SpaceContainer({
   const hasPosted = entries.length > 0;
   const [copied, setCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [isDeleting, setIsDeleting] = useState(false);
@@ -119,16 +120,27 @@ export function SpaceContainer({
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  const dismissGuide = () => {
-    setShowGuide(false);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("woff_visited_before", "true");
-    }
-  };
-
   // Check if current user is the creator
   const isCreator =
     currentDeviceId && space.creator_device_id === currentDeviceId;
+
+  const dismissGuide = useCallback(() => {
+    setShowGuide(false);
+    localStorage.setItem(`woff_space_guide_v2_${space.slug}`, "complete");
+  }, [space.slug]);
+
+  useEffect(() => {
+    const guideKey = `woff_space_guide_v2_${space.slug}`;
+    if (localStorage.getItem(guideKey)) return;
+
+    setGuideStep(1);
+    setShowGuide(true);
+    if (window.matchMedia("(min-width: 768px)").matches) {
+      setSidebarExpanded(true);
+    } else {
+      setMobileSidebarOpen(true);
+    }
+  }, [space.slug]);
 
   useEffect(() => {
     setOwnerRecoveryKey(
@@ -327,14 +339,12 @@ export function SpaceContainer({
 
   const handleCopy = async () => {
     try {
-      const shareUrl = `${window.location.origin}/${space.slug}`;
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(space.slug);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      const shareUrl = `${window.location.origin}/${space.slug}`;
       const textArea = document.createElement("textarea");
-      textArea.value = shareUrl;
+      textArea.value = space.slug;
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand("copy");
@@ -342,6 +352,22 @@ export function SpaceContainer({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleRecoveryAction = async () => {
+    if (isCreator && ownerRecoveryKey) {
+      await navigator.clipboard.writeText(ownerRecoveryKey);
+      toast.success("Recovery key copied");
+      return;
+    }
+
+    setMobileSidebarOpen(false);
+    setRecoveryDialogOpen(true);
+  };
+
+  const openMobileSettings = () => {
+    setMobileSidebarOpen(false);
+    setMobileSettingsOpen(true);
   };
 
   const handleDeleteSpace = async () => {
@@ -387,6 +413,14 @@ export function SpaceContainer({
     generateQRCode(shareUrl);
   };
 
+  const handleSidebarShare = () => {
+    if (showGuide && guideStep === 2) {
+      void generateQRCode(`${window.location.origin}/${space.slug}`);
+      return;
+    }
+    void handleShare();
+  };
+
   const handleCopyFromModal = async () => {
     const shareUrl = `${window.location.origin}/${space.slug}`;
     try {
@@ -397,6 +431,82 @@ export function SpaceContainer({
       /* ignore */
     }
   };
+
+  const renderSettingsContent = (closeSettings: () => void) => (
+    <div className="space-y-4 p-4">
+      <div className="space-y-2">
+        <h4 className="font-medium leading-none">Settings</h4>
+        <p className="text-sm text-muted-foreground">
+          Customize your experience
+        </p>
+      </div>
+
+      {isPro && (
+        <div className="flex items-center justify-between rounded-lg bg-purple-500/10 p-3">
+          <div className="text-sm font-medium">Admin space</div>
+          <div className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+            PRO
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <div className="text-sm font-medium">Theme</div>
+          <div className="text-xs text-muted-foreground">
+            Toggle light/dark mode
+          </div>
+        </div>
+        <AnimatedThemeToggler className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white" />
+      </div>
+
+      <div className="h-px bg-border" />
+
+      {isCreator ? (
+        <>
+          {ownerRecoveryKey && (
+            <div className="rounded-lg border bg-muted/40 p-2">
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Recovery key
+              </div>
+              <button
+                className="flex w-full items-center justify-between gap-2 font-mono text-[11px]"
+                onClick={() => void handleRecoveryAction()}
+              >
+                <span className="truncate">{ownerRecoveryKey}</span>
+                <Copy className="h-3.5 w-3.5 shrink-0" />
+              </button>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start px-2 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/20"
+            onClick={() => {
+              closeSettings();
+              setDeleteDialogOpen(true);
+            }}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete Space
+          </Button>
+        </>
+      ) : (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start px-2"
+          onClick={() => {
+            closeSettings();
+            setRecoveryDialogOpen(true);
+          }}
+        >
+          <KeyRound className="mr-2 h-4 w-4" />
+          Recover ownership
+        </Button>
+      )}
+    </div>
+  );
 
   // Sidebar icon button helper
   const SidebarButton = ({
@@ -454,6 +564,10 @@ export function SpaceContainer({
   // The sidebar content — reused for both desktop and mobile
   const renderSidebarContent = (isMobile: boolean = false) => {
     const isCurrentlyExpanded = isMobile || sidebarExpanded;
+    const isGuideStepOpen = (step: number) =>
+      showGuide &&
+      guideStep === step &&
+      (isMobile ? !isDesktop && mobileSidebarOpen : isDesktop);
 
     return (
       <div className="flex flex-col h-full bg-zinc-50 dark:bg-[#111113]">
@@ -501,7 +615,7 @@ export function SpaceContainer({
           className={`flex flex-col gap-2 py-3 ${isCurrentlyExpanded ? "px-3" : "px-2"}`}
         >
           {/* Room Code Button with Onboarding Popover */}
-          <Popover open={showGuide && guideStep === 1}>
+          <Popover open={isGuideStepOpen(1)}>
             <PopoverTrigger asChild>
               <div className="w-full">
                 {isCurrentlyExpanded ? (
@@ -512,7 +626,7 @@ export function SpaceContainer({
                     <button
                       onClick={handleCopy}
                       className={`flex items-center justify-between gap-2 w-full rounded-xl px-3 py-2 text-sm transition-all duration-300 border ${
-                        showGuide && guideStep === 1
+                        isGuideStepOpen(1)
                           ? "bg-orange-500/10 border-[#ff5a00] text-[#ff5a00] dark:bg-orange-500/20 dark:border-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.25)] scale-[1.02]"
                           : copied
                             ? "bg-green-500/10 border-green-500/30 text-green-600 dark:bg-green-500/20 dark:border-green-500/40 dark:text-green-300"
@@ -556,7 +670,7 @@ export function SpaceContainer({
                     }
                     onClick={handleCopy}
                     className={
-                      showGuide && guideStep === 1
+                      isGuideStepOpen(1)
                         ? "bg-orange-500/10 border border-[#ff5a00] text-[#ff5a00] dark:bg-orange-500/20 dark:border-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_12px_rgba(255,90,0,0.2)] scale-[1.05]"
                         : copied
                           ? "text-green-600 dark:text-green-400 hover:text-green-500"
@@ -567,7 +681,7 @@ export function SpaceContainer({
               </div>
             </PopoverTrigger>
             <PopoverContent
-              side="right"
+              side={isMobile ? "bottom" : "right"}
               align="start"
               sideOffset={12}
               className="w-72 p-0 border border-orange-500/30 bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-xl shadow-[0_10px_30px_rgba(255,90,0,0.15)] rounded-2xl animate-in fade-in slide-in-from-left-2 duration-300 z-[9999]"
@@ -578,7 +692,7 @@ export function SpaceContainer({
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[9px] font-black text-[#ff5a00] uppercase tracking-wider bg-orange-500/10 dark:bg-orange-500/20 px-2 py-0.5 rounded-full">
-                      Step 1 of 2
+                      Step 1 of 3
                     </span>
                     <button
                       onClick={dismissGuide}
@@ -592,9 +706,9 @@ export function SpaceContainer({
                     Copy & Share Room ID
                   </h4>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                    Clicking this will copy the room ID/link to your clipboard.
-                    You can share it with anyone so they can join this space
-                    instantly!
+                    Clicking this copies the four-digit room code. Share it with
+                    anyone you want to invite; they can enter it on the home
+                    page to join.
                   </p>
                 </div>
                 <div className="flex justify-between items-center pt-1">
@@ -606,7 +720,12 @@ export function SpaceContainer({
                   </button>
                   <Button
                     size="sm"
-                    onClick={() => setGuideStep(2)}
+                    onClick={() => {
+                      void generateQRCode(
+                        `${window.location.origin}/${space.slug}`,
+                      );
+                      setGuideStep(2);
+                    }}
                     className="h-7 rounded-lg text-xs font-bold bg-[#ff5a00] hover:bg-[#ff5a00]/95 text-white shadow-md shadow-orange-500/10"
                   >
                     Next option
@@ -617,14 +736,14 @@ export function SpaceContainer({
           </Popover>
 
           {/* Share Button with Onboarding Popover */}
-          <Popover open={showGuide && guideStep === 2}>
+          <Popover open={isGuideStepOpen(2)}>
             <PopoverTrigger asChild>
               <div className="w-full">
                 {isCurrentlyExpanded ? (
                   <button
-                    onClick={handleShare}
+                    onClick={handleSidebarShare}
                     className={`flex items-center gap-3 w-full rounded-xl px-3 py-2 text-sm transition-all duration-300 border ${
-                      showGuide && guideStep === 2
+                      isGuideStepOpen(2)
                         ? "bg-orange-500/10 border-[#ff5a00] text-[#ff5a00] dark:bg-orange-500/20 dark:border-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.25)] scale-[1.02]"
                         : "border-transparent text-zinc-500 hover:text-zinc-950 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/5"
                     }`}
@@ -636,9 +755,9 @@ export function SpaceContainer({
                   <SidebarButton
                     icon={Share}
                     label="Share"
-                    onClick={handleShare}
+                    onClick={handleSidebarShare}
                     className={
-                      showGuide && guideStep === 2
+                      isGuideStepOpen(2)
                         ? "bg-orange-500/10 border border-[#ff5a00] text-[#ff5a00] dark:bg-orange-500/20 dark:border-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_12px_rgba(255,90,0,0.2)] scale-[1.05]"
                         : ""
                     }
@@ -647,7 +766,7 @@ export function SpaceContainer({
               </div>
             </PopoverTrigger>
             <PopoverContent
-              side="right"
+              side={isMobile ? "bottom" : "right"}
               align="start"
               sideOffset={12}
               className="w-72 p-0 border border-orange-500/30 bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-xl shadow-[0_10px_30px_rgba(255,90,0,0.15)] rounded-2xl animate-in fade-in slide-in-from-left-2 duration-300 z-[9999]"
@@ -658,7 +777,7 @@ export function SpaceContainer({
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[9px] font-black text-[#ff5a00] uppercase tracking-wider bg-orange-500/10 dark:bg-orange-500/20 px-2 py-0.5 rounded-full">
-                      Step 2 of 2
+                      Step 2 of 3
                     </span>
                     <button
                       onClick={dismissGuide}
@@ -672,9 +791,25 @@ export function SpaceContainer({
                     Interactive QR Sharing
                   </h4>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                    Use the share option to generate a custom QR code instantly!
-                    Anyone can scan it to connect their mobile devices directly.
+                    Let someone scan this QR code to open the room instantly.
+                    The Share option also gives you the full room link.
                   </p>
+                  <div className="flex justify-center rounded-xl border border-orange-500/15 bg-white p-2 dark:bg-white">
+                    {qrCodeUrl ? (
+                      <Image
+                        src={qrCodeUrl}
+                        alt={`QR code for room ${space.slug}`}
+                        width={112}
+                        height={112}
+                        className="h-28 w-28"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="flex h-28 w-28 items-center justify-center">
+                        <Loader2 className="h-5 w-5 animate-spin text-orange-500" />
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex justify-between items-center pt-1">
                   <button
@@ -685,10 +820,120 @@ export function SpaceContainer({
                   </button>
                   <Button
                     size="sm"
-                    onClick={dismissGuide}
+                    onClick={() => setGuideStep(3)}
                     className="h-7 rounded-lg text-xs font-bold bg-[#ff5a00] hover:bg-[#ff5a00]/95 text-white shadow-md shadow-orange-500/10"
                   >
-                    Got it!
+                    Recovery
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Recovery key / ownership option with onboarding step */}
+          <Popover open={isGuideStepOpen(3)}>
+            <PopoverTrigger asChild>
+              <div className="w-full">
+                {isCurrentlyExpanded ? (
+                  <div className="flex w-full flex-col gap-1.5">
+                    <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                      Recovery
+                    </span>
+                    <button
+                      onClick={() => void handleRecoveryAction()}
+                      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-sm transition-all duration-300 ${
+                        isGuideStepOpen(3)
+                          ? "scale-[1.02] border-[#ff5a00] bg-orange-500/10 text-[#ff5a00] shadow-[0_0_15px_rgba(255,90,0,0.25)] dark:bg-orange-500/20 dark:text-[#ff7d3b]"
+                          : "border-zinc-200 text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-950 dark:border-white/[0.06] dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
+                      }`}
+                    >
+                      <KeyRound className="h-[18px] w-[18px] shrink-0" />
+                      <span className="min-w-0 truncate font-medium">
+                        {isCreator && ownerRecoveryKey
+                          ? ownerRecoveryKey
+                          : "Recover ownership"}
+                      </span>
+                      {isCreator && ownerRecoveryKey && (
+                        <Copy className="ml-auto h-3.5 w-3.5 shrink-0" />
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <SidebarButton
+                    icon={KeyRound}
+                    label={
+                      isCreator && ownerRecoveryKey
+                        ? "Copy recovery key"
+                        : "Recover ownership"
+                    }
+                    onClick={() => void handleRecoveryAction()}
+                    className={
+                      isGuideStepOpen(3)
+                        ? "scale-[1.05] border border-[#ff5a00] bg-orange-500/10 text-[#ff5a00] shadow-[0_0_12px_rgba(255,90,0,0.2)] dark:bg-orange-500/20 dark:text-[#ff7d3b]"
+                        : ""
+                    }
+                  />
+                )}
+              </div>
+            </PopoverTrigger>
+            <PopoverContent
+              side={isMobile ? "bottom" : "right"}
+              align="start"
+              sideOffset={12}
+              className="z-[9999] w-72 rounded-2xl border border-orange-500/30 bg-white/95 p-0 shadow-[0_10px_30px_rgba(255,90,0,0.15)] backdrop-blur-xl animate-in fade-in slide-in-from-left-2 duration-300 dark:bg-[#0c0c0e]/95"
+            >
+              <div className="relative space-y-3.5 overflow-hidden p-4">
+                <div className="pointer-events-none absolute right-0 top-0 h-24 w-24 bg-gradient-to-br from-orange-500/10 to-transparent blur-xl" />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#ff5a00] dark:bg-orange-500/20">
+                      Step 3 of 3
+                    </span>
+                    <button
+                      onClick={dismissGuide}
+                      className="text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-white"
+                      aria-label="Close guide"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <h4 className="flex items-center gap-1.5 text-sm font-bold text-zinc-800 dark:text-zinc-100">
+                    <KeyRound className="h-4 w-4 text-[#ff5a00]" />
+                    Keep your recovery key safe
+                  </h4>
+                  <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    This key restores creator controls if this browser loses its
+                    anonymous session. Anyone with the key can recover ownership,
+                    so keep it private.
+                  </p>
+                  {isCreator && ownerRecoveryKey ? (
+                    <button
+                      onClick={() => void handleRecoveryAction()}
+                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-orange-500/20 bg-orange-500/[0.06] px-3 py-2 font-mono text-[11px] text-zinc-800 dark:text-zinc-100"
+                    >
+                      <span className="break-all text-left">{ownerRecoveryKey}</span>
+                      <Copy className="h-3.5 w-3.5 shrink-0 text-orange-500" />
+                    </button>
+                  ) : (
+                    <p className="rounded-xl border bg-muted/40 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                      The creator receives this key. If you already have one,
+                      choose Recover ownership and enter it there.
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    onClick={() => setGuideStep(2)}
+                    className="text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
+                  >
+                    Back
+                  </button>
+                  <Button
+                    size="sm"
+                    onClick={dismissGuide}
+                    className="h-7 rounded-lg bg-[#ff5a00] text-xs font-bold text-white shadow-md shadow-orange-500/10 hover:bg-[#ff5a00]/95"
+                  >
+                    Finish
                   </Button>
                 </div>
               </div>
@@ -734,126 +979,54 @@ export function SpaceContainer({
           <div className="flex-1" />
         )}
 
-        {/* BOTTOM section: Settings popover only */}
+        {/* Bottom settings action. Mobile uses a dialog outside the drawer. */}
         <div
           className={`flex flex-col gap-1 py-3 ${isCurrentlyExpanded ? "px-3" : "px-2"}`}
         >
-          <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
-            <PopoverTrigger asChild>
-              <div>
-                {isCurrentlyExpanded ? (
-                  <button
-                    onClick={() => setSettingsOpen(true)}
-                    className={`flex items-center gap-3 w-full rounded-xl px-3 py-2 text-sm text-zinc-500 hover:text-zinc-950 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/5 transition-all duration-200 ${
-                      settingsOpen
-                        ? "bg-zinc-200 text-zinc-950 dark:bg-white/10 dark:text-white"
-                        : ""
-                    }`}
-                  >
-                    <Settings className="h-[18px] w-[18px] flex-shrink-0" />
-                    <span className="text-sm font-medium">Settings</span>
-                  </button>
-                ) : (
-                  <SidebarButton
-                    icon={Settings}
-                    label="Settings"
-                    onClick={() => setSettingsOpen(true)}
-                    active={settingsOpen}
-                  />
-                )}
-              </div>
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-56 p-0"
-              side="right"
-              align="end"
-              sideOffset={8}
+          {isMobile ? (
+            <button
+              onClick={openMobileSettings}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-zinc-500 transition-all duration-200 hover:bg-zinc-200/50 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
             >
-              <div className="p-4 space-y-4">
-                <div className="space-y-2">
-                  <h4 className="font-medium leading-none">Settings</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Customize your experience
-                  </p>
-                </div>
-
-                {isPro && (
-                  <div className="p-3 bg-purple-500/10 rounded-lg flex items-center justify-between">
-                    <div className="text-sm font-medium">Admin space</div>
-                    <div className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                      PRO
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <div className="text-sm font-medium">Theme</div>
-                      <div className="text-xs text-muted-foreground">
-                        Toggle light/dark mode
-                      </div>
-                    </div>
-                    <AnimatedThemeToggler className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors animate-in fade-in duration-200" />
-                  </div>
-                </div>
-
-                {isCreator && (
-                  <>
-                    <div className="h-px bg-border my-2" />
-                    {ownerRecoveryKey && (
-                      <div className="mb-2 rounded-lg border bg-muted/40 p-2">
-                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Recovery key
-                        </div>
-                        <button
-                          className="flex w-full items-center justify-between gap-2 font-mono text-[11px]"
-                          onClick={async () => {
-                            await navigator.clipboard.writeText(ownerRecoveryKey);
-                            toast.success("Recovery key copied");
-                          }}
-                        >
-                          <span className="truncate">{ownerRecoveryKey}</span>
-                          <Copy className="h-3.5 w-3.5 shrink-0" />
-                        </button>
-                      </div>
-                    )}
-                    <div className="pt-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 px-2"
-                        onClick={() => {
-                          setSettingsOpen(false);
-                          setDeleteDialogOpen(true);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete Space
-                      </Button>
-                    </div>
-                  </>
-                )}
-                {!isCreator && (
-                  <>
-                    <div className="h-px bg-border my-2" />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start px-2"
-                      onClick={() => {
-                        setSettingsOpen(false);
-                        setRecoveryDialogOpen(true);
-                      }}
+              <Settings className="h-[18px] w-[18px] shrink-0" />
+              <span className="text-sm font-medium">Settings</span>
+            </button>
+          ) : (
+            <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <PopoverTrigger asChild>
+                <div>
+                  {isCurrentlyExpanded ? (
+                    <button
+                      onClick={() => setSettingsOpen(true)}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-zinc-500 transition-all duration-200 hover:bg-zinc-200/50 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white ${
+                        settingsOpen
+                          ? "bg-zinc-200 text-zinc-950 dark:bg-white/10 dark:text-white"
+                          : ""
+                      }`}
                     >
-                      <KeyRound className="mr-2 h-4 w-4" />
-                      Recover ownership
-                    </Button>
-                  </>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
+                      <Settings className="h-[18px] w-[18px] shrink-0" />
+                      <span className="text-sm font-medium">Settings</span>
+                    </button>
+                  ) : (
+                    <SidebarButton
+                      icon={Settings}
+                      label="Settings"
+                      onClick={() => setSettingsOpen(true)}
+                      active={settingsOpen}
+                    />
+                  )}
+                </div>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-56 p-0"
+                side="right"
+                align="end"
+                sideOffset={8}
+              >
+                {renderSettingsContent(() => setSettingsOpen(false))}
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
     );
@@ -902,6 +1075,18 @@ export function SpaceContainer({
         </div>
       )}
 
+      <Dialog open={mobileSettingsOpen} onOpenChange={setMobileSettingsOpen}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm overflow-hidden p-0 sm:max-w-sm">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Settings</DialogTitle>
+            <DialogDescription>
+              Change the theme or manage this space.
+            </DialogDescription>
+          </DialogHeader>
+          {renderSettingsContent(() => setMobileSettingsOpen(false))}
+        </DialogContent>
+      </Dialog>
+
       {/* Main content area — offset by sidebar on desktop */}
       <div className="flex-1 min-h-screen transition-all duration-300">
         <main
@@ -948,7 +1133,7 @@ export function SpaceContainer({
             {!hasPosted ? (
               // Centered composer for first post
               <div className="flex min-h-screen items-center justify-center">
-                <div className="w-full max-w-2xl">
+                <div className="w-full max-w-4xl">
                   <Composer
                     spaceId={space.id}
                     onNewEntry={handleNewEntry}
