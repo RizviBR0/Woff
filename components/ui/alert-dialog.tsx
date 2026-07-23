@@ -188,7 +188,7 @@ const AlertDialogContent = React.forwardRef<
               (contentRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
             }}
             className={cn(
-              "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg sm:rounded-lg",
+              "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border bg-background p-6 shadow-lg",
               className
             )}
             initial={{ opacity: 0, scale: 0.3, x: "-50%", y: "-50%" }}

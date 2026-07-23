@@ -82,6 +82,7 @@ export function SpaceContainer({
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const hasPosted = entries.length > 0;
   const [copied, setCopied] = useState(false);
+  const [navLinkCopied, setNavLinkCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -352,6 +353,23 @@ export function SpaceContainer({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleCopyNavLink = async () => {
+    const roomLink = `${window.location.origin}/${space.slug}`;
+    try {
+      await navigator.clipboard.writeText(roomLink);
+    } catch {
+      const textArea = document.createElement("textarea");
+      textArea.value = roomLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+    }
+    setNavLinkCopied(true);
+    toast.success("Room link copied");
+    window.setTimeout(() => setNavLinkCopied(false), 2000);
   };
 
   const handleRecoveryAction = async () => {
@@ -1094,10 +1112,25 @@ export function SpaceContainer({
           style={{ marginLeft: isDesktop ? sidebarWidth : 0 }}
         >
           <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 backdrop-blur-xl">
-            <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-14 md:px-4">
+            <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 pl-14 pr-3 sm:pr-4 md:px-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-bold tracking-[0.2em]">{space.slug}</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyNavLink()}
+                    className="group -ml-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Copy room ${space.slug} link`}
+                    title="Copy room link"
+                  >
+                    <span className="font-mono text-sm font-bold tracking-[0.2em]">
+                      {space.slug}
+                    </span>
+                    {navLinkCopied ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-500" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5 text-muted-foreground opacity-60 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100" />
+                    )}
+                  </button>
                   {isPro && (
                     <span className="rounded-full bg-purple-600 px-1.5 py-0.5 text-[9px] font-black text-white">PRO</span>
                   )}
@@ -1122,7 +1155,13 @@ export function SpaceContainer({
                       ? "Connecting"
                       : "Offline"}
                 </span>
-                <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={handleShare}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 w-8 gap-0 p-0 sm:w-auto sm:gap-1.5 sm:px-3"
+                  onClick={handleShare}
+                  aria-label="Share room"
+                >
                   <Share className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Share</span>
                 </Button>
