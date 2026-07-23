@@ -36,10 +36,6 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
-declare
-  used_bytes bigint;
-  reserved_bytes bigint;
-  quota_bytes bigint;
 begin
   if auth.uid() is null or not exists (
     select 1 from public.space_members
@@ -54,23 +50,6 @@ begin
     or p_size < 1 or p_size > 52428800 then
     return false;
   end if;
-
-  select case when is_pro then 1073741824 else 209715200 end
-  into quota_bytes
-  from public.spaces where id = p_space_id;
-
-  select coalesce(sum(asset.size), 0)
-  into used_bytes
-  from public.assets asset
-  join public.entries entry on entry.id = asset.entry_id
-  where entry.space_id = p_space_id;
-
-  select coalesce(sum(size), 0)
-  into reserved_bytes
-  from public.upload_intents
-  where space_id = p_space_id and expires_at > now();
-
-  if used_bytes + reserved_bytes + p_size > quota_bytes then return false; end if;
 
   insert into public.upload_intents(path, space_id, user_id, size, mime)
   values (
@@ -90,11 +69,6 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
-declare
-  quota_bytes bigint;
-  used_bytes bigint;
-  reserved_bytes bigint;
-  requested_bytes bigint;
 begin
   if auth.uid() is null
     or jsonb_typeof(p_files) <> 'array'
@@ -112,14 +86,6 @@ begin
     return false;
   end if;
 
-  select case when is_pro then 1073741824 else 209715200 end
-  into quota_bytes
-  from public.spaces
-  where id = p_space_id
-  for update;
-
-  if quota_bytes is null then return false; end if;
-
   if exists (
     select 1
     from jsonb_array_elements(p_files) as file
@@ -127,25 +93,6 @@ begin
       or coalesce((file->>'size')::bigint, 0) < 1
       or coalesce((file->>'size')::bigint, 0) > 52428800
   ) then
-    return false;
-  end if;
-
-  select coalesce(sum((file->>'size')::bigint), 0)
-  into requested_bytes
-  from jsonb_array_elements(p_files) as file;
-
-  select coalesce(sum(asset.size), 0)
-  into used_bytes
-  from public.assets asset
-  join public.entries entry on entry.id = asset.entry_id
-  where entry.space_id = p_space_id;
-
-  select coalesce(sum(size), 0)
-  into reserved_bytes
-  from public.upload_intents
-  where space_id = p_space_id and expires_at > now();
-
-  if used_bytes + reserved_bytes + requested_bytes > quota_bytes then
     return false;
   end if;
 

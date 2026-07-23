@@ -309,7 +309,7 @@ export async function createUploadIntents(
     },
   );
   if (reserveError) throw new Error(`Unable to reserve upload: ${reserveError.message}`);
-  if (!reserved) throw new Error("This space has reached its storage limit");
+  if (!reserved) throw new Error("Unable to reserve upload slot. Please retry.");
 
   return reservations.map(({ path }) => ({
     path,
