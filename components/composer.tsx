@@ -51,7 +51,7 @@ type BatchState = {
   error?: string;
 };
 
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_FILE_BYTES = 200 * 1024 * 1024;
 const MAX_BATCH_FILES = 20;
 const CONCURRENT_UPLOADS = 3;
 
@@ -122,7 +122,7 @@ export function Composer({
     if (empty) throw new Error(`${empty.name} is empty`);
     const tooLarge = files.find((file) => file.size > MAX_FILE_BYTES);
     if (tooLarge) {
-      throw new Error(`${tooLarge.name} exceeds the 20 MB file limit`);
+      throw new Error(`${tooLarge.name} exceeds the 200 MB file limit`);
     }
   }, []);
 
