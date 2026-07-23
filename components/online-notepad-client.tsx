@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { createSpace } from "@/lib/actions";
+import { rememberSpaceOwnership } from "@/lib/space-recovery";
 import {
   Zap,
   Shield,
@@ -33,6 +34,7 @@ export function OnlineNotepadClient() {
     setIsCreating(true);
     try {
       const space = await createSpace();
+      rememberSpaceOwnership(space);
       router.push(`/${space.slug}`);
     } catch (err) {
       console.error("Failed to create space:", err);

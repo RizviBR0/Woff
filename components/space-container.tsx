@@ -18,16 +18,22 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
+  Wifi,
+  WifiOff,
+  ArrowDown,
+  KeyRound,
 } from "lucide-react";
-import { Space, deleteSpace } from "@/lib/actions";
+import dynamic from "next/dynamic";
+import { toast } from "sonner";
+import { Space, deleteSpace, recoverSpace } from "@/lib/actions";
 import { getDaysUntilExpiry } from "@/lib/utils";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
 import { ProgressiveBlur } from "@/components/ui/progressive-blur";
-import { ActivitySidebar } from "./activity-sidebar";
 import { Logo } from "./logo";
-import { createClientSupabaseClient } from "@/lib/supabase";
+import { createClientSupabaseClient } from "@/lib/supabase-browser";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import QRCode from "qrcode";
 import {
   Popover,
@@ -51,10 +57,16 @@ import {
 import { useRouter } from "next/navigation";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 
+const ActivitySidebar = dynamic(
+  () => import("./activity-sidebar").then((module) => module.ActivitySidebar),
+  { ssr: false },
+);
+
 interface SpaceContainerProps {
   space: Space;
   initialEntries: Entry[];
   currentDeviceId?: string | null;
+  currentDisplayName: string;
 }
 
 // Sidebar widths as constants
@@ -65,15 +77,27 @@ export function SpaceContainer({
   space,
   initialEntries,
   currentDeviceId,
+  currentDisplayName,
 }: SpaceContainerProps) {
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
-  const [hasPosted, setHasPosted] = useState(initialEntries.length > 0);
+  const hasPosted = entries.length > 0;
   const [copied, setCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [recoveryDialogOpen, setRecoveryDialogOpen] = useState(false);
+  const [recoveryKey, setRecoveryKey] = useState("");
+  const [ownerRecoveryKey, setOwnerRecoveryKey] = useState("");
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<
+    "connecting" | "connected" | "disconnected"
+  >("connecting");
+  const [newItemsCount, setNewItemsCount] = useState(0);
+  const [shareHost, setShareHost] = useState("woff.space");
+  const [onlineCount, setOnlineCount] = useState(1);
+  const isNearBottomRef = useRef(true);
   const router = useRouter();
 
   // Sidebar state
@@ -87,24 +111,12 @@ export function SpaceContainer({
   // Track if we're on desktop for sidebar offset
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => {
+    setShareHost(window.location.host);
     const mq = window.matchMedia("(min-width: 768px)");
     setIsDesktop(mq.matches);
     const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const hasVisited = localStorage.getItem("woff_visited_before");
-      if (!hasVisited) {
-        setShowGuide(true);
-        // Expand sidebar on desktop by default so they can see full labels
-        if (window.innerWidth >= 768) {
-          setSidebarExpanded(true);
-        }
-      }
-    }
   }, []);
 
   const dismissGuide = () => {
@@ -114,24 +126,37 @@ export function SpaceContainer({
     }
   };
 
-  // Track entry IDs that were added/replaced locally to prevent
-  // the real-time subscription from adding duplicates.
-  const locallyHandledIdsRef = useRef<Set<string>>(new Set());
-
   // Check if current user is the creator
   const isCreator =
     currentDeviceId && space.creator_device_id === currentDeviceId;
+
+  useEffect(() => {
+    setOwnerRecoveryKey(
+      localStorage.getItem(`woff_recovery_${space.slug}`) || "",
+    );
+    if (isCreator) return;
+    const savedKey = localStorage.getItem(`woff_recovery_${space.slug}`);
+    if (!savedKey) return;
+    void recoverSpace(space.slug, savedKey)
+      .then((recovered) => {
+        if (recovered) router.refresh();
+        else localStorage.removeItem(`woff_recovery_${space.slug}`);
+      })
+      .catch(() => {
+        // Keep the saved key for a future retry if the network is unavailable.
+      });
+  }, [isCreator, router, space.slug]);
 
   // Use space prop for pro status
   const isPro = space.is_pro || false;
 
   // Calculate days until space expires
   const daysUntilExpiry = useMemo(() => {
-    if (space.last_activity_at) {
-      return getDaysUntilExpiry(space.last_activity_at);
+    if (space.expires_at || space.last_activity_at) {
+      return getDaysUntilExpiry(space.expires_at || space.last_activity_at, Boolean(space.expires_at));
     }
     return 7;
-  }, [space.last_activity_at]);
+  }, [space.expires_at, space.last_activity_at]);
 
   // User avatar letter (first letter of slug)
   const avatarLetter = (space.slug?.[0] || "W").toUpperCase();
@@ -147,10 +172,11 @@ export function SpaceContainer({
       top: document.documentElement.scrollHeight,
       behavior: "smooth",
     });
+    setNewItemsCount(0);
   }, []);
 
   // Helper function to safely add entry without duplicates
-  const addEntryIfNotExists = useCallback((newEntry: Entry, source: string) => {
+  const addEntryIfNotExists = useCallback((newEntry: Entry) => {
     setEntries((prev) => {
       const exists = prev.some((entry) => entry.id === newEntry.id);
       if (exists) {
@@ -160,21 +186,33 @@ export function SpaceContainer({
     });
   }, []);
 
-  // Auto-scroll to bottom when entries change
+  // Track whether new content can be revealed without interrupting reading.
   useEffect(() => {
-    if (entries.length > 0) {
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
-    }
-  }, [entries, scrollToBottom]);
+    const handleScroll = () => {
+      const remaining =
+        document.documentElement.scrollHeight -
+        window.innerHeight -
+        window.scrollY;
+      isNearBottomRef.current = remaining < 180;
+      if (isNearBottomRef.current) setNewItemsCount(0);
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Real-time subscription for new entries
   useEffect(() => {
     const supabase = createClientSupabaseClient();
 
     const channel = supabase
-      .channel("entries-changes")
+      .channel(`space:${space.id}`, {
+        config: { presence: { key: currentDeviceId || crypto.randomUUID() } },
+      })
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState();
+        setOnlineCount(Math.max(1, Object.keys(state).length));
+      })
       .on(
         "postgres_changes",
         {
@@ -186,17 +224,12 @@ export function SpaceContainer({
         (payload) => {
           const newEntry = payload.new as Entry;
 
-          if (locallyHandledIdsRef.current.has(newEntry.id)) {
-            return;
+          addEntryIfNotExists(newEntry);
+          if (isNearBottomRef.current) {
+            requestAnimationFrame(scrollToBottom);
+          } else {
+            setNewItemsCount((count) => count + 1);
           }
-
-          setTimeout(() => {
-            if (locallyHandledIdsRef.current.has(newEntry.id)) {
-              return;
-            }
-            addEntryIfNotExists(newEntry, "Real-time");
-            setHasPosted(true);
-          }, 300);
         },
       )
       .on(
@@ -233,24 +266,26 @@ export function SpaceContainer({
           }
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          setConnectionStatus("connected");
+          void channel.track({ name: currentDisplayName, onlineAt: new Date().toISOString() });
+        }
+        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          setConnectionStatus("disconnected");
+        } else {
+          setConnectionStatus("connecting");
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [space.id, addEntryIfNotExists]);
+  }, [space.id, currentDeviceId, currentDisplayName, addEntryIfNotExists, scrollToBottom]);
 
   const handleNewEntry = useCallback(
     (entry: Entry) => {
-      if (!entry.id.startsWith("placeholder-")) {
-        locallyHandledIdsRef.current.add(entry.id);
-        setTimeout(() => {
-          locallyHandledIdsRef.current.delete(entry.id);
-        }, 10000);
-      }
-
-      addEntryIfNotExists(entry, "Local");
-      setHasPosted(true);
+      addEntryIfNotExists(entry);
 
       setTimeout(() => {
         scrollToBottom();
@@ -272,11 +307,6 @@ export function SpaceContainer({
 
   const handleReplaceEntry = useCallback(
     (placeholderId: string, realEntry: Entry) => {
-      locallyHandledIdsRef.current.add(realEntry.id);
-      setTimeout(() => {
-        locallyHandledIdsRef.current.delete(realEntry.id);
-      }, 10000);
-
       setEntries((prev) => {
         // First, remove any duplicate that real-time may have already inserted
         const withoutRealtimeDup = prev.filter(
@@ -330,6 +360,7 @@ export function SpaceContainer({
     } catch (error) {
       setIsDeleting(false);
       setDeleteDialogOpen(false);
+      toast.error(error instanceof Error ? error.message : "Unable to delete the space");
     }
   };
 
@@ -746,18 +777,14 @@ export function SpaceContainer({
                   </p>
                 </div>
 
-                <div className="p-3 bg-muted/50 rounded-lg flex items-center justify-between">
-                  <div className="text-sm font-medium">Plan</div>
-                  <div
-                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      isPro
-                        ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
-                        : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                    }`}
-                  >
-                    {isPro ? "PRO" : "FREE"}
+                {isPro && (
+                  <div className="p-3 bg-purple-500/10 rounded-lg flex items-center justify-between">
+                    <div className="text-sm font-medium">Admin space</div>
+                    <div className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                      PRO
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -774,6 +801,23 @@ export function SpaceContainer({
                 {isCreator && (
                   <>
                     <div className="h-px bg-border my-2" />
+                    {ownerRecoveryKey && (
+                      <div className="mb-2 rounded-lg border bg-muted/40 p-2">
+                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Recovery key
+                        </div>
+                        <button
+                          className="flex w-full items-center justify-between gap-2 font-mono text-[11px]"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(ownerRecoveryKey);
+                            toast.success("Recovery key copied");
+                          }}
+                        >
+                          <span className="truncate">{ownerRecoveryKey}</span>
+                          <Copy className="h-3.5 w-3.5 shrink-0" />
+                        </button>
+                      </div>
+                    )}
                     <div className="pt-1">
                       <Button
                         variant="ghost"
@@ -788,6 +832,23 @@ export function SpaceContainer({
                         Delete Space
                       </Button>
                     </div>
+                  </>
+                )}
+                {!isCreator && (
+                  <>
+                    <div className="h-px bg-border my-2" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start px-2"
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        setRecoveryDialogOpen(true);
+                      }}
+                    >
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      Recover ownership
+                    </Button>
                   </>
                 )}
               </div>
@@ -847,6 +908,42 @@ export function SpaceContainer({
           className="transition-all duration-300"
           style={{ marginLeft: isDesktop ? sidebarWidth : 0 }}
         >
+          <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 backdrop-blur-xl">
+            <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-14 md:px-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold tracking-[0.2em]">{space.slug}</span>
+                  {isPro && (
+                    <span className="rounded-full bg-purple-600 px-1.5 py-0.5 text-[9px] font-black text-white">PRO</span>
+                  )}
+                </div>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  You&apos;re {currentDisplayName}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className="hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:flex"
+                  aria-live="polite"
+                >
+                  {connectionStatus === "connected" ? (
+                    <Wifi className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : (
+                    <WifiOff className="h-3.5 w-3.5 text-amber-500" />
+                  )}
+                  {connectionStatus === "connected"
+                    ? `${onlineCount} online`
+                    : connectionStatus === "connecting"
+                      ? "Connecting"
+                      : "Offline"}
+                </span>
+                <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={handleShare}>
+                  <Share className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Share</span>
+                </Button>
+              </div>
+            </div>
+          </header>
           <div className="container mx-auto px-4">
             {!hasPosted ? (
               // Centered composer for first post
@@ -868,11 +965,11 @@ export function SpaceContainer({
               </div>
             ) : (
               // Timeline view with entries, and bottom composer
-              <div className="pb-20">
+              <div className="pb-40">
                 <div className="mx-auto max-w-2xl space-y-6 py-8">
-                  {entries.map((entry, index) => (
+                  {entries.map((entry) => (
                     <EntryCard
-                      key={`${entry.id}-${index}`}
+                      key={entry.id}
                       entry={entry}
                       currentDeviceId={currentDeviceId || null}
                       onDelete={handleRemoveEntry}
@@ -909,6 +1006,16 @@ export function SpaceContainer({
           </div>
         </main>
       </div>
+
+      {newItemsCount > 0 && (
+        <button
+          onClick={scrollToBottom}
+          className="fixed bottom-28 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background shadow-xl"
+        >
+          <ArrowDown className="h-3.5 w-3.5" />
+          {newItemsCount} new {newItemsCount === 1 ? "item" : "items"}
+        </button>
+      )}
 
       {/* Share Modal */}
       <Dialog
@@ -964,7 +1071,7 @@ export function SpaceContainer({
               </label>
               <div className="flex gap-2.5">
                 <div className="flex-1 px-4 py-3 bg-zinc-50 dark:bg-[#18181b]/50 rounded-xl text-sm font-mono text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-white/[0.06] select-all truncate flex items-center">
-                  woff.space/{space.slug}
+                  {shareHost}/{space.slug}
                 </div>
                 <Button
                   onClick={handleCopyFromModal}
@@ -995,11 +1102,15 @@ export function SpaceContainer({
             {/* Premium footer */}
             <div className="text-center pt-4 border-t border-zinc-200 dark:border-white/[0.06] flex items-center justify-center gap-2">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                {connectionStatus === "connected" && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                )}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                  connectionStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"
+                }`}></span>
               </span>
               <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 tracking-wide uppercase">
-                Real-time sharing active
+                {connectionStatus === "connected" ? "Live sharing connected" : "Reconnecting…"}
               </span>
             </div>
           </div>
@@ -1007,6 +1118,56 @@ export function SpaceContainer({
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
+      <Dialog open={recoveryDialogOpen} onOpenChange={setRecoveryDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Recover space ownership</DialogTitle>
+            <DialogDescription>
+              Enter the recovery key saved when this space was created.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={recoveryKey}
+            onChange={(event) =>
+              setRecoveryKey(
+                event.target.value.toUpperCase().replace(/[^A-F0-9]/g, "").slice(0, 20),
+              )
+            }
+            placeholder="20-character recovery key"
+            className="font-mono uppercase tracking-wider"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecoveryDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={recoveryKey.length !== 20 || isRecovering}
+              onClick={async () => {
+                setIsRecovering(true);
+                try {
+                  const recovered = await recoverSpace(space.slug, recoveryKey);
+                  if (!recovered) {
+                    toast.error("That recovery key is not valid");
+                    return;
+                  }
+                  localStorage.setItem(`woff_recovery_${space.slug}`, recoveryKey);
+                  toast.success("Ownership recovered");
+                  setRecoveryDialogOpen(false);
+                  router.refresh();
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Recovery failed");
+                } finally {
+                  setIsRecovering(false);
+                }
+              }}
+            >
+              {isRecovering && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Recover
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

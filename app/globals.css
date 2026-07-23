@@ -59,6 +59,102 @@
   }
 }
 
+/* Stable TipTap document styling. Kept local instead of relying on the
+   typography plugin, which is not installed in this project. */
+.note-editor-content .tiptap {
+  min-height: inherit;
+  width: 100%;
+  max-width: 100%;
+  outline: none;
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+}
+
+.note-editor-content .tiptap > * + * {
+  margin-top: 0.75rem;
+}
+
+.note-editor-content .tiptap h1 {
+  margin-top: 1.5rem;
+  font-size: clamp(1.75rem, 6vw, 2.5rem);
+  font-weight: 750;
+  line-height: 1.15;
+}
+
+.note-editor-content .tiptap h2 {
+  margin-top: 1.25rem;
+  font-size: clamp(1.35rem, 4vw, 1.875rem);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.note-editor-content .tiptap h3 {
+  margin-top: 1rem;
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+.note-editor-content .tiptap ul:not([data-type="taskList"]),
+.note-editor-content .tiptap ol {
+  padding-left: 1.5rem;
+}
+
+.note-editor-content .tiptap ul:not([data-type="taskList"]) {
+  list-style: disc;
+}
+
+.note-editor-content .tiptap ol {
+  list-style: decimal;
+}
+
+.note-editor-content .tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+}
+
+.note-editor-content .tiptap ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.note-editor-content .tiptap blockquote {
+  border-left: 3px solid rgb(249 115 22);
+  padding-left: 1rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.note-editor-content .tiptap pre {
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  background: hsl(var(--muted));
+  padding: 1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+}
+
+.note-editor-content .tiptap a {
+  color: rgb(234 88 12);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.note-editor-content .tiptap .note-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1rem auto;
+  border-radius: 0.75rem;
+}
+
+.note-editor-content .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;

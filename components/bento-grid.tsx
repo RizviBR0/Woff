@@ -6,20 +6,20 @@ import { FaShieldAlt } from "react-icons/fa";
 const cards = [
   {
     className: styles.cardSecure,
-    title: "Passcode Protected",
-    text: "Keep shared spaces locked down. Only people with the room code can enter.",
+    title: "Private by Room Code",
+    text: "Only people you share the four-digit room code with can join the space.",
     visual: <ShieldVisual />,
   },
   {
     className: styles.cardNotes,
-    title: "Real-time Markdown Notes",
-    text: "Draft ideas, write documentation, and collaborate in the same instant workspace.",
+    title: "Live Rich-text Notes",
+    text: "Write formatted notes with dependable autosave and share them with room members.",
     visual: <ChartVisual />,
   },
   {
     className: styles.cardFiles,
     title: "Files & Images",
-    text: "Drop files, images, and quick assets without compression, setup, or friction.",
+    text: "Drop files, images, and drawings into a resumable queue with clear progress.",
     visual: <DropVisual />,
   },
   {

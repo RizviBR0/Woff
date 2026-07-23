@@ -1,46 +1,46 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
-function generateDeviceId(): string {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (let i = 0; i < 21; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export function middleware(request: NextRequest) {
-  const response = NextResponse.next();
+  if (!url || !anonKey) return response;
 
-  // Check if device_id cookie exists
-  const deviceId = request.cookies.get("device_id")?.value;
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll: () => request.cookies.getAll(),
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => {
+          request.cookies.set(name, value);
+        });
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) => {
+          response.cookies.set(name, value, options);
+        });
+      },
+    },
+  });
 
-  if (!deviceId) {
-    // Set the device_id cookie
-    response.cookies.set("device_id", generateDeviceId(), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 365, // 1 year
-    });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Room/note pages need identity before Server Components read through RLS.
+  // Marketing pages create it lazily only when a Server Action is used.
+  const needsIdentity =
+    /^\/\d{4}(?:\/|$)/.test(request.nextUrl.pathname) ||
+    request.nextUrl.pathname.startsWith("/n/");
+  if (!user && needsIdentity) {
+    await supabase.auth.signInAnonymously();
   }
 
   return response;
 }
 
-// Only run on page routes, not API routes or static files
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files (images, etc.)
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*|_next).*)",
+    "/((?!api/cleanup-storage|_next/static|_next/image|favicon.ico|.*\\..*).*)",
   ],
 };

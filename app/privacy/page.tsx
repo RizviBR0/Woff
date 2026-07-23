@@ -64,10 +64,10 @@ export default function PrivacyPage() {
             </p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-2">
               <li>
-                <strong>Temporary Spaces:</strong> Workspaces auto-expire and are permanently deleted from our servers after an extended period of inactivity.
+                <strong>Temporary Spaces:</strong> Workspaces expire after seven days without content activity and are then queued for permanent database and object-storage deletion.
               </li>
               <li>
-                <strong>Manual Deletion:</strong> Any user can clear notes, texts, or files instantly using our built-in delete controls. Once deleted, they are unrecoverable.
+                <strong>Manual Deletion:</strong> A sender can delete only their own messages, while only the space creator can delete the complete space.
               </li>
             </ul>
           </div>
@@ -84,10 +84,10 @@ export default function PrivacyPage() {
             </p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-2">
               <li>
-                <strong>device_id cookie:</strong> Generated to group actions belonging to the same browser (so you can edit the notes you created in your space). This is purely anonymous and local.
+                <strong>Anonymous session cookies:</strong> Supabase Authentication creates an invisible anonymous identity used by Row Level Security to enforce ownership. There is no profile, login form, email address, or password.
               </li>
               <li>
-                <strong>Local Storage / Session Storage:</strong> Used to remember your interface preferences, such as system theme (dark/light mode).
+                <strong>Local Storage:</strong> Used for interface preferences, unsaved note recovery drafts, recent rooms, and locally saved room recovery keys.
               </li>
             </ul>
           </div>
@@ -100,7 +100,7 @@ export default function PrivacyPage() {
               4. Analytics Services
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              To understand traffic patterns and technical health, we use high-level, aggregate analytics platforms like Google Analytics (GA4) and Vercel Speed Insights. These track general browser details, city-level locations, and page speed benchmarks. Your shared workspace contents and notes are never shared with or processed by these third-party trackers.
+              On public marketing pages we may use Google Analytics (GA4) and Vercel Speed Insights for aggregate traffic and performance information. These tools are disabled entirely on room-code and note routes, so private room and note URLs are not sent to them.
             </p>
           </div>
 

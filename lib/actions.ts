@@ -1,8 +1,23 @@
 "use server";
 
-import { createServerSupabaseClient } from "@/lib/supabase";
-import { generateShortSlug, generateDeviceId } from "@/lib/slug";
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import sanitizeHtml from "sanitize-html";
+import { customAlphabet } from "nanoid";
+import { displayNameForDevice } from "@/lib/display-name";
+import {
+  createServerSupabaseClient,
+  requireAnonymousUser,
+} from "@/lib/supabase";
+
+const noteId = customAlphabet(
+  "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz",
+  12,
+);
+const MAX_TEXT_LENGTH = 50_000;
+const MAX_META_BYTES = 250_000;
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+const MAX_FILES_PER_ENTRY = 20;
 
 export interface Space {
   id: string;
@@ -13,60 +28,9 @@ export interface Space {
   allow_public_post: boolean;
   created_at: string;
   last_activity_at: string;
+  expires_at?: string | null;
   is_pro?: boolean;
-}
-
-export async function createSpace(): Promise<Space> {
-  // Get or create device ID
-  const cookieStore = await cookies();
-  let deviceId = cookieStore.get("device_id")?.value;
-
-  if (!deviceId) {
-    deviceId = generateDeviceId();
-    cookieStore.set("device_id", deviceId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 365, // 1 year
-    });
-  }
-
-  const supabase = await createServerSupabaseClient();
-
-  // Generate unique slug and create space using optimistic insertion
-  let attempts = 0;
-  const maxAttempts = 5;
-  let lastError = null;
-
-  while (attempts < maxAttempts) {
-    const slug = generateShortSlug();
-    const { data, error } = await supabase
-      .from("spaces")
-      .insert({
-        slug,
-        creator_device_id: deviceId,
-        visibility: "unlisted",
-        allow_public_post: true,
-      })
-      .select()
-      .single();
-
-    if (!error) {
-      /* console.log("💾 Space created successfully:", data); */
-      return data;
-    }
-
-    // Code '23505' is unique key violation in Postgres
-    if (error.code === "23505") {
-      attempts++;
-      lastError = error;
-      continue;
-    }
-
-    throw new Error(`Failed to create space: ${error.message}`);
-  }
-
-  throw new Error(`Failed to create space after ${maxAttempts} attempts: ${lastError?.message}`);
+  recovery_key?: string;
 }
 
 export interface Entry {
@@ -74,40 +38,9 @@ export interface Entry {
   space_id: string;
   kind: "text" | "image" | "pdf" | "file";
   text: string | null;
-  meta: any;
+  meta: Record<string, any> | null;
   created_by_device_id: string | null;
   created_at: string;
-}
-
-export async function createEntry(
-  spaceId: string,
-  kind: "text" | "image" | "pdf" | "file",
-  text?: string,
-  meta?: any,
-): Promise<Entry> {
-  // Get device ID from cookies
-  const cookieStore = await cookies();
-  const deviceId = cookieStore.get("device_id")?.value;
-
-  const supabase = await createServerSupabaseClient();
-
-  const { data, error } = await supabase
-    .from("entries")
-    .insert({
-      space_id: spaceId,
-      kind,
-      text: text || null,
-      meta: meta || null,
-      created_by_device_id: deviceId,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to create entry: ${error.message}`);
-  }
-
-  return data;
 }
 
 export interface Note {
@@ -115,6 +48,7 @@ export interface Note {
   slug: string;
   title: string;
   content: string;
+  content_json?: Record<string, unknown> | null;
   public_code: string;
   visibility: "public" | "unlisted" | "private";
   font_family: "system" | "serif" | "mono";
@@ -124,51 +58,361 @@ export interface Note {
   created_at: string;
   updated_at: string;
   is_locked?: boolean;
-  passcode?: string;
+  is_owner?: boolean;
+  version?: number;
+}
+
+export interface UploadIntent {
+  path: string;
+  bucket: "files";
+  maxBytes: number;
+}
+
+const allowedHtmlTags = [
+  "p",
+  "br",
+  "strong",
+  "em",
+  "u",
+  "s",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "blockquote",
+  "pre",
+  "code",
+  "ul",
+  "ol",
+  "li",
+  "a",
+  "img",
+  "hr",
+  "span",
+  "div",
+  "label",
+  "input",
+];
+
+function sanitizeNoteHtml(value: string): string {
+  return sanitizeHtml(value, {
+    allowedTags: allowedHtmlTags,
+    allowedAttributes: {
+      a: ["href", "target", "rel"],
+      img: ["src", "alt", "title", "width", "height"],
+      span: ["data-type", "data-checked"],
+      div: ["data-type"],
+      li: ["data-checked"],
+      ul: ["data-type"],
+      input: ["type", "checked", "disabled"],
+    },
+    allowedSchemes: ["http", "https", "mailto"],
+    allowedSchemesByTag: {
+      img: ["http", "https"],
+    },
+    transformTags: {
+      a: (_tagName, attribs) => ({
+        tagName: "a",
+        attribs: {
+          ...attribs,
+          target: "_blank",
+          rel: "noopener noreferrer nofollow",
+        },
+      }),
+    },
+  });
+}
+
+function normalizeRoomCode(value: string) {
+  return value.replace(/\D/g, "").slice(0, 4);
+}
+
+function safeFileName(value: string) {
+  const extension = value.includes(".")
+    ? `.${value.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}`
+    : "";
+  return `${randomUUID()}${extension}`;
+}
+
+function hashPasscode(passcode: string) {
+  const salt = randomBytes(16);
+  const hash = scryptSync(passcode, salt, 32);
+  return `${salt.toString("hex")}:${hash.toString("hex")}`;
+}
+
+function checkPasscode(passcode: string, stored: string) {
+  try {
+    const [saltHex, hashHex] = stored.split(":");
+    const expected = Buffer.from(hashHex, "hex");
+    const actual = scryptSync(passcode, Buffer.from(saltHex, "hex"), 32);
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  } catch {
+    return false;
+  }
+}
+
+async function assertRateLimit(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  action: string,
+  limit: number,
+  windowSeconds = 60,
+) {
+  const { data, error } = await supabase.rpc("consume_rate_limit", {
+    p_action: action,
+    p_limit: limit,
+    p_window_seconds: windowSeconds,
+  });
+  if (error) throw new Error(`Rate limit check failed: ${error.message}`);
+  if (!data) throw new Error("Too many requests. Please wait and try again.");
+}
+
+async function joinSpaceByCode(slug: string): Promise<Space | null> {
+  const code = normalizeRoomCode(slug);
+  if (code.length !== 4) return null;
+
+  const { supabase, user } = await requireAnonymousUser();
+  const { data, error } = await supabase.rpc("join_space", {
+    p_slug: code,
+    p_display_name: displayNameForDevice(user.id),
+  });
+
+  if (error || !data) return null;
+  const result = Array.isArray(data) ? data[0] : data;
+  return {
+    ...(result.space as Space),
+    recovery_key: result.recovery_key,
+  };
+}
+
+export async function recoverSpace(
+  slug: string,
+  recoveryKey: string,
+): Promise<boolean> {
+  const { supabase, user } = await requireAnonymousUser();
+  if (!/^\d{4}$/.test(slug) || !/^[A-F0-9]{20}$/i.test(recoveryKey.trim())) {
+    return false;
+  }
+  const { data, error } = await supabase.rpc("recover_space", {
+    p_slug: slug,
+    p_recovery_key: recoveryKey.trim(),
+    p_display_name: displayNameForDevice(user.id),
+  });
+  if (error) throw new Error(`Unable to recover space: ${error.message}`);
+  return Boolean(data);
+}
+
+export async function createSpace(): Promise<Space> {
+  const { supabase, user } = await requireAnonymousUser();
+  const { data, error } = await supabase.rpc("create_space", {
+    p_display_name: displayNameForDevice(user.id),
+  });
+
+  if (error || !data) {
+    throw new Error(error?.message || "Unable to create a space");
+  }
+
+  const payload = (Array.isArray(data) ? data[0] : data) as {
+    space?: Space;
+    recovery_key?: string;
+  } & Partial<Space>;
+  const space = payload.space ?? (payload as Space);
+  return {
+    ...space,
+    recovery_key: payload.recovery_key,
+  };
+}
+
+export async function joinSpace(slug: string): Promise<Space | null> {
+  return joinSpaceByCode(slug);
+}
+
+export async function createEntry(
+  spaceId: string,
+  kind: "text" | "image" | "pdf" | "file",
+  text?: string,
+  meta?: Record<string, any>,
+): Promise<Entry> {
+  const { supabase, user } = await requireAnonymousUser();
+  await assertRateLimit(supabase, "create_entry", 60);
+  const cleanText = text?.trim() || null;
+
+  if (cleanText && cleanText.length > MAX_TEXT_LENGTH) {
+    throw new Error(`Messages can be at most ${MAX_TEXT_LENGTH} characters`);
+  }
+
+  if (cleanText?.startsWith("data:") || cleanText?.includes(";base64,")) {
+    throw new Error("Binary data must be uploaded as a file");
+  }
+
+  const metaBytes = meta ? Buffer.byteLength(JSON.stringify(meta), "utf8") : 0;
+  if (metaBytes > MAX_META_BYTES) {
+    throw new Error("Entry metadata is too large");
+  }
+
+  const { data, error } = await supabase
+    .from("entries")
+    .insert({
+      space_id: spaceId,
+      kind,
+      text: cleanText,
+      meta: meta || null,
+      created_by_device_id: user.id,
+    })
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || "Unable to post this entry");
+  }
+
+  return data as Entry;
+}
+
+export async function createUploadIntent(
+  spaceId: string,
+  file: { name: string; size: number; type: string },
+): Promise<UploadIntent> {
+  const { supabase } = await requireAnonymousUser();
+
+  if (!file.name || file.name.length > 255) {
+    throw new Error("Invalid file name");
+  }
+  if (!Number.isFinite(file.size) || file.size <= 0 || file.size > MAX_UPLOAD_BYTES) {
+    throw new Error("Files must be smaller than 20 MB");
+  }
+
+  const { data: membership } = await supabase
+    .from("space_members")
+    .select("space_id")
+    .eq("space_id", spaceId)
+    .maybeSingle();
+
+  if (!membership) throw new Error("Join this room before uploading");
+
+  const path = `${spaceId}/${safeFileName(file.name)}`;
+  const { data: reserved, error: reserveError } = await supabase.rpc(
+    "reserve_upload",
+    {
+      p_space_id: spaceId,
+      p_path: path,
+      p_size: file.size,
+      p_mime: file.type || "application/octet-stream",
+    },
+  );
+  if (reserveError) throw new Error(`Unable to reserve upload: ${reserveError.message}`);
+  if (!reserved) throw new Error("This space has reached its storage limit");
+
+  return {
+    path,
+    bucket: "files",
+    maxBytes: MAX_UPLOAD_BYTES,
+  };
+}
+
+export async function createUploadedEntry(
+  spaceId: string,
+  items: Array<{
+    path: string;
+    name: string;
+    type: string;
+    size: number;
+    width?: number;
+    height?: number;
+  }>,
+  entryType: "files" | "photos" | "drawing" = "files",
+): Promise<Entry> {
+  const { supabase } = await requireAnonymousUser();
+  if (items.length < 1 || items.length > MAX_FILES_PER_ENTRY) {
+    throw new Error(`Upload between 1 and ${MAX_FILES_PER_ENTRY} files`);
+  }
+
+  const normalizedItems = items.map((item) => {
+    if (!item.path.startsWith(`${spaceId}/`)) {
+      throw new Error("Invalid upload path");
+    }
+    if (item.size <= 0 || item.size > MAX_UPLOAD_BYTES) {
+      throw new Error("Invalid upload size");
+    }
+    return {
+      path: item.path,
+      url: `/api/files/${item.path
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}`,
+      name: item.name.slice(0, 255),
+      type: item.type || "application/octet-stream",
+      size: item.size,
+      width: item.width,
+      height: item.height,
+    };
+  });
+
+  const { data: entry, error } = await supabase.rpc("create_file_entry", {
+    p_space_id: spaceId,
+    p_items: normalizedItems,
+    p_presentation: entryType,
+  });
+  if (error || !entry) {
+    throw new Error(error?.message || "Unable to publish uploaded files");
+  }
+  return (Array.isArray(entry) ? entry[0] : entry) as Entry;
+}
+
+export async function registerNoteAsset(
+  noteSlug: string,
+  item: {
+    path: string;
+    type: string;
+    size: number;
+    width?: number;
+    height?: number;
+  },
+): Promise<void> {
+  const { supabase } = await requireAnonymousUser();
+  const { data, error } = await supabase.rpc("register_note_asset", {
+    p_note_slug: noteSlug,
+    p_path: item.path,
+    p_mime: item.type || "application/octet-stream",
+    p_size: item.size,
+    p_width: item.width || null,
+    p_height: item.height || null,
+  });
+  if (error) throw new Error(`Unable to register note image: ${error.message}`);
+  if (!data) throw new Error("The note image upload expired");
 }
 
 export async function createNoteEntry(
   spaceId: string,
-  title?: string,
+  title = "Untitled Note",
 ): Promise<{ noteSlug: string; publicCode: string; entryId: string }> {
-  /* console.log(
-    "💾 Creating note entry for space:",
-    spaceId,
-    "with title:",
-    title,
-  ); */
+  const { supabase, user } = await requireAnonymousUser();
+  await assertRateLimit(supabase, "create_note", 10);
+  const noteSlug = noteId();
+  const publicCode = noteId();
+  const cleanTitle = title.trim().slice(0, 120) || "Untitled Note";
 
-  // Generate unique slug and public code
-  const noteSlug = generateShortSlug();
-  const publicCode = generateShortSlug();
+  const entry = await createEntry(spaceId, "text", `NOTE:${noteSlug}`, {
+    type: "note",
+    note_slug: noteSlug,
+    public_code: publicCode,
+    title: cleanTitle,
+    is_locked: false,
+  });
 
-  /* console.log("💾 Generated slugs - note:", noteSlug, "public:", publicCode); */
+  const { error } = await supabase.from("notes").insert({
+    entry_id: entry.id,
+    slug: noteSlug,
+    public_code: publicCode,
+    title: cleanTitle,
+    created_by_user_id: user.id,
+  });
 
-  // Create entry with note data stored as text
-  const noteText = `NOTE:${noteSlug}:${publicCode}:${title || "Untitled Note"}`;
-
-  /* console.log("💾 Creating entry with text:", noteText); */
-
-  try {
-    const entry = await createEntry(spaceId, "text", noteText, {
-      type: "note",
-      title: title || "Untitled Note",
-      content: "",
-      font_family: "system",
-      visibility: "unlisted",
-    });
-
-    /* console.log("💾 Entry created successfully:", entry.id); */
-
-    return {
-      noteSlug,
-      publicCode,
-      entryId: entry.id,
-    };
-  } catch (error) {
-    /* console.error("💾 Error creating note entry:", error); */
-    throw error;
+  if (error) {
+    await supabase.from("entries").delete().eq("id", entry.id);
+    throw new Error(`Unable to create note: ${error.message}`);
   }
+
+  return { noteSlug, publicCode, entryId: entry.id };
 }
 
 export async function updateNote(
@@ -176,185 +420,229 @@ export async function updateNote(
   updates: Partial<{
     title: string;
     content: string;
+    content_json: Record<string, unknown>;
     visibility: "public" | "unlisted" | "private";
-    font_family: string;
+    font_family: "system" | "serif" | "mono";
     is_locked: boolean;
     passcode: string;
+    version: number;
   }>,
 ): Promise<Note> {
-  // Get or create device ID
-  const cookieStore = await cookies();
-  let deviceId = cookieStore.get("device_id")?.value;
+  const { supabase, user } = await requireAnonymousUser();
+  await assertRateLimit(supabase, "update_note", 120);
+  const { data: current, error: fetchError } = await supabase
+    .from("notes")
+    .select("*, entries!inner(space_id, created_by_device_id)")
+    .eq("slug", noteSlug)
+    .single();
 
-  if (!deviceId) {
-    deviceId = generateDeviceId();
-    cookieStore.set("device_id", deviceId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 365, // 1 year
-    });
+  if (fetchError || !current) throw new Error("Note not found");
+  if (current.created_by_user_id !== user.id) {
+    throw new Error("Only the note creator can edit this note");
   }
 
-  const supabase = await createServerSupabaseClient();
-
-  // Find the entry with this note slug
-  const { data: entries, error: fetchError } = await supabase
-    .from("entries")
-    .select("id, space_id, text, meta, created_by_device_id, created_at")
-    .eq("kind", "text")
-    .like("text", `NOTE:${noteSlug}:%`)
-    .limit(1);
-
-  if (fetchError) {
-    /* console.error("Database error:", fetchError); */
-    throw new Error(`Database error: ${fetchError.message}`);
-  }
-
-  if (!entries || entries.length === 0) {
-    // Note doesn't exist in database, create a mock response
-    throw new Error(
-      "Note not found in database - this appears to be a mock note",
-    );
-  }
-
-  const entry = entries[0];
-
-
-
-  // Parse existing note data
-  const noteData = entry.text?.replace("NOTE:", "").split(":") || [];
-  const [, publicCode, currentTitle] = noteData;
-
-  // Update meta with new data
-  const updatedMeta = {
-    ...entry.meta,
-    ...updates,
+  const nextVersion = current.version + 1;
+  const updateRow: Record<string, unknown> = {
+    version: nextVersion,
     updated_at: new Date().toISOString(),
   };
 
-  // Update text if title changed
-  let updatedText = entry.text;
-  if (updates.title && updates.title !== currentTitle) {
-    updatedText = `NOTE:${noteSlug}:${publicCode}:${updates.title}`;
+  if (updates.title !== undefined) {
+    updateRow.title = updates.title.trim().slice(0, 120) || "Untitled Note";
+  }
+  if (updates.content !== undefined) {
+    if (updates.content.length > 1_000_000) throw new Error("Note is too large");
+    updateRow.content_html = sanitizeNoteHtml(updates.content);
+  }
+  if (updates.content_json !== undefined) updateRow.content_json = updates.content_json;
+  if (updates.visibility !== undefined) updateRow.visibility = updates.visibility;
+  if (updates.font_family !== undefined) updateRow.font_family = updates.font_family;
+  if (updates.is_locked !== undefined) {
+    updateRow.is_locked = updates.is_locked;
+    updateRow.passcode_hash =
+      updates.is_locked && updates.passcode
+        ? hashPasscode(updates.passcode.slice(0, 64))
+        : null;
   }
 
-  // Update entry
-  /* console.log("💾 Attempting to update entry:", entry.id, "with data:", {
-    text: updatedText,
-    meta: updatedMeta,
-  }); */
+  const expectedVersion = updates.version ?? current.version;
+  const { data: updated, error } = await supabase
+    .from("notes")
+    .update(updateRow)
+    .eq("id", current.id)
+    .eq("version", expectedVersion)
+    .select()
+    .maybeSingle();
 
-  const { data, error } = await supabase
+  if (error) throw new Error(`Unable to save note: ${error.message}`);
+  if (!updated) {
+    throw new Error("This note changed elsewhere. Reload before saving again.");
+  }
+
+  const entryMeta = {
+    type: "note",
+    note_slug: noteSlug,
+    public_code: updated.public_code,
+    title: updated.title,
+    is_locked: updated.is_locked,
+  };
+  await supabase
     .from("entries")
-    .update({
-      text: updatedText,
-      meta: updatedMeta,
-    })
-    .eq("id", entry.id)
-    .select();
+    .update({ text: `NOTE:${noteSlug}`, meta: entryMeta })
+    .eq("id", updated.entry_id);
 
-  if (error) {
-    /* console.error("💾 Update error:", error); */
-    /* console.error("💾 Update error details:", {
-      message: error.message,
-      code: error.code,
-      hint: error.hint,
-      details: error.details,
-    }); */
-    throw new Error(`Failed to update note: ${error.message}`);
-  }
-
-  /* console.log("💾 Update result:", data); */
-
-  if (!data || data.length === 0) {
-    /* console.warn("No data returned from update, using original entry data"); */
-    // Fall back to using the original entry data with updates applied
-    const updatedEntry = {
-      ...entry,
-      text: updatedText,
-      meta: updatedMeta,
-    };
-
-    return {
-      id: updatedEntry.id,
-      slug: noteSlug,
-      title: updates.title || currentTitle || "Untitled Note",
-      content: updatedMeta.content || "",
-      public_code: publicCode,
-      visibility: updatedMeta.visibility || "unlisted",
-      font_family: updatedMeta.font_family || "system",
-      space_id: updatedEntry.space_id,
-      created_by_device_id: updatedEntry.created_by_device_id,
-      created_at: updatedEntry.created_at,
-      updated_at: updatedMeta.updated_at || updatedEntry.created_at,
-      is_locked: updatedMeta.is_locked || false,
-      passcode: updatedMeta.passcode || undefined,
-    };
-  }
-
-  const updatedEntry = data[0];
-
-  // Return note-like object
   return {
-    id: updatedEntry.id,
-    slug: noteSlug,
-    title: updates.title || currentTitle || "Untitled Note",
-    content: updatedMeta.content || "",
-    public_code: publicCode,
-    visibility: updatedMeta.visibility || "unlisted",
-    font_family: updatedMeta.font_family || "system",
-    space_id: updatedEntry.space_id,
-    created_by_device_id: updatedEntry.created_by_device_id,
-    created_at: updatedEntry.created_at,
-    updated_at: updatedMeta.updated_at || updatedEntry.created_at,
-    is_locked: updatedMeta.is_locked || false,
-    passcode: updatedMeta.passcode || undefined,
+    id: updated.id,
+    slug: updated.slug,
+    title: updated.title,
+    content: updated.content_html,
+    content_json: updated.content_json,
+    public_code: updated.public_code,
+    visibility: updated.visibility,
+    font_family: updated.font_family,
+    space_id: (current.entries as any).space_id,
+    created_by_device_id: user.id,
+    created_at: updated.created_at,
+    updated_at: updated.updated_at,
+    is_locked: updated.is_locked,
+    is_owner: true,
+    version: updated.version,
   };
 }
 
 export async function getNote(noteSlug: string): Promise<Note | null> {
-  const supabase = await createServerSupabaseClient();
-
-  // Find the entry with this note slug and join with spaces to get the space slug
-  const { data: entries, error } = await supabase
-    .from("entries")
-    .select(
-      `
-      *,
-      spaces:space_id (
-        slug
-      )
-    `,
-    )
-    .eq("kind", "text")
-    .like("text", `NOTE:${noteSlug}:%`);
-
-  if (error || !entries || entries.length === 0) {
-    return null;
+  const { supabase, user } = await requireAnonymousUser();
+  const { data: joinedSpaceSlug } = await supabase.rpc("join_note", {
+    p_note_slug: noteSlug,
+    p_display_name: displayNameForDevice(user.id),
+  });
+  const cookieStore = await cookies();
+  const legacyDeviceId = cookieStore.get("device_id")?.value;
+  if (joinedSpaceSlug && legacyDeviceId) {
+    await supabase.rpc("claim_legacy_space", {
+      p_slug: joinedSpaceSlug,
+      p_legacy_device_id: legacyDeviceId,
+    });
   }
 
-  const entry = entries[0];
+  const { data: note } = await supabase
+    .from("notes")
+    .select("*, entries!inner(space_id, created_by_device_id, spaces!inner(slug))")
+    .eq("slug", noteSlug)
+    .maybeSingle();
 
-  // Parse note data from text
-  const noteData = entry.text?.replace("NOTE:", "").split(":") || [];
-  const [, publicCode, title] = noteData;
+  if (note) {
+    return {
+      id: note.id,
+      slug: note.slug,
+      title: note.title,
+      content: sanitizeNoteHtml(note.content_html || ""),
+      content_json: note.content_json,
+      public_code: note.public_code,
+      visibility: note.visibility,
+      font_family: note.font_family,
+      space_id: (note.entries as any).space_id,
+      space_slug: (note.entries as any).spaces?.slug,
+      created_by_device_id: (note.entries as any).created_by_device_id,
+      created_at: note.created_at,
+      updated_at: note.updated_at,
+      is_locked: note.is_locked,
+      is_owner: note.created_by_user_id === user.id,
+      version: note.version,
+    };
+  }
 
+  // Locked notes are intentionally hidden by RLS. Their non-secret metadata is
+  // duplicated on the room entry so the UI can show a locked state.
+  let { data: entry } = await supabase
+    .from("entries")
+    .select("id, space_id, created_by_device_id, created_at, meta, spaces!inner(slug)")
+    .eq("meta->>note_slug", noteSlug)
+    .maybeSingle();
+
+  if (!entry) {
+    const legacy = await supabase
+      .from("entries")
+      .select("id, space_id, created_by_device_id, created_at, text, meta, spaces!inner(slug)")
+      .like("text", `NOTE:${noteSlug}:%`)
+      .limit(1)
+      .maybeSingle();
+    entry = legacy.data as any;
+
+    if (entry && entry.created_by_device_id === user.id) {
+      const parts = (entry as any).text?.replace("NOTE:", "").split(":") || [];
+      const publicCode = parts[1] || noteId();
+      const title = entry.meta?.title || parts.slice(2).join(":") || "Untitled Note";
+      const { data: migrated } = await supabase
+        .from("notes")
+        .insert({
+          entry_id: entry.id,
+          slug: noteSlug,
+          public_code: publicCode,
+          title,
+          content_html: sanitizeNoteHtml(entry.meta?.content || ""),
+          font_family: entry.meta?.font_family || "system",
+          visibility: entry.meta?.visibility || "unlisted",
+          is_locked: false,
+          created_by_user_id: user.id,
+        })
+        .select()
+        .maybeSingle();
+
+      if (migrated) {
+        await supabase
+          .from("entries")
+          .update({
+            text: `NOTE:${noteSlug}`,
+            meta: {
+              type: "note",
+              note_slug: noteSlug,
+              public_code: publicCode,
+              title,
+              is_locked: false,
+            },
+          })
+          .eq("id", entry.id);
+        return {
+          id: migrated.id,
+          slug: noteSlug,
+          title,
+          content: migrated.content_html,
+          content_json: migrated.content_json,
+          public_code: publicCode,
+          visibility: migrated.visibility,
+          font_family: migrated.font_family,
+          space_id: entry.space_id,
+          space_slug: (entry.spaces as any)?.slug,
+          created_by_device_id: user.id,
+          created_at: migrated.created_at,
+          updated_at: migrated.updated_at,
+          is_locked: false,
+          is_owner: true,
+          version: migrated.version,
+        };
+      }
+    }
+  }
+
+  if (!entry) return null;
+  const legacyParts = (entry as any).text?.replace("NOTE:", "").split(":") || [];
   return {
     id: entry.id,
     slug: noteSlug,
-    title: title || "Untitled Note",
-    content: entry.meta?.content || "",
-    public_code: publicCode,
+    title: entry.meta?.title || legacyParts.slice(2).join(":") || "Untitled Note",
+    content:
+      entry.meta?.is_locked ? "" : sanitizeNoteHtml(entry.meta?.content || ""),
+    public_code: entry.meta?.public_code || legacyParts[1] || "",
     visibility: entry.meta?.visibility || "unlisted",
     font_family: entry.meta?.font_family || "system",
     space_id: entry.space_id,
     space_slug: (entry.spaces as any)?.slug,
     created_by_device_id: entry.created_by_device_id,
     created_at: entry.created_at,
-    updated_at: entry.meta?.updated_at || entry.created_at,
-    is_locked: entry.meta?.is_locked || false,
-    passcode: entry.meta?.passcode || undefined,
+    updated_at: entry.created_at,
+    is_locked: Boolean(entry.meta?.is_locked),
+    is_owner: entry.created_by_device_id === user.id,
   };
 }
 
@@ -362,283 +650,148 @@ export async function verifyNotePasscode(
   noteSlug: string,
   passcode: string,
 ): Promise<boolean> {
-  const note = await getNote(noteSlug);
-
-  if (!note || !note.is_locked) {
-    return true; // Note doesn't exist or isn't locked
+  // The hash is never returned by getNote or the API. Owners can verify their
+  // own lock locally; participant unlocking is handled by a dedicated RPC in
+  // deployments that enable locked shared notes.
+  const { supabase, user } = await requireAnonymousUser();
+  const { data } = await supabase
+    .from("notes")
+    .select("passcode_hash, created_by_user_id")
+    .eq("slug", noteSlug)
+    .maybeSingle();
+  if (!data || data.created_by_user_id !== user.id || !data.passcode_hash) {
+    return false;
   }
-
-  return note.passcode === passcode;
+  return checkPasscode(passcode, data.passcode_hash);
 }
 
-export async function updateNoteEntry(
-  entryId: string,
-  noteTitle: string,
-): Promise<void> {
-  // Get device ID from cookies
-  const cookieStore = await cookies();
-  const deviceId = cookieStore.get("device_id")?.value;
-
-  const supabase = await createServerSupabaseClient();
-
-  // Get the entry to verify ownership and extract note data
-  const { data: entry, error: fetchError } = await supabase
+export async function updateNoteEntry(entryId: string, noteTitle: string) {
+  const { supabase, user } = await requireAnonymousUser();
+  const cleanTitle = noteTitle.trim().slice(0, 120) || "Untitled Note";
+  const { data: entry } = await supabase
     .from("entries")
-    .select("text, created_by_device_id")
+    .select("id, meta, created_by_device_id")
     .eq("id", entryId)
     .single();
 
-  if (fetchError || !entry) {
-    throw new Error("Entry not found");
+  if (!entry || entry.created_by_device_id !== user.id) {
+    throw new Error("Only the note creator can rename this note");
   }
 
-
-
-  // Extract note data from the text field
-  if (!entry.text?.startsWith("NOTE:")) {
-    throw new Error("Invalid note entry");
-  }
-
-  const noteData = entry.text.replace("NOTE:", "").split(":");
-  const noteSlug = noteData[0];
-  const publicCode = noteData[1];
-
-  // Update the entry with new title
-  const newText = `NOTE:${noteSlug}:${publicCode}:${noteTitle}`;
+  const noteSlug = entry.meta?.note_slug;
+  if (!noteSlug) throw new Error("Invalid note entry");
 
   const { error } = await supabase
-    .from("entries")
-    .update({ text: newText })
-    .eq("id", entryId);
+    .from("notes")
+    .update({ title: cleanTitle, updated_at: new Date().toISOString() })
+    .eq("slug", noteSlug)
+    .eq("created_by_user_id", user.id);
+  if (error) throw new Error(`Unable to rename note: ${error.message}`);
 
-  if (error) {
-    throw new Error(`Failed to update note entry: ${error.message}`);
-  }
+  await supabase
+    .from("entries")
+    .update({ meta: { ...entry.meta, title: cleanTitle } })
+    .eq("id", entryId);
 }
 
 export async function validateRoomCode(roomCode: string): Promise<boolean> {
   try {
-    const supabase = await createServerSupabaseClient();
-
-    const { data: space, error } = await supabase
-      .from("spaces")
-      .select("id")
-      .eq("slug", roomCode)
-      .single();
-
-    if (error || !space) {
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    /* console.error("Error validating room code:", error); */
+    return Boolean(await joinSpaceByCode(roomCode));
+  } catch {
     return false;
   }
 }
 
-// Update space last activity timestamp
-export async function updateSpaceActivity(spaceId: string): Promise<void> {
-  const supabase = await createServerSupabaseClient();
+// Activity is extended by the database trigger only when participants create or
+// edit content. Merely viewing/enumerating a room no longer keeps it alive.
+export async function updateSpaceActivity(_spaceId: string): Promise<void> {}
+export async function updateSpaceActivityBySlug(_slug: string): Promise<void> {}
 
-  await supabase
-    .from("spaces")
-    .update({ last_activity_at: new Date().toISOString() })
-    .eq("id", spaceId);
-}
-
-// Update space last activity timestamp by slug
-export async function updateSpaceActivityBySlug(slug: string): Promise<void> {
-  const supabase = await createServerSupabaseClient();
-
-  await supabase
-    .from("spaces")
-    .update({ last_activity_at: new Date().toISOString() })
-    .eq("slug", slug);
-}
-
-// Ensure device ID cookie exists and return it
 export async function ensureDeviceId(): Promise<string> {
-  const cookieStore = await cookies();
-  let deviceId = cookieStore.get("device_id")?.value;
-
-  if (!deviceId) {
-    deviceId = generateDeviceId();
-    cookieStore.set("device_id", deviceId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 365, // 1 year
-    });
-  }
-
-  return deviceId;
+  const { user } = await requireAnonymousUser();
+  return user.id;
 }
 
 export async function getPlanStatus(): Promise<{
   isPro: boolean;
   deviceId: string;
 }> {
-  const deviceId = await ensureDeviceId();
-  const supabase = await createServerSupabaseClient();
-
+  const { supabase, user } = await requireAnonymousUser();
   const { data } = await supabase
-    .from("device_sessions")
+    .from("spaces")
     .select("is_pro")
-    .eq("device_id", deviceId)
-    .single();
-
-  return {
-    isPro: data?.is_pro || false,
-    deviceId,
-  };
+    .eq("creator_device_id", user.id)
+    .eq("is_pro", true)
+    .limit(1)
+    .maybeSingle();
+  return { isPro: Boolean(data?.is_pro), deviceId: user.id };
 }
 
 export async function deleteSpace(spaceId: string): Promise<void> {
-  const deviceId = await ensureDeviceId();
-  const supabase = await createServerSupabaseClient();
-
-  // Verify ownership
-  const { data: space, error: fetchError } = await supabase
+  const { supabase, user } = await requireAnonymousUser();
+  const { data: space } = await supabase
     .from("spaces")
     .select("creator_device_id")
     .eq("id", spaceId)
     .single();
 
-  if (fetchError || !space) {
-    throw new Error("Space not found or validation failed");
+  if (!space || space.creator_device_id !== user.id) {
+    throw new Error("Only the space creator can delete this space");
   }
 
-  if (space.creator_device_id !== deviceId) {
-    throw new Error("Unauthorized to delete this space");
-  }
-
-  // 1. Delete all uploaded files from storage bucket for this space.
-  //    Files live under `{spaceId}/` in the "files" bucket.
-  //    We paginate to handle spaces with many files.
-  try {
-    let offset = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data: fileList, error: listError } = await supabase.storage
-        .from("files")
-        .list(spaceId, { limit: pageSize, offset });
-
-      if (listError) {
-        console.error("💾 Error listing files in storage bucket:", listError);
-        break;
-      }
-
-      if (!fileList || fileList.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      const filePaths = fileList.map((f) => `${spaceId}/${f.name}`);
-      const { error: removeError } = await supabase.storage
-        .from("files")
-        .remove(filePaths);
-
-      if (removeError) {
-        console.error("💾 Error removing files from storage bucket:", removeError);
-      } else {
-        console.log(`💾 Successfully deleted ${filePaths.length} file(s) from storage:`, filePaths);
-      }
-
-      if (fileList.length < pageSize) {
-        hasMore = false;
-      } else {
-        offset += pageSize;
-      }
-    }
-  } catch (err) {
-    console.error("💾 Unexpected storage cleanup error:", err);
-    // Storage cleanup is best-effort; continue with deletion
-  }
-
-  // 2. Delete the space row.
-  //    CASCADE foreign keys handle: entries → assets → (trigger logs to deleted_storage_keys), views
-  const { error: deleteError } = await supabase
-    .from("spaces")
-    .delete()
-    .eq("id", spaceId);
-
-  if (deleteError) {
-    throw new Error(`Failed to delete space: ${deleteError.message}`);
-  }
+  // The database trigger queues the room prefix for service-role cleanup. This
+  // works even when other participants own some of the Storage objects.
+  const { error } = await supabase.from("spaces").delete().eq("id", spaceId);
+  if (error) throw new Error(`Unable to delete space: ${error.message}`);
 }
 
 export async function deleteEntry(entryId: string): Promise<void> {
-  const deviceId = await ensureDeviceId();
-  const supabase = await createServerSupabaseClient();
-
-  // 1. Fetch the entry to check ownership
-  const { data: entry, error: fetchError } = await supabase
+  const { supabase, user } = await requireAnonymousUser();
+  const { data: entry } = await supabase
     .from("entries")
-    .select("created_by_device_id, space_id")
+    .select("created_by_device_id, meta")
     .eq("id", entryId)
     .single();
 
-  if (fetchError || !entry) {
-    throw new Error("Entry not found");
+  if (!entry || entry.created_by_device_id !== user.id) {
+    throw new Error("You can only delete messages you sent");
   }
 
-  // 2. Fetch the space to check if the user is the creator of the space
-  const { data: space } = await supabase
-    .from("spaces")
-    .select("creator_device_id")
-    .eq("id", entry.space_id)
-    .single();
-
-  const isEntryCreator = entry.created_by_device_id === deviceId;
-  const isSpaceCreator = space?.creator_device_id === deviceId;
-
-  if (!isEntryCreator && !isSpaceCreator) {
-    throw new Error("Unauthorized to delete this entry");
+  const paths = Array.isArray(entry.meta?.items)
+    ? entry.meta.items
+        .map((item: any) => item.path)
+        .filter((path: unknown): path is string => typeof path === "string")
+    : [];
+  if (paths.length) {
+    const { error } = await supabase.storage.from("files").remove(paths);
+    if (error) throw new Error(`Unable to remove attached files: ${error.message}`);
   }
 
-  // 3. Delete related files from storage if the entry has assets
-  const { data: fullEntry } = await supabase
-    .from("entries")
-    .select("kind, meta")
-    .eq("id", entryId)
-    .single();
-
-  if (fullEntry && fullEntry.kind === "file" && fullEntry.meta?.items) {
-    const items = fullEntry.meta.items || [];
-    const filePaths = items.map((it: any) => {
-      try {
-        const urlParts = it.url.split("/object/public/files/");
-        if (urlParts.length > 1) {
-          return decodeURIComponent(urlParts[1]);
-        }
-      } catch (err) {
-        console.error("Failed to parse file url for deletion:", err);
-      }
-      return null;
-    }).filter(Boolean);
-
-    if (filePaths.length > 0) {
-      const { error: removeError } = await supabase.storage
-        .from("files")
-        .remove(filePaths);
-
-      if (removeError) {
-        console.error("Failed to remove files from storage:", removeError);
-      }
-    }
-  }
-
-  // 4. Delete the entry row
-  const { error: deleteError } = await supabase
-    .from("entries")
-    .delete()
-    .eq("id", entryId);
-
-  if (deleteError) {
-    throw new Error(`Failed to delete entry: ${deleteError.message}`);
-  }
+  const { error } = await supabase.from("entries").delete().eq("id", entryId);
+  if (error) throw new Error(`Unable to delete entry: ${error.message}`);
 }
 
+export async function reportEntry(entryId: string): Promise<void> {
+  const { supabase, user } = await requireAnonymousUser();
+  await assertRateLimit(supabase, "report_entry", 10, 3600);
+  const { error } = await supabase.from("content_reports").upsert(
+    {
+      entry_id: entryId,
+      reported_by_user_id: user.id,
+      reason: "inappropriate",
+      status: "open",
+    },
+    { onConflict: "entry_id,reported_by_user_id", ignoreDuplicates: true },
+  );
+  if (error) throw new Error(`Unable to submit report: ${error.message}`);
+}
+
+export async function getCurrentIdentity() {
+  const { user } = await requireAnonymousUser();
+  return { id: user.id, displayName: displayNameForDevice(user.id) };
+}
+
+export async function getLegacyDeviceCookie() {
+  const cookieStore = await cookies();
+  return cookieStore.get("device_id")?.value || null;
+}

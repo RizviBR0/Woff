@@ -14,6 +14,7 @@ import {
   Trash2,
   Loader2,
   MoreVertical,
+  Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,9 +26,10 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 // JSZip is dynamically imported when needed to reduce bundle size
 import { useState, useEffect, memo } from "react";
-import { GlobalImageViewer } from "./global-image-viewer";
+import dynamic from "next/dynamic";
+import { toast } from "sonner";
 import { displayNameForDevice } from "@/lib/display-name";
-import { deleteEntry } from "@/lib/actions";
+import { deleteEntry, reportEntry } from "@/lib/actions";
 import NextImage from "next/image";
 import {
   AlertDialog,
@@ -40,6 +42,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+
+const GlobalImageViewer = dynamic(
+  () =>
+    import("./global-image-viewer").then((module) => module.GlobalImageViewer),
+  { ssr: false },
+);
 
 export interface Entry {
   id: string;
@@ -54,6 +62,7 @@ export interface Entry {
   isLoading?: boolean;
   uploadProgress?: number;
   uploadMessage?: string;
+  isError?: boolean;
 }
 
 interface EntryCardProps {
@@ -84,7 +93,7 @@ export const EntryCard = memo(function EntryCard({
       onDelete?.(entry.id);
     } catch (err: any) {
       setIsDeleting(false);
-      alert("Failed to delete: " + err.message);
+      toast.error(err?.message || "Unable to delete this message");
     }
   };
 
@@ -328,6 +337,13 @@ export const EntryCard = memo(function EntryCard({
   // Parse note info if it is a NOTE entry
   const noteInfo = (() => {
     if (!entry.text || !entry.text.startsWith("NOTE:")) return null;
+    if (entry.meta?.note_slug) {
+      return {
+        slug: entry.meta.note_slug,
+        publicCode: entry.meta.public_code || "",
+        title: entry.meta.title || "Untitled Note",
+      };
+    }
     const noteData = entry.text.replace("NOTE:", "").split(":");
     return {
       slug: noteData[0],
@@ -610,6 +626,19 @@ export const EntryCard = memo(function EntryCard({
         onClick: () => setDeleteDialogOpen(true),
         destructive: true,
       });
+    } else {
+      options.push({
+        label: "Report Message",
+        icon: <Flag className="h-4 w-4" />,
+        onClick: async () => {
+          try {
+            await reportEntry(entry.id);
+            toast.success("Report submitted for review");
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Unable to report message");
+          }
+        },
+      });
     }
 
     return options;
@@ -621,7 +650,7 @@ export const EntryCard = memo(function EntryCard({
     if (menuOptions.length === 0) return null;
 
     return (
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200 z-20">
+      <div className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200 z-20">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -1637,6 +1666,7 @@ export const EntryCard = memo(function EntryCard({
       size: number;
       type: string;
       url: string;
+      path?: string;
     }> = entry.meta.items || [];
 
 
@@ -1692,7 +1722,7 @@ export const EntryCard = memo(function EntryCard({
                 const isImg = isImage(it.type, it.name);
                 return (
                   <div
-                    key={it.url}
+                    key={it.path || it.url}
                     className="flex items-center justify-between p-2 hover:bg-accent/30 transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1767,7 +1797,7 @@ export const EntryCard = memo(function EntryCard({
 
           {/* Action buttons */}
           {items.length > 1 && (
-            <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex gap-1 mt-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <Button
                 size="sm"
                 variant="ghost"

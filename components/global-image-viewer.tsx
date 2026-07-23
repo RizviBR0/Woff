@@ -11,7 +11,6 @@ import {
   DownloadIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import JSZip from "jszip";
 
 interface GlobalImageViewerProps {
   images: string[];
@@ -58,16 +57,18 @@ export function GlobalImageViewer({
             const ctx = canvas.getContext("2d");
             if (!ctx) return resolve(false);
 
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
+            // Brightness only needs a representative sample. Downsampling
+            // avoids allocating a full-resolution canvas for large photos.
+            canvas.width = 32;
+            canvas.height = 32;
+            ctx.drawImage(img, 0, 0, 32, 32);
 
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
             let totalBrightness = 0;
             let pixelCount = 0;
 
-            for (let i = 0; i < data.length; i += 40) {
+            for (let i = 0; i < data.length; i += 4) {
               const r = data[i];
               const g = data[i + 1];
               const b = data[i + 2];
@@ -163,6 +164,7 @@ export function GlobalImageViewer({
 
   const downloadAllAsZip = async () => {
     try {
+      const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
 
       for (let i = 0; i < images.length; i++) {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { createSpace } from "@/lib/actions";
+import { rememberSpaceOwnership } from "@/lib/space-recovery";
 import {
   Menu,
   X,
@@ -73,6 +74,7 @@ export function Navbar() {
     setIsCreating(true);
     try {
       const space = await createSpace();
+      rememberSpaceOwnership(space);
       router.prefetch(`/${space.slug}`);
       router.push(`/${space.slug}`);
     } catch (err) {

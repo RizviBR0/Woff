@@ -1,33 +1,64 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import "server-only";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
-// Singleton instance for client-side Supabase client (with realtime)
-let clientSupabaseInstance: SupabaseClient | null = null;
+function getSupabaseConfig() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Client-side Supabase client with singleton pattern to avoid creating multiple instances
-export const createClientSupabaseClient = () => {
-  if (clientSupabaseInstance) {
-    return clientSupabaseInstance;
+  if (!url || !anonKey) {
+    throw new Error("Supabase environment variables are not configured");
   }
-  clientSupabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
-    realtime: {
-      params: {
-        eventsPerSecond: 10, // Rate limit realtime events
+
+  return { url, anonKey };
+}
+
+/**
+ * Request-scoped Supabase client. Authentication is an invisible anonymous
+ * Supabase session, so RLS can use auth.uid() without adding a login UI.
+ */
+export async function createServerSupabaseClient() {
+  const cookieStore = await cookies();
+  const { url, anonKey } = getSupabaseConfig();
+
+  return createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Server Components cannot write cookies. Middleware refreshes the
+          // session; Server Actions and Route Handlers can write them.
+        }
       },
     },
   });
-  return clientSupabaseInstance;
-};
-
-// Re-export singleton for backward compatibility (client-side only)
-export const supabase = createClientSupabaseClient();
-
-// Server-side Supabase client — fresh per request to avoid leaking state
-// across serverless invocations. The underlying Node.js HTTP agent pools
-// TCP connections, so creating a new JS client is cheap.
-export async function createServerSupabaseClient() {
-  return createClient(supabaseUrl, supabaseAnonKey);
 }
 
+export async function requireAnonymousUser() {
+  const supabase = await createServerSupabaseClient();
+  let {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    const { data, error: signInError } = await supabase.auth.signInAnonymously();
+    user = data.user;
+    error = signInError;
+  }
+
+  if (error || !user) {
+    throw new Error(
+      "Unable to create an anonymous session. Refresh and try again.",
+    );
+  }
+
+  return { supabase, user };
+}

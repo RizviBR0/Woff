@@ -49,15 +49,16 @@
 - **Instant Spaces** — Create a shareable space in one click, no sign-up
 - **4-Digit Room Code** — Join any space with a simple 4-digit code
 - **Multi-Content Support** — Share text, images, files, PDFs, and code snippets
-- **Rich Note Editor** — Full-featured editor with slash commands, formatting, and font options
-- **Drag & Drop Upload** — Drop files anywhere on the page to share
+- **Rich Note Editor** — TipTap editor with Markdown shortcuts, versioned autosave, and offline drafts
+- **Resumable Uploads** — Real byte progress, cancellation, retry, and atomic multi-file publishing
 - **QR Code Sharing** — Generate and scan QR codes to share/join spaces
-- **Device-Based Auth** — Sessions tied to your device via secure cookies
+- **Invisible Anonymous Auth** — Secure ownership through Supabase Auth with no login UI
+- **Owner Recovery** — A recovery key can restore room ownership after a session is lost
 - **Dark/Light Theme** — System-aware theme with manual toggle
 - **Online Notepad** — Dedicated notepad with shareable link
 - **SEO Optimized** — Structured data, meta tags, sitemap, and blog
 - **Responsive Design** — Works across desktop, tablet, and mobile
-- **Analytics** — Google Analytics + Vercel Speed Insights
+- **Privacy-aware Analytics** — Analytics are disabled on room and note routes
 
 ---
 
@@ -135,11 +136,17 @@ Create a `.env.local` file in the root:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_server_only_secret_or_legacy_service_role_key
+CRON_SECRET=a_long_random_secret
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
 4. **Set up the database**
 
-Run the SQL schema in your Supabase SQL editor to create all tables and Row Level Security policies.
+Enable anonymous sign-ins, then apply every SQL file in
+`supabase/migrations` in filename order. Together they install the tables,
+restricted RPCs, private Storage policies, Row Level Security, advisor
+hardening, optimized indexes, and the legacy-file compatibility migration.
 
 5. **Start the dev server**
 

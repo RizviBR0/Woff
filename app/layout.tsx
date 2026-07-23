@@ -1,10 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Toaster } from "sonner";
 import { Almarai } from "next/font/google";
+import { PrivacySafeAnalytics } from "@/components/privacy-safe-analytics";
 
 const almarai = Almarai({
   subsets: ["arabic"],
@@ -120,7 +119,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const GA_ID = process.env.NEXT_PUBLIC_GA_ID || "G-Q401QHEJG3";
+  const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -158,19 +157,6 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {/* Google Analytics (GA4) — lazyOnload to avoid blocking FCP/LCP */}
-        <Script
-          src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
-          strategy="lazyOnload"
-        />
-        <Script id="gtag-init" strategy="lazyOnload">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', '${GA_ID}');
-          `}
-        </Script>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -180,7 +166,7 @@ export default function RootLayout({
           {children}
           <Toaster position="top-center" richColors />
         </ThemeProvider>
-        <SpeedInsights />
+        <PrivacySafeAnalytics measurementId={GA_ID} />
       </body>
     </html>
   );

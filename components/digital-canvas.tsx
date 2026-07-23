@@ -1,20 +1,20 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "@/components/ui/button";
 import {
-  Undo2,
+  Check,
+  Download,
+  Eraser,
+  Minus,
+  Pen,
+  Plus,
   Redo2,
   RotateCcw,
-  Check,
-  Eraser,
-  Download,
-  Minus,
-  Plus,
-  Pen,
+  Undo2,
   X,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface DrawingCanvasProps {
   isOpen: boolean;
@@ -22,23 +22,7 @@ interface DrawingCanvasProps {
   onSave: (dataUrl: string) => void;
 }
 
-const COLORS = [
-  "#1a1a1a",
-  "#f44336",
-  "#2196F3",
-  "#4CAF50",
-  "#FF9800",
-  "#9C27B0",
-  "#00BCD4",
-  "#E91E63",
-  "#FFFFFF",
-];
-
-type Point = {
-  x: number;
-  y: number;
-};
-
+type Point = { x: number; y: number };
 type Stroke = {
   points: Point[];
   color: string;
@@ -46,449 +30,309 @@ type Stroke = {
   mode: "pen" | "eraser";
 };
 
+const COLORS = [
+  "#1a1a1a",
+  "#ef4444",
+  "#3b82f6",
+  "#22c55e",
+  "#f97316",
+  "#a855f7",
+  "#06b6d4",
+  "#ec4899",
+  "#ffffff",
+];
+
 export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [currentColor, setCurrentColor] = useState("#1a1a1a");
-  const [brushSize, setBrushSize] = useState(4);
+  const activePointerRef = useRef<number | null>(null);
+  const currentStrokeRef = useRef<Stroke | null>(null);
+  const strokesRef = useRef<Stroke[]>([]);
+  const dimensionsRef = useRef({ width: 1, height: 1, dpr: 1 });
+  const frameRef = useRef<number | null>(null);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [redoStack, setRedoStack] = useState<Stroke[]>([]);
-  const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
-  const [isEraser, setIsEraser] = useState(false);
-  const [canvasWidth, setCanvasWidth] = useState(0);
-  const [canvasHeight, setCanvasHeight] = useState(0);
+  const [color, setColor] = useState("#1a1a1a");
+  const [size, setSize] = useState(4);
+  const [eraser, setEraser] = useState(false);
 
-  // Stop drawing globally when pointer is released anywhere
   useEffect(() => {
-    const handlePointerUp = () => {
-      setIsDrawing(false);
-      if (currentStroke) {
-        setStrokes((prev) => [...prev, currentStroke]);
-        setCurrentStroke(null);
+    strokesRef.current = strokes;
+  }, [strokes]);
+
+  const renderCanvas = useCallback(() => {
+    frameRef.current = null;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const { width, height, dpr } = dimensionsRef.current;
+
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.lineCap = "round";
+    context.lineJoin = "round";
+
+    const all = currentStrokeRef.current
+      ? [...strokesRef.current, currentStrokeRef.current]
+      : strokesRef.current;
+    all.forEach((stroke) => {
+      const points = stroke.points;
+      if (!points.length) return;
+      context.strokeStyle = stroke.mode === "eraser" ? "#ffffff" : stroke.color;
+      context.fillStyle = context.strokeStyle;
+      context.lineWidth = stroke.size;
+      if (points.length === 1) {
+        context.beginPath();
+        context.arc(
+          points[0].x * width,
+          points[0].y * height,
+          stroke.size / 2,
+          0,
+          Math.PI * 2,
+        );
+        context.fill();
+        return;
       }
-    };
+      context.beginPath();
+      context.moveTo(points[0].x * width, points[0].y * height);
+      for (let index = 1; index < points.length; index += 1) {
+        const previous = points[index - 1];
+        const point = points[index];
+        context.quadraticCurveTo(
+          previous.x * width,
+          previous.y * height,
+          ((previous.x + point.x) / 2) * width,
+          ((previous.y + point.y) / 2) * height,
+        );
+      }
+      context.stroke();
+    });
+  }, []);
 
-    window.addEventListener("mouseup", handlePointerUp);
-    window.addEventListener("touchend", handlePointerUp);
-    window.addEventListener("touchcancel", handlePointerUp);
+  const requestRender = useCallback(() => {
+    if (frameRef.current === null) {
+      frameRef.current = requestAnimationFrame(renderCanvas);
+    }
+  }, [renderCanvas]);
 
-    return () => {
-      window.removeEventListener("mouseup", handlePointerUp);
-      window.removeEventListener("touchend", handlePointerUp);
-      window.removeEventListener("touchcancel", handlePointerUp);
-    };
-  }, [currentStroke]);
-
-  // Keyboard shortcuts
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) {
-        e.preventDefault();
-        redo();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "y") {
-        e.preventDefault();
-        redo();
-      }
-      if (e.key === "e" || e.key === "E") {
-        setIsEraser((v) => !v);
-      }
-      if (e.key === "Escape") {
-        onClose();
-      }
-      if (e.key === "[") {
-        setBrushSize((s) => Math.max(1, s - 2));
-      }
-      if (e.key === "]") {
-        setBrushSize((s) => Math.min(48, s + 2));
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
-
-  // Redraw all strokes
-  const redraw = useCallback(
-    (ctx: CanvasRenderingContext2D, dpr: number, w: number, h: number) => {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(dpr, dpr);
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, w, h);
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.imageSmoothingEnabled = true;
-
-      const allStrokes = currentStroke ? [...strokes, currentStroke] : strokes;
-
-      allStrokes.forEach((stroke) => {
-        if (stroke.points.length < 2) return;
-        ctx.beginPath();
-        ctx.strokeStyle = stroke.mode === "eraser" ? "#ffffff" : stroke.color;
-        ctx.lineWidth = stroke.size;
-        for (let i = 0; i < stroke.points.length - 1; i++) {
-          const p0 = stroke.points[i];
-          const p1 = stroke.points[i + 1];
-          const midX = (p0.x + p1.x) / 2;
-          const midY = (p0.y + p1.y) / 2;
-          if (i === 0) {
-            ctx.moveTo(p0.x, p0.y);
-          }
-          ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
-        }
-        ctx.stroke();
-      });
-    },
-    [strokes, currentStroke]
-  );
-
-  // Setup canvas to fill the entire container
-  useEffect(() => {
-    const setup = () => {
+    const resize = () => {
       const canvas = canvasRef.current;
       const container = containerRef.current;
       if (!canvas || !container) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      const dpr = Math.max(2, Math.min(4, window.devicePixelRatio || 2));
-
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
-      setCanvasWidth(w);
-      setCanvasHeight(h);
-
-      redraw(ctx, dpr, w, h);
+      const width = Math.max(1, container.clientWidth);
+      const height = Math.max(1, container.clientHeight);
+      const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+      dimensionsRef.current = { width, height, dpr };
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      requestRender();
     };
-
-    if (!isOpen) return;
-
-    // Small delay so portal has mounted and has dimensions
-    const timer = setTimeout(setup, 50);
-    const ro = new ResizeObserver(() => setup());
-    if (containerRef.current) ro.observe(containerRef.current);
+    const observer = new ResizeObserver(resize);
+    if (containerRef.current) observer.observe(containerRef.current);
+    resize();
     return () => {
-      clearTimeout(timer);
-      ro.disconnect();
+      observer.disconnect();
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     };
-  }, [isOpen, redraw]);
+  }, [isOpen, requestRender]);
 
-  const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
+  useEffect(() => {
+    requestRender();
+  }, [strokes, requestRender]);
 
-    const rect = canvas.getBoundingClientRect();
+  useEffect(() => {
+    if (!isOpen) return;
+    const keydown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+      } else if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  });
 
-    const getRelative = (clientX: number, clientY: number) => ({
-      x: clientX - rect.left,
-      y: clientY - rect.top,
-    });
-
-    if ("touches" in e) {
-      const touch = e.touches[0] || e.changedTouches[0];
-      return getRelative(touch.clientX, touch.clientY);
-    } else {
-      return getRelative(e.clientX, e.clientY);
-    }
+  const normalizedPoint = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+      y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+    };
   };
 
-  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    const { x, y } = getCoordinates(e);
-    const mode = isEraser ? "eraser" : "pen";
-    const stroke: Stroke = {
-      points: [{ x, y }],
-      color: currentColor,
-      size: brushSize,
-      mode,
+  const start = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activePointerRef.current !== null) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    activePointerRef.current = event.pointerId;
+    currentStrokeRef.current = {
+      points: [normalizedPoint(event)],
+      color,
+      size,
+      mode: eraser ? "eraser" : "pen",
     };
-    setCurrentStroke(stroke);
-    setIsDrawing(true);
     setRedoStack([]);
+    requestRender();
   };
 
-  const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!currentStroke) return;
-    e.preventDefault();
-
-    if ("buttons" in e && e.buttons === 0) {
+  const move = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (
+      activePointerRef.current !== event.pointerId ||
+      !currentStrokeRef.current
+    ) {
       return;
     }
-
-    const { x, y } = getCoordinates(e);
-    setCurrentStroke((prev) =>
-      prev ? { ...prev, points: [...prev.points, { x, y }] } : prev
-    );
+    currentStrokeRef.current.points.push(normalizedPoint(event));
+    requestRender();
   };
 
-  const stopDrawing = () => {
-    if (currentStroke) {
-      setStrokes((prev) => [...prev, currentStroke]);
-      setCurrentStroke(null);
+  const finish = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activePointerRef.current !== event.pointerId) return;
+    const completed = currentStrokeRef.current;
+    activePointerRef.current = null;
+    currentStrokeRef.current = null;
+    if (completed) setStrokes((existing) => [...existing, completed]);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    setIsDrawing(false);
+    requestRender();
   };
 
   const undo = () => {
-    setStrokes((prev) => {
-      if (prev.length === 0) return prev;
-      const copy = [...prev];
-      const last = copy.pop()!;
-      setRedoStack((r) => [...r, last]);
-      return copy;
+    setStrokes((existing) => {
+      const next = [...existing];
+      const removed = next.pop();
+      if (removed) setRedoStack((redoItems) => [...redoItems, removed]);
+      return next;
     });
   };
 
   const redo = () => {
-    setRedoStack((prev) => {
-      if (prev.length === 0) return prev;
-      const copy = [...prev];
-      const last = copy.pop()!;
-      setStrokes((s) => [...s, last]);
-      return copy;
+    setRedoStack((existing) => {
+      const next = [...existing];
+      const restored = next.pop();
+      if (restored) setStrokes((items) => [...items, restored]);
+      return next;
     });
   };
 
   const clear = () => {
     setStrokes([]);
     setRedoStack([]);
-    setCurrentStroke(null);
+    currentStrokeRef.current = null;
   };
 
-  const handleSave = () => {
+  const save = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const dataUrl = canvas.toDataURL("image/png");
-    onSave(dataUrl);
+    if (!canvas || !strokesRef.current.length) return;
+    onSave(canvas.toDataURL("image/png"));
     onClose();
   };
 
-  const handleDownload = () => {
+  const download = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const url = canvas.toDataURL("image/png");
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `drawing-${Date.now()}.png`;
-    a.click();
+    const anchor = document.createElement("a");
+    anchor.href = canvas.toDataURL("image/png");
+    anchor.download = `drawing-${Date.now()}.png`;
+    anchor.click();
   };
 
   if (!isOpen) return null;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[9999] bg-background flex flex-col overflow-hidden"
-      style={{ margin: 0, padding: 0, width: '100vw', height: '100vh', top: 0, left: 0 }}
-    >
-      {/* Top Bar */}
-      <div className="h-11 sm:h-12 flex items-center justify-between px-2 sm:px-4 border-b border-border bg-background shrink-0">
-        <div className="flex items-center gap-2 sm:gap-3">
+    <div className="fixed inset-0 z-[9999] flex h-dvh w-screen flex-col overflow-hidden bg-background">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b px-2 sm:px-4">
+        <div className="flex items-center gap-2">
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-muted transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted"
+            aria-label="Close drawing canvas"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
-          <div className="h-5 w-px bg-border hidden sm:block" />
-          <span className="text-xs sm:text-sm font-semibold text-foreground">
-            Digital Canvas
-          </span>
+          <span className="text-sm font-semibold">Digital Canvas</span>
         </div>
-
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownload}
-            className="h-7 sm:h-8 text-[11px] sm:text-xs gap-1 sm:gap-1.5 px-2 sm:px-3"
-          >
-            <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            <span className="hidden sm:inline">Export PNG</span>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={download}>
+            <Download className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Export</span>
           </Button>
-          <Button
-            size="sm"
-            onClick={handleSave}
-            className="h-7 sm:h-8 text-[11px] sm:text-xs gap-1 sm:gap-1.5 px-2 sm:px-3"
-          >
-            <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            <span className="hidden xs:inline">Send</span>
-            <span className="hidden sm:inline"> Drawing</span>
+          <Button size="sm" className="h-8 gap-1.5" disabled={!strokes.length} onClick={save}>
+            <Check className="h-3.5 w-3.5" />
+            Send
           </Button>
         </div>
-      </div>
+      </header>
 
-      {/* Canvas Area */}
-      <div className="flex-1 relative overflow-hidden bg-neutral-100 dark:bg-neutral-900">
-        {/* Canvas Container */}
-        <div
-          ref={containerRef}
-          className="absolute inset-0"
-        >
-          <canvas
-            ref={canvasRef}
-            className="cursor-crosshair bg-white touch-none absolute inset-0"
-            style={{
-              width: `${canvasWidth}px`,
-              height: `${canvasHeight}px`,
-            }}
-            onMouseDown={startDrawing}
-            onMouseMove={draw}
-            onMouseUp={stopDrawing}
-            onMouseLeave={draw}
-            onTouchStart={startDrawing}
-            onTouchMove={draw}
-            onTouchEnd={stopDrawing}
-          />
-        </div>
+      <div ref={containerRef} className="relative min-h-0 flex-1 bg-neutral-100">
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 touch-none bg-white"
+          onPointerDown={start}
+          onPointerMove={move}
+          onPointerUp={finish}
+          onPointerCancel={finish}
+        />
 
-        {/* Floating Bottom Toolbar - Responsive */}
-        <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 z-10 w-[calc(100%-1rem)] sm:w-auto max-w-[calc(100%-1rem)]">
-          {/* Mobile: two rows stacked. Desktop: single row */}
-          <div className="bg-background border border-border rounded-xl shadow-lg px-1.5 sm:px-2 py-1.5 flex flex-col sm:flex-row items-center gap-1.5 sm:gap-1">
-
-            {/* Row 1: Tools + Colors */}
-            <div className="flex items-center gap-1 w-full sm:w-auto justify-center">
-              {/* Pen / Eraser Toggle */}
-              <button
-                onClick={() => setIsEraser(false)}
-                className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg transition-all shrink-0 ${
-                  !isEraser
-                    ? "bg-foreground text-background shadow-sm"
-                    : "hover:bg-muted text-muted-foreground"
-                }`}
-                title="Pen (E)"
-              >
-                <Pen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-              <button
-                onClick={() => setIsEraser(true)}
-                className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg transition-all shrink-0 ${
-                  isEraser
-                    ? "bg-foreground text-background shadow-sm"
-                    : "hover:bg-muted text-muted-foreground"
-                }`}
-                title="Eraser (E)"
-              >
-                <Eraser className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-
-              <div className="w-px h-5 sm:h-6 bg-border mx-0.5 sm:mx-1 shrink-0" />
-
-              {/* Color Swatches */}
-              <div className="flex items-center gap-0.5 sm:gap-1 px-0.5 sm:px-1 overflow-x-auto">
-                {COLORS.map((color) => (
-                  <button
-                    key={color}
-                    className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 transition-all shrink-0 ${
-                      currentColor === color && !isEraser
-                        ? "border-foreground scale-110"
-                        : "border-border hover:scale-105"
-                    } ${color === "#FFFFFF" ? "ring-1 ring-border ring-inset" : ""}`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => {
-                      setCurrentColor(color);
-                      setIsEraser(false);
-                    }}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={currentColor}
-                  onChange={(e) => {
-                    setCurrentColor(e.target.value);
-                    setIsEraser(false);
-                  }}
-                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-border cursor-pointer appearance-none bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none shrink-0"
-                  aria-label="Custom color"
-                />
-              </div>
-            </div>
-
-            {/* Divider - only visible on desktop single-row */}
-            <div className="w-full h-px sm:w-px sm:h-6 bg-border sm:mx-1 shrink-0" />
-
-            {/* Row 2: Brush Size + Actions */}
-            <div className="flex items-center gap-1 w-full sm:w-auto justify-center">
-              {/* Brush Size */}
-              <div className="flex items-center gap-1 sm:gap-1.5 px-0.5 sm:px-1">
-                <button
-                  onClick={() => setBrushSize((s) => Math.max(1, s - 2))}
-                  className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors shrink-0"
-                  title="Decrease size"
-                >
-                  <Minus className="w-3 h-3" />
-                </button>
-                <div className="flex items-center justify-center w-8 sm:w-12">
-                  <div
-                    className="rounded-full bg-foreground transition-all"
-                    style={{
-                      width: `${Math.max(4, Math.min(brushSize, 24))}px`,
-                      height: `${Math.max(4, Math.min(brushSize, 24))}px`,
-                    }}
-                  />
-                </div>
-                <button
-                  onClick={() => setBrushSize((s) => Math.min(48, s + 2))}
-                  className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors shrink-0"
-                  title="Increase size"
-                >
-                  <Plus className="w-3 h-3" />
-                </button>
-              </div>
-
-              <div className="w-px h-5 sm:h-6 bg-border mx-0.5 sm:mx-1 shrink-0" />
-
-              {/* Actions */}
-              <button
-                onClick={undo}
-                disabled={strokes.length === 0}
-                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-30 transition-all shrink-0"
-                title="Undo (Ctrl+Z)"
-              >
-                <Undo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-              <button
-                onClick={redo}
-                disabled={redoStack.length === 0}
-                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-30 transition-all shrink-0"
-                title="Redo (Ctrl+Shift+Z)"
-              >
-                <Redo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-              <button
-                onClick={clear}
-                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-muted-foreground hover:text-red-500 transition-all shrink-0"
-                title="Clear canvas"
-              >
-                <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Keyboard shortcut hints — desktop only */}
-        <div className="absolute bottom-4 right-4 text-[10px] text-muted-foreground/50 hidden lg:block space-y-0.5 select-none">
-          <div><kbd className="font-mono">E</kbd> Toggle eraser</div>
-          <div><kbd className="font-mono">[ ]</kbd> Brush size</div>
-          <div><kbd className="font-mono">Ctrl+Z</kbd> Undo</div>
-          <div><kbd className="font-mono">Esc</kbd> Close</div>
+        <div className="absolute bottom-3 left-1/2 flex w-[calc(100%-1rem)] max-w-2xl -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-2xl border bg-background/95 p-2 shadow-xl backdrop-blur">
+          <button
+            onClick={() => setEraser(false)}
+            className={`flex h-9 w-9 items-center justify-center rounded-lg ${!eraser ? "bg-foreground text-background" : "hover:bg-muted"}`}
+            aria-label="Pen"
+          >
+            <Pen className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setEraser(true)}
+            className={`flex h-9 w-9 items-center justify-center rounded-lg ${eraser ? "bg-foreground text-background" : "hover:bg-muted"}`}
+            aria-label="Eraser"
+          >
+            <Eraser className="h-4 w-4" />
+          </button>
+          <span className="mx-1 h-6 w-px bg-border" />
+          {COLORS.map((item) => (
+            <button
+              key={item}
+              onClick={() => {
+                setColor(item);
+                setEraser(false);
+              }}
+              aria-label={`Use ${item}`}
+              className={`h-6 w-6 rounded-full border-2 ${color === item && !eraser ? "scale-110 border-foreground" : "border-border"}`}
+              style={{ backgroundColor: item }}
+            />
+          ))}
+          <span className="mx-1 h-6 w-px bg-border" />
+          <button onClick={() => setSize((value) => Math.max(1, value - 2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted" aria-label="Smaller brush">
+            <Minus className="h-3.5 w-3.5" />
+          </button>
+          <span className="w-8 text-center text-xs tabular-nums">{size}</span>
+          <button onClick={() => setSize((value) => Math.min(48, value + 2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted" aria-label="Larger brush">
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+          <span className="mx-1 h-6 w-px bg-border" />
+          <button disabled={!strokes.length} onClick={undo} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted disabled:opacity-30" aria-label="Undo">
+            <Undo2 className="h-4 w-4" />
+          </button>
+          <button disabled={!redoStack.length} onClick={redo} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted disabled:opacity-30" aria-label="Redo">
+            <Redo2 className="h-4 w-4" />
+          </button>
+          <button onClick={clear} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10" aria-label="Clear canvas">
+            <RotateCcw className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
-

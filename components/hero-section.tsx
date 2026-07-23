@@ -15,12 +15,14 @@ import {
 } from "lucide-react";
 import { createSpace, validateRoomCode } from "@/lib/actions";
 import { toast } from "sonner";
+import { rememberSpaceOwnership } from "@/lib/space-recovery";
 
 export default function HeroSection() {
   const [pinDigits, setPinDigits] = useState<string[]>(Array(4).fill(""));
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [shareHost, setShareHost] = useState("woff.space");
   const [isPasting, setIsPasting] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -42,7 +44,9 @@ export default function HeroSection() {
         inputRefs.current[3]?.focus();
       }, 100);
     } else {
-      const savedRoom = localStorage.getItem("last_created_space");
+      const savedRoom =
+        localStorage.getItem("last_room") ||
+        localStorage.getItem("last_created_space");
       if (savedRoom && /^\d{4}$/.test(savedRoom)) {
         setPinDigits(savedRoom.split(""));
       }
@@ -50,6 +54,7 @@ export default function HeroSection() {
   }, [searchParams]);
 
   useEffect(() => {
+    setShareHost(window.location.host);
     return () => {
       if (qrScannerRef.current) {
         qrScannerRef.current.stop();
@@ -62,7 +67,7 @@ export default function HeroSection() {
     setIsCreating(true);
     try {
       const space = await createSpace();
-      localStorage.setItem("last_created_space", space.slug);
+      rememberSpaceOwnership(space);
       // Prefetch the room page assets before navigating for faster transition
       router.prefetch(`/${space.slug}`);
       router.push(`/${space.slug}`);
@@ -110,7 +115,7 @@ export default function HeroSection() {
     try {
       const isValid = await validateRoomCode(codeToJoin);
       if (isValid) {
-        localStorage.setItem("last_created_space", codeToJoin);
+        localStorage.setItem("last_room", codeToJoin);
         router.push(`/${codeToJoin}`);
       } else {
         toast.error("Room not found - please check the code");
@@ -211,7 +216,7 @@ export default function HeroSection() {
   const handleCopyLink = async () => {
     if (!hasFullCode) return;
     try {
-      await navigator.clipboard.writeText(`woff.space/${roomCode}`);
+      await navigator.clipboard.writeText(`${window.location.origin}/${roomCode}`);
       setLinkCopied(true);
       toast.success("Link copied!");
       setTimeout(() => setLinkCopied(false), 2000);
@@ -344,7 +349,7 @@ export default function HeroSection() {
       await qrScanner.start();
 
       setTimeout(() => {
-        if (qrScannerRef.current && isScanning) {
+        if (qrScannerRef.current) {
           qrScanner.stop();
           safeRemoveOverlay(overlay);
           setIsScanning(false);
@@ -527,7 +532,9 @@ export default function HeroSection() {
                       onClick={handleCopyLink}
                       className="flex items-center gap-1.5 text-xs text-[#ff5a00] dark:text-[#ff7d3b] font-medium transition hover:opacity-80 bg-transparent"
                     >
-                      <span className="font-mono">woff.space/{roomCode}</span>
+                      <span className="font-mono">
+                        {shareHost}/{roomCode}
+                      </span>
                       <Copy size={12} />
                       {linkCopied && (
                         <span className="text-emerald-500 text-[10px] ml-1">

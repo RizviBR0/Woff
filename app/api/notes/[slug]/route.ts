@@ -14,7 +14,13 @@ export async function GET(_req: Request, context: any) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json(note, { status: 200 });
+    return NextResponse.json(note, {
+      status: 200,
+      headers: {
+        "Cache-Control": "private, no-store",
+        "Referrer-Policy": "no-referrer",
+      },
+    });
   } catch (err) {
     /* console.error("/api/notes/[slug] error:", err); */
     return NextResponse.json(

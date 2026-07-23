@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Upload, Loader2 } from "lucide-react";
 import { createSpace } from "@/lib/actions";
+import { rememberSpaceOwnership } from "@/lib/space-recovery";
 
 /**
  * Client-only shell for the homepage that handles:
@@ -64,6 +65,7 @@ export function HomeClientShell() {
 
           // Create new space automatically
           const space = await createSpace();
+          rememberSpaceOwnership(space);
 
           // Navigate to the space
           router.push(`/${space.slug}`);

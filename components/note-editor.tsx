@@ -1,2286 +1,625 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Underline from "@tiptap/extension-underline";
+import TiptapLink from "@tiptap/extension-link";
+import TiptapImage from "@tiptap/extension-image";
+import TextAlign from "@tiptap/extension-text-align";
+import Placeholder from "@tiptap/extension-placeholder";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import QRCode from "qrcode";
 import {
-  ArrowLeft,
-  Share,
-  MoreHorizontal,
-  Bold,
-  Italic,
-  Link,
-  Code,
-  Type,
-  Save,
-  Underline,
-  Strikethrough,
-  List,
-  ListOrdered,
-  Quote,
-  ImageIcon,
-  Check,
-  X,
-  Moon,
-  Sun,
-  Monitor,
-  Undo2,
-  Redo2,
-  Minus,
-  Plus,
-  ChevronDown,
-  AlignLeft,
   AlignCenter,
+  AlignLeft,
   AlignRight,
-  AlignJustify,
-  Maximize2,
-  Minimize2,
-  Highlighter,
-  PenLine,
+  ArrowLeft,
+  Bold,
+  Check,
+  ChevronDown,
+  Code2,
+  Copy,
+  Heading1,
+  Heading2,
+  ImagePlus,
+  Italic,
+  Link2,
+  List,
+  ListChecks,
+  ListOrdered,
+  Loader2,
+  Lock,
+  Quote,
+  Redo2,
+  Save,
+  Share2,
+  Strikethrough,
+  UnderlineIcon,
+  Undo2,
+  Unlink,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import type { Note } from "@/lib/actions";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  createUploadIntent,
+  registerNoteAsset,
+  updateNote,
+} from "@/lib/actions";
+import { supabaseBrowser } from "@/lib/supabase-browser";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
-import { SlashMenu } from "./slash-menu";
-import { updateNote, createSpace, createNoteEntry, type Note } from "@/lib/actions";
-import { compressImageAdaptive } from "@/lib/image-compression";
 
 interface NoteEditorProps {
   noteSlug: string;
   initialNote?: Note | null;
 }
 
+type SaveState = "saved" | "unsaved" | "saving" | "error" | "offline";
+
+function ToolbarButton({
+  label,
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition ${
+        active
+          ? "bg-foreground text-background"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      } disabled:cursor-not-allowed disabled:opacity-30`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const router = useRouter();
-  const [note, setNote] = useState<Note | null>(initialNote || null);
-  const [isLoading, setIsLoading] = useState(!initialNote);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">(
-    "saved"
-  );
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [showSelectionBubble, setShowSelectionBubble] = useState(false);
-  const [selectionBubblePos, setSelectionBubblePos] = useState({ x: 0, y: 0 });
-  const [showSlashMenu, setShowSlashMenu] = useState(false);
-  const [slashMenuPos, setSlashMenuPos] = useState({ x: 0, y: 0 });
-  const [stats, setStats] = useState({ lines: 0, words: 0, sentences: 0 });
-  const [showToolbarShare, setShowToolbarShare] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [tempTitle, setTempTitle] = useState("");
-  const [isSavingTitle, setIsSavingTitle] = useState(false);
-  const [isAutoSaving, setIsAutoSaving] = useState(false);
-  const [lastSavedContent, setLastSavedContent] = useState(initialNote?.content || "");
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const note = initialNote!;
+  const canEdit = Boolean(note?.is_owner);
+  const [title, setTitle] = useState(note?.title || "Untitled Note");
+  const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [shareOpen, setShareOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkValue, setLinkValue] = useState("");
+  const [qrCode, setQrCode] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [stats, setStats] = useState({ words: 0, characters: 0 });
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const versionRef = useRef(note?.version || 1);
+  const dirtyRef = useRef(false);
+  const mountedRef = useRef(false);
+  const draftKey = `woff-note-draft:${noteSlug}`;
 
-  const { theme, setTheme } = useTheme();
-
-  // Zoom and fullscreen state
-  const [zoomLevel, setZoomLevel] = useState(100);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  // Load autosave setting from localStorage
-  useEffect(() => {
-    const savedAutoSave = localStorage.getItem("woff-autosave-enabled");
-    if (savedAutoSave !== null) {
-      setAutoSaveEnabled(JSON.parse(savedAutoSave));
-    }
-  }, []);
-
-  // Save autosave setting to localStorage and clear timeouts when disabled
-  useEffect(() => {
-    localStorage.setItem(
-      "woff-autosave-enabled",
-      JSON.stringify(autoSaveEnabled)
-    );
-
-    // Clear pending autosave when disabled
-    if (!autoSaveEnabled && autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-      autoSaveTimeoutRef.current = undefined;
-      /* console.log("🔄 Autosave disabled - cleared pending autosave"); */
-    }
-  }, [autoSaveEnabled]);
-  const editorRef = useRef<HTMLDivElement>(null);
-  const titleRef = useRef<HTMLInputElement>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout>();
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout>();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const editorInitializedRef = useRef(false); // Track if editor content was initialized
-
-  // Selection range preservation refs and callbacks
-  const savedRangeRef = useRef<Range | null>(null);
-
-  const saveActiveSelection = useCallback(() => {
-    const selection = window.getSelection();
-    if (
-      selection &&
-      selection.rangeCount > 0 &&
-      editorRef.current &&
-      editorRef.current.contains(selection.anchorNode)
-    ) {
-      savedRangeRef.current = selection.getRangeAt(0).cloneRange();
-    }
-  }, []);
-
-  const restoreActiveSelection = useCallback(() => {
-    if (savedRangeRef.current && editorRef.current) {
-      const selection = window.getSelection();
-      if (selection) {
-        selection.removeAllRanges();
-        selection.addRange(savedRangeRef.current.cloneRange());
-      }
-    }
-  }, []);
-
-  // Listen for selection changes inside the editor
-  useEffect(() => {
-    const handleSelectionChange = () => {
-      const selection = window.getSelection();
-      if (
-        selection &&
-        selection.rangeCount > 0 &&
-        editorRef.current &&
-        editorRef.current.contains(selection.anchorNode)
-      ) {
-        savedRangeRef.current = selection.getRangeAt(0).cloneRange();
-      }
-    };
-
-    document.addEventListener("selectionchange", handleSelectionChange);
-    return () => {
-      document.removeEventListener("selectionchange", handleSelectionChange);
-    };
-  }, []);
-
-  // Load note from server (via API route to avoid client-side server action calls)
-  useEffect(() => {
-    if (initialNote) {
-      setLastSavedContent(initialNote.content || "");
-      setIsLoading(false);
-      return;
-    }
-
-    const loadNote = async () => {
-      setIsLoading(true);
-      try {
-        const res = await fetch(`/api/notes/${noteSlug}`);
-        const fetchedNote = res.ok ? ((await res.json()) as Note) : null;
-        if (fetchedNote) {
-          /* console.log(
-            "📝 Loaded existing note from database:",
-            fetchedNote.title
-          ); */
-          setNote(fetchedNote);
-          setLastSavedContent(fetchedNote.content);
-        } else {
-          /* console.log("📝 Note not found in database, creating new note"); */
-          // Create a new note that will be saved to database on first save
-          const mockNote: Note = {
-            id: `mock-${noteSlug}`,
-            slug: noteSlug,
-            title: "Untitled Note",
-            content: "",
-            public_code: generateShortCode(),
-            visibility: "unlisted",
-            font_family: "system",
-            space_id: "mock-space",
-            created_by_device_id: getCookieValue("device_id") || "mock-device",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          setNote(mockNote);
-          setLastSavedContent(mockNote.content);
-        }
-      } catch (error) {
-        /* console.error("Failed to load note:", error); */
-        // Create new note on error too
-        const mockNote: Note = {
-          id: `mock-${noteSlug}`,
-          slug: noteSlug,
-          title: "Untitled Note",
-          content: "",
-          public_code: generateShortCode(),
-          visibility: "unlisted",
-          font_family: "system",
-          space_id: "mock-space",
-          created_by_device_id: getCookieValue("device_id") || "mock-device",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        setNote(mockNote);
-        setLastSavedContent(mockNote.content);
-      }
-      setIsLoading(false);
-    };
-
-    loadNote();
-  }, [noteSlug, router, initialNote]);
-
-  // Helper function to generate short codes
-  const generateShortCode = () => {
-    return Math.random().toString(36).substr(2, 5).toUpperCase();
-  };
-
-  // Helper function to get cookie value
-  const getCookieValue = (name: string) => {
-    if (typeof document === "undefined") return null;
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop()?.split(";").shift();
-    return null;
-  };
-
-  // Save cursor position
-  const saveCursorPosition = useCallback(() => {
-    const selection = window.getSelection();
-    if (!selection || !selection.rangeCount || !editorRef.current) return null;
-
-    const range = selection.getRangeAt(0);
-    const preCaretRange = range.cloneRange();
-    preCaretRange.selectNodeContents(editorRef.current);
-    preCaretRange.setEnd(range.startContainer, range.startOffset);
-    const caretOffset = preCaretRange.toString().length;
-
-    return {
-      offset: caretOffset,
-      length: range.toString().length,
-    };
-  }, []);
-
-  // Restore cursor position
-  const restoreCursorPosition = useCallback(
-    (position: { offset: number; length: number } | null) => {
-      if (!position || !editorRef.current) return;
-
-      const selection = window.getSelection();
-      if (!selection) return;
-
-      try {
-        const range = document.createRange();
-        let currentOffset = 0;
-        let startNode: Node | null = null;
-        let startOffset = 0;
-        let endNode: Node | null = null;
-        let endOffset = 0;
-
-        // Walk through all text nodes to find the position
-        const walker = document.createTreeWalker(
-          editorRef.current,
-          NodeFilter.SHOW_TEXT,
-          null
-        );
-
-        let node;
-        while ((node = walker.nextNode())) {
-          const nodeLength = node.textContent?.length || 0;
-
-          if (!startNode && currentOffset + nodeLength >= position.offset) {
-            startNode = node;
-            startOffset = position.offset - currentOffset;
-          }
-
-          if (
-            !endNode &&
-            currentOffset + nodeLength >= position.offset + position.length
-          ) {
-            endNode = node;
-            endOffset = position.offset + position.length - currentOffset;
-            break;
-          }
-
-          currentOffset += nodeLength;
-        }
-
-        if (startNode) {
-          range.setStart(startNode, startOffset);
-          if (endNode && position.length > 0) {
-            range.setEnd(endNode, endOffset);
-          } else {
-            range.collapse(true);
-          }
-
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
-      } catch (error) {
-        /* console.warn("Failed to restore cursor position:", error); */
-      }
-    },
-    []
-  );
-
-  // Scroll detection for toolbar share button
-  useEffect(() => {
-    const handleScroll = () => {
-      // Show toolbar share button when scrolled past ~150px (roughly past the header)
-      const scrollThreshold = 150;
-      setShowToolbarShare(window.scrollY > scrollThreshold);
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  // Manual save function
-  const saveNote = useCallback(async () => {
-    if (!note) {
-      /* console.log("💾 No note to save"); */
-      return;
-    }
-
-    /* console.log("💾 Manual save triggered for:", note.title); */
-    setSaveStatus("saving");
-    setIsSaving(true);
-
-    // Clear any pending autosave
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-      autoSaveTimeoutRef.current = undefined;
-    }
-
-    try {
-      if (note.id.startsWith("mock-")) {
-        // This is a new note that needs to be created in the database
-        /* console.log("💾 Creating new note in database..."); */
-
-        try {
-          /* console.log("💾 Starting new note creation process..."); */
-
-          // Step 1: Create space
-          /* console.log("💾 Step 1: Creating new space..."); */
-          const newSpace = await createSpace();
-          /* console.log("💾 ✅ Space created:", newSpace); */
-
-          // Step 2: Create note entry
-          /* console.log("💾 Step 2: Creating note entry..."); */
-          const noteResult = await createNoteEntry(newSpace.id, note.title);
-          /* console.log("💾 ✅ Note entry created:", noteResult); */
-
-          // Step 3: Update note with content
-          /* console.log("💾 Step 3: Updating note with content..."); */
-          const updatedNote = await updateNote(noteResult.noteSlug, {
-            title: note.title,
-            content: note.content,
-            visibility: note.visibility,
-            font_family: note.font_family,
-          });
-          /* console.log("💾 ✅ Note updated with content:", updatedNote); */
-
-          // Step 4: Update local state
-          /* console.log("💾 Step 4: Updating local state..."); */
-          setNote({
-            ...updatedNote,
-            public_code: noteResult.publicCode,
-            space_id: newSpace.id,
-          });
-
-          // Step 5: Update URL
-          /* console.log("💾 Step 5: Updating URL..."); */
-          const newUrl = `/n/${noteResult.noteSlug}`;
-          if (window.location.pathname !== newUrl) {
-            window.history.replaceState({}, "", newUrl);
-            /* console.log("💾 ✅ URL updated to:", newUrl); */
-          }
-
-          /* console.log("💾 🎉 Note creation completed successfully!"); */
-        } catch (createError) {
-          /* console.error("💾 ❌ Error in note creation process:", createError); */
-          /* console.error(
-            "💾 Error stack:",
-            createError instanceof Error ? createError.stack : createError
-          ); */
-          throw createError;
-        }
-      } else {
-        // This is an existing note, just update it
-        /* console.log("💾 Updating existing note..."); */
-        const updatedNote = await updateNote(note.slug, {
-          title: note.title,
-          content: note.content,
-          visibility: note.visibility,
-          font_family: note.font_family,
-        });
-
-        /* console.log("💾 Note updated successfully"); */
-        setNote(updatedNote);
-      }
-
-      /* console.log("💾 Save completed successfully"); */
-      setSaveStatus("saved");
-
-      // Update lastSavedContent to prevent unnecessary autosaves
-      setLastSavedContent(note.content);
-
-      // Show "Saved" briefly then fade
-      setTimeout(() => {
-        setSaveStatus("saved");
-      }, 2000);
-    } catch (error) {
-      /* console.error("💾 Failed to save note:", error); */
-      setSaveStatus("error");
-
-      // Show error message to user
-      /* console.error("Save error details:", error); */
-    } finally {
-      setIsSaving(false);
-    }
-  }, [note]);
-
-  // Autosave function
-  const autoSave = useCallback(
-    async (noteToSave: Note) => {
-      if (
-        !autoSaveEnabled ||
-        !noteToSave ||
-        noteToSave.content === lastSavedContent
-      ) {
-        return; // No changes to save or autosave disabled
-      }
-
-      /* console.log("🔄 Autosave triggered for:", noteToSave.title); */
-      setIsAutoSaving(true);
-
-      // Save cursor position before autosave
-      const cursorPosition = saveCursorPosition();
-
-      try {
-        if (noteToSave.id.startsWith("mock-")) {
-          // For mock notes, we'll save them when user manually saves
-          /* console.log(
-            "🔄 Mock note - autosave skipped, will save on manual save"
-          ); */
-          setLastSavedContent(noteToSave.content);
-        } else {
-          // Update existing note
-          /* console.log("🔄 Autosaving to database..."); */
-          const updatedNote = await updateNote(noteToSave.slug, {
-            title: noteToSave.title,
-            content: noteToSave.content,
-            visibility: noteToSave.visibility,
-            font_family: noteToSave.font_family,
-          });
-
-          /* console.log("🔄 Autosave completed successfully"); */
-          setLastSavedContent(noteToSave.content);
-
-          // Don't update note state from server response during autosave
-          // This prevents overwriting what the user is currently typing
-          // Only update non-content fields if needed
-          if (updatedNote.updated_at) {
-            setNote((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    updated_at: updatedNote.updated_at,
-                  }
-                : null
-            );
-          }
-        }
-
-        setSaveStatus("saved");
-      } catch (error) {
-        /* console.error("🔄 Autosave failed:", error); */
-        setSaveStatus("error");
-      } finally {
-        setIsAutoSaving(false);
-
-        // Restore cursor position after a brief delay
-        setTimeout(() => {
-          restoreCursorPosition(cursorPosition);
-        }, 10);
-      }
-    },
-    [
-      autoSaveEnabled,
-      lastSavedContent,
-      saveCursorPosition,
-      restoreCursorPosition,
-    ]
-  );
-
-  // Calculate editor statistics
-  const calculateStats = useCallback(() => {
-    if (!editorRef.current) return;
-
-    const textContent = editorRef.current.textContent || "";
-
-    // Count lines by counting block elements and line breaks
-    let lines = 0;
-    if (textContent.trim() === "") {
-      lines = 0;
-    } else {
-      // Count block elements (p, div, h1-h6, blockquote, pre, li) and br tags
-      const blockElements = editorRef.current.querySelectorAll(
-        "p, div, h1, h2, h3, h4, h5, h6, blockquote, pre, li"
+  const editor = useEditor({
+    immediatelyRender: false,
+    editable: canEdit,
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+        link: false,
+        underline: false,
+      }),
+      Underline,
+      TiptapLink.configure({
+        openOnClick: !canEdit,
+        autolink: true,
+        defaultProtocol: "https",
+        HTMLAttributes: {
+          rel: "noopener noreferrer nofollow",
+          target: "_blank",
+        },
+      }),
+      TiptapImage.configure({
+        allowBase64: false,
+        HTMLAttributes: { class: "note-image" },
+      }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Placeholder.configure({
+        placeholder: canEdit
+          ? "Start writing… Markdown shortcuts like “# ” and “- ” work here."
+          : "",
+      }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+    ],
+    // Server-sanitized HTML is the rendering source of truth. JSON remains a
+    // versioned storage format but is never trusted directly from the database.
+    content: note?.content || note?.content_json || "",
+    onUpdate({ editor: currentEditor }) {
+      if (!mountedRef.current || !canEdit) return;
+      dirtyRef.current = true;
+      setSaveState(navigator.onLine ? "unsaved" : "offline");
+      const text = currentEditor.getText();
+      setStats({
+        words: text.trim() ? text.trim().split(/\s+/).length : 0,
+        characters: text.length,
+      });
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          html: currentEditor.getHTML(),
+          json: currentEditor.getJSON(),
+          title,
+          savedAt: Date.now(),
+        }),
       );
-      const brElements = editorRef.current.querySelectorAll("br");
+      scheduleSave();
+    },
+  });
 
-      // If we have block elements, count them (excluding empty ones)
-      if (blockElements.length > 0) {
-        lines = Array.from(blockElements).filter((el) => {
-          const text = el.textContent?.trim() || "";
-          return text.length > 0;
-        }).length;
-      } else {
-        // Fallback: count by text lines if no block elements
-        const textLines = textContent
-          .split("\n")
-          .filter((line) => line.trim().length > 0);
-        lines = Math.max(textLines.length, 1);
-      }
+  const performSave = useCallback(
+    (snapshot?: { title: string; html: string; json: Record<string, unknown> }) => {
+      if (!editor || !canEdit) return Promise.resolve();
+      const current =
+        snapshot ||
+        ({
+          title,
+          html: editor.getHTML(),
+          json: editor.getJSON(),
+        } as const);
 
-      // Add extra lines for standalone br elements (not inside block elements)
-      const standaloneBrs = Array.from(brElements).filter((br) => {
-        const parent = br.parentElement;
-        return parent && parent === editorRef.current;
-      });
-      lines += standaloneBrs.length;
-
-      // Ensure at least 1 line if there's content
-      lines = Math.max(lines, textContent.trim() ? 1 : 0);
-    }
-
-    // Count words (split by whitespace, filter out empty strings)
-    const words =
-      textContent.trim() === ""
-        ? 0
-        : textContent
-            .trim()
-            .split(/\s+/)
-            .filter((word) => word.length > 0).length;
-
-    // Count sentences (split by sentence endings, filter out empty strings)
-    const sentences =
-      textContent.trim() === ""
-        ? 0
-        : textContent
-            .split(/[.!?]+/)
-            .filter((sentence) => sentence.trim().length > 0).length;
-
-    setStats({ lines, words, sentences });
-  }, []);
-
-  // Handle content changes
-  const handleContentChange = useCallback(() => {
-    if (!editorRef.current || !note) return;
-
-    const newContent = editorRef.current.innerHTML;
-    /* console.log("📝 Content changing, new length:", newContent.length); */
-
-    // Update local state immediately
-    setNote((prev) => {
-      if (!prev) return null;
-      const updated = {
-        ...prev,
-        content: newContent,
-        updated_at: new Date().toISOString(),
-      };
-
-      // Clear existing autosave timeout
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
-
-      // Set up autosave with debouncing (2 seconds after user stops typing) - only if enabled
-      if (autoSaveEnabled) {
-        autoSaveTimeoutRef.current = setTimeout(() => {
-          /* console.log("🔄 Triggering autosave after content change"); */
-          autoSave(updated);
-        }, 2000);
-      }
-
-      return updated;
-    });
-
-    calculateStats();
-
-    // Show that content has changed (mark as unsaved) - only if autosave is enabled
-    if (
-      autoSaveEnabled &&
-      saveStatus === "saved" &&
-      newContent !== lastSavedContent
-    ) {
-      setSaveStatus("saving");
-    }
-  }, [
-    note,
-    calculateStats,
-    autoSave,
-    saveStatus,
-    lastSavedContent,
-    autoSaveEnabled,
-  ]);
-
-  // Handle click outside to close slash menu
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        showSlashMenu &&
-        editorRef.current &&
-        !editorRef.current.contains(e.target as Node)
-      ) {
-        setShowSlashMenu(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showSlashMenu]);
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    const autoSaveTimeout = autoSaveTimeoutRef.current;
-    const saveTimeout = saveTimeoutRef.current;
-
-    return () => {
-      if (autoSaveTimeout) {
-        clearTimeout(autoSaveTimeout);
-      }
-      if (saveTimeout) {
-        clearTimeout(saveTimeout);
-      }
-    };
-  }, []);
-
-  // Initialize editor content properly - only on initial load
-  useEffect(() => {
-    if (note && editorRef.current && !editorInitializedRef.current) {
-      // Only initialize content once when note is first loaded
-      editorInitializedRef.current = true;
-      editorRef.current.innerHTML = note.content || "";
-
-      // If content is empty, focus the editor and position cursor properly
-      if (!note.content || note.content.trim() === "") {
-        editorRef.current.focus();
-        const range = document.createRange();
-        const sel = window.getSelection();
-
-        if (sel) {
-          range.selectNodeContents(editorRef.current);
-          range.collapse(true); // Collapse to start
-          sel.removeAllRanges();
-          sel.addRange(range);
+      saveQueueRef.current = saveQueueRef.current.then(async () => {
+        if (!navigator.onLine) {
+          setSaveState("offline");
+          return;
         }
-      }
-
-      // Calculate initial stats
-      calculateStats();
-    }
-  }, [note, calculateStats]);
-
-  // Handle link interactions with tooltips
-  useEffect(() => {
-    if (!editorRef.current) return;
-
-    let tooltipTimeout: NodeJS.Timeout | null = null;
-    let currentTooltip: HTMLElement | null = null;
-
-    const showTooltip = (link: HTMLAnchorElement) => {
-      // Clear any existing tooltip
-      if (currentTooltip) {
-        currentTooltip.remove();
-        currentTooltip = null;
-      }
-
-      const href = link.href || link.getAttribute("href") || "";
-
-      // Create simplified tooltip
-      const tooltip = document.createElement("div");
-      tooltip.className =
-        "fixed z-50 bg-popover text-popover-foreground px-3 py-2 rounded-lg shadow-lg text-sm border animate-in fade-in-0 zoom-in-95 duration-200 cursor-pointer hover:bg-accent transition-colors";
-      tooltip.innerHTML = `Follow link`;
-      tooltip.id = "link-tooltip";
-
-      // Position tooltip closer to the link
-      const rect = link.getBoundingClientRect();
-      tooltip.style.left = `${rect.left + rect.width / 2}px`;
-      tooltip.style.top = `${rect.top - 8}px`;
-      tooltip.style.transform = "translate(-50%, -100%)";
-
-      // Make tooltip clickable to follow link
-      const handleTooltipClick = (e: MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        let url = href;
-        // Ensure the URL has a protocol
-        if (
-          url &&
-          !url.startsWith("http://") &&
-          !url.startsWith("https://") &&
-          !url.startsWith("mailto:")
-        ) {
-          url = "https://" + url;
-        }
-
-        if (url) {
-          hideTooltip();
-          window.open(url, "_blank", "noopener,noreferrer");
-        }
-      };
-
-      // Add event listeners to tooltip
-      tooltip.addEventListener("click", handleTooltipClick);
-
-      tooltip.addEventListener("mouseenter", () => {
-        if (tooltipTimeout) {
-          clearTimeout(tooltipTimeout);
-          tooltipTimeout = null;
+        setSaveState("saving");
+        try {
+          const updated = await updateNote(noteSlug, {
+            title: current.title,
+            content: current.html,
+            content_json: current.json,
+            version: versionRef.current,
+          });
+          versionRef.current = updated.version || versionRef.current + 1;
+          dirtyRef.current = false;
+          setSaveState("saved");
+          localStorage.removeItem(draftKey);
+        } catch (error) {
+          dirtyRef.current = true;
+          setSaveState("error");
+          toast.error(error instanceof Error ? error.message : "Unable to save note");
         }
       });
+      return saveQueueRef.current;
+    },
+    [canEdit, draftKey, editor, noteSlug, title],
+  );
 
-      tooltip.addEventListener("mouseleave", () => {
-        hideTooltip();
+  const scheduleSave = useCallback(() => {
+    if (!canEdit) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (!editor) return;
+      void performSave({
+        title,
+        html: editor.getHTML(),
+        json: editor.getJSON(),
       });
+    }, 1000);
+  }, [canEdit, editor, performSave, title]);
 
-      document.body.appendChild(tooltip);
-      currentTooltip = tooltip;
-    };
-
-    const hideTooltip = () => {
-      if (currentTooltip) {
-        currentTooltip.remove();
-        currentTooltip = null;
-      }
-      if (tooltipTimeout) {
-        clearTimeout(tooltipTimeout);
-        tooltipTimeout = null;
-      }
-    };
-
-    const handleLinkEnter = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "A") {
-        const link = target as HTMLAnchorElement;
-
-        // Clear any hide timeout
-        if (tooltipTimeout) {
-          clearTimeout(tooltipTimeout);
-          tooltipTimeout = null;
-        }
-
-        showTooltip(link);
-      }
-    };
-
-    const handleLinkLeave = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "A") {
-        // Only hide if not moving to tooltip
-        tooltipTimeout = setTimeout(() => {
-          const tooltip = document.getElementById("link-tooltip");
-          if (tooltip && !tooltip.matches(":hover")) {
-            hideTooltip();
-          }
-        }, 150);
-      }
-    };
-
-    const handleLinkClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "A") {
-        // Prevent direct link clicks - only allow tooltip clicks
-        e.preventDefault();
-        e.stopPropagation();
-
-        // Show visual feedback that direct clicking is disabled
-        const link = target as HTMLAnchorElement;
-        link.style.backgroundColor = "rgba(239, 68, 68, 0.1)"; // Red highlight
-        setTimeout(() => {
-          link.style.backgroundColor = "transparent";
-        }, 200);
-      }
-    };
-
-    const editor = editorRef.current;
-    editor.addEventListener("mouseenter", handleLinkEnter, true);
-    editor.addEventListener("mouseleave", handleLinkLeave, true);
-    editor.addEventListener("click", handleLinkClick);
-
-    return () => {
-      editor.removeEventListener("mouseenter", handleLinkEnter, true);
-      editor.removeEventListener("mouseleave", handleLinkLeave, true);
-      editor.removeEventListener("click", handleLinkClick);
-
-      // Clean up timeouts and tooltips
-      if (tooltipTimeout) {
-        clearTimeout(tooltipTimeout);
-      }
-      const tooltip = document.getElementById("link-tooltip");
-      if (tooltip) {
-        tooltip.remove();
-      }
-    };
-  }, [note]);
-
-  // Handle title editing mode
-  const startTitleEdit = () => {
-    if (!note) return;
-    setTempTitle(note.title);
-    setIsEditingTitle(true);
-
-    // Focus and select the input after it renders
-    setTimeout(() => {
-      if (titleRef.current) {
-        titleRef.current.focus();
-        titleRef.current.select();
-      }
-    }, 10);
-  };
-
-  const confirmTitleEdit = async () => {
-    if (!note || !tempTitle.trim()) return;
-
-    /* console.log("📝 Title confirmed, saving:", tempTitle); */
-    setIsSavingTitle(true);
-
-    // Update local state immediately for responsive UI
-    setNote((prev) => {
-      if (!prev) return null;
-      const updated = {
-        ...prev,
-        title: tempTitle.trim(),
-        updated_at: new Date().toISOString(),
-      };
-      /* console.log("📝 Note title updated locally:", updated); */
-      return updated;
-    });
-
-    setIsEditingTitle(false);
-    setTempTitle("");
-
-    // Save to database in background
-    try {
-      if (note.id.startsWith("mock-")) {
-        /* console.log("📝 Mock note - title will be saved on next full save"); */
-        // For mock notes, just wait a bit to show the saving state
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      } else {
-        /* console.log("📝 Saving title to database..."); */
-        const updatedNote = await updateNote(note.slug, {
-          title: tempTitle.trim(),
-          content: note.content,
-          visibility: note.visibility,
-          font_family: note.font_family,
-        });
-        /* console.log("📝 Title saved to database successfully"); */
-
-        // Update state with server response
-        setNote((prev) => (prev ? { ...prev, ...updatedNote } : null));
-      }
-    } catch (error) {
-      /* console.error("📝 Failed to save title to database:", error); */
-      // Could show a toast notification here for user feedback
-    } finally {
-      setIsSavingTitle(false);
-    }
-  };
-
-  const cancelTitleEdit = () => {
-    /* console.log("📝 Title edit cancelled"); */
-    setIsEditingTitle(false);
-    setTempTitle("");
-  };
-
-  // Handle title changes (legacy for direct input)
-  const handleTitleChange = (newTitle: string) => {
-    /* console.log("📝 Title changing to:", newTitle); */
-    if (!note) return;
-
-    setNote((prev) => {
-      if (!prev) return null;
-      const updated = {
-        ...prev,
-        title: newTitle,
-        updated_at: new Date().toISOString(),
-      };
-      /* console.log("📝 Note updated locally:", updated); */
-      return updated;
-    });
-  };
-
-  // Check if current user is the creator
-  // Since device_id cookie is httpOnly, we can't access it on client side
-  // We'll allow lock functionality for all users and let server handle authorization
-  const deviceId = getCookieValue("device_id");
-  const isCreator = true; // Allow for everyone, server will validate actual permissions
-
-  // Handle text selection for formatting bubble
-  const handleSelection = useCallback(() => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
-      setShowSelectionBubble(false);
-      return;
-    }
-
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-
-    if (rect.width > 0 && rect.height > 0) {
-      setSelectionBubblePos({
-        x: rect.left + rect.width / 2,
-        y: rect.top - 50,
+  useEffect(() => {
+    mountedRef.current = true;
+    if (editor) {
+      const text = editor.getText();
+      setStats({
+        words: text.trim() ? text.trim().split(/\s+/).length : 0,
+        characters: text.length,
       });
-      setShowSelectionBubble(true);
     }
-  }, []);
 
-  // Format commands
-  const formatText = (command: string, value?: string) => {
-    if (!editorRef.current) return;
-
-    restoreActiveSelection();
-
-    if (command === "formatBlock" && value) {
+    if (canEdit && editor) {
       try {
-        const tag = value.startsWith("<") ? value : `<${value}>`;
-        document.execCommand("formatBlock", false, tag);
-      } catch (error) {
-        console.warn("formatBlock failed:", error);
-      }
-      setTimeout(() => {
-        handleContentChange();
-        saveActiveSelection();
-      }, 50);
-      return;
-    } else {
-      // Handle inline formatting (bold, italic, etc.)
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const selectedText = range.toString();
-
-        if (selectedText) {
-          try {
-            if (command === "createLink" && value) {
-              const linkElement = document.createElement("a");
-              linkElement.href = value;
-              linkElement.textContent = selectedText;
-              linkElement.className =
-                "text-blue-600 dark:text-blue-400 underline underline-offset-2 decoration-blue-600/40 dark:decoration-blue-400/40 hover:decoration-blue-600 dark:hover:decoration-blue-400 transition-colors hover:text-blue-700 dark:hover:text-blue-300";
-              linkElement.style.cursor = "default";
-              linkElement.contentEditable = "false";
-              linkElement.removeAttribute("target");
-              linkElement.removeAttribute("rel");
-
-              range.deleteContents();
-              range.insertNode(linkElement);
-
-              range.setStartAfter(linkElement);
-              range.collapse(true);
-              selection.removeAllRanges();
-              selection.addRange(range);
-            } else {
-              document.execCommand(command, false, value);
-            }
-          } catch (error) {
-            console.warn("execCommand failed:", error);
-          }
+        const rawDraft = localStorage.getItem(draftKey);
+        const draft = rawDraft ? JSON.parse(rawDraft) : null;
+        if (
+          draft?.savedAt > new Date(note.updated_at).getTime() &&
+          draft.html !== editor.getHTML()
+        ) {
+          toast("An unsaved local draft was found", {
+            duration: 10_000,
+            action: {
+              label: "Restore",
+              onClick: () => {
+                editor.commands.setContent(draft.json || draft.html);
+                setTitle(draft.title || note.title);
+                dirtyRef.current = true;
+                setSaveState("unsaved");
+              },
+            },
+          });
         }
+      } catch {
+        localStorage.removeItem(draftKey);
       }
     }
 
-    setTimeout(() => {
-      if (editorRef.current) {
-        editorRef.current.focus();
-        handleContentChange();
+    return () => {
+      mountedRef.current = false;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [canEdit, draftKey, editor, note.title, note.updated_at]);
+
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const online = () => {
+      if (dirtyRef.current) {
+        setSaveState("unsaved");
+        scheduleSave();
       }
-    }, 50);
+    };
+    const offline = () => setSaveState("offline");
+    window.addEventListener("beforeunload", beforeUnload);
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offline);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      window.removeEventListener("online", online);
+      window.removeEventListener("offline", offline);
+    };
+  }, [scheduleSave]);
 
-    setShowSelectionBubble(false);
-  };
+  useEffect(() => {
+    if (!shareOpen) return;
+    const url = window.location.href;
+    void QRCode.toDataURL(url, { width: 220, margin: 1 }).then(setQrCode);
+  }, [shareOpen]);
 
-  // Handle list creation (for toolbar buttons)
-  const createList = (listType: "ul" | "ol") => {
-    if (!editorRef.current) return;
-
-    restoreActiveSelection();
-
-    try {
-      const command = listType === "ul" ? "insertUnorderedList" : "insertOrderedList";
-      document.execCommand(command);
-    } catch (error) {
-      console.warn("createList failed:", error);
-    }
-
-    setTimeout(() => {
-      handleContentChange();
-      saveActiveSelection();
-    }, 50);
-  };
-
-  // Handle keyboard shortcuts
-  const handleKeyboardShortcuts = (e: React.KeyboardEvent) => {
-    // Check for Ctrl/Cmd shortcuts
-    if (e.ctrlKey || e.metaKey) {
-      switch (e.key.toLowerCase()) {
-        case "b":
-          e.preventDefault();
-          formatText("bold");
-          break;
-        case "i":
-          e.preventDefault();
-          formatText("italic");
-          break;
-        case "u":
-          e.preventDefault();
-          formatText("underline");
-          break;
-        case "s":
-          e.preventDefault();
-          saveNote();
-          break;
-        default:
-          break;
-      }
-    }
-  };
-
-  // Handle slash menu
-  const handleSlashMenu = (e: React.KeyboardEvent) => {
-    if (e.key === "/") {
-      // Prevent the "/" from being inserted
-      e.preventDefault();
-
-      // Get cursor position for menu placement
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const r = sel.getRangeAt(0);
-        const rect = r.getBoundingClientRect();
-
-        // If rect has no dimensions (e.g., empty editor), use editor position
-        if (rect.width === 0 && rect.height === 0 && editorRef.current) {
-          const editorRect = editorRef.current.getBoundingClientRect();
-          setSlashMenuPos({ x: editorRect.left + 40, y: editorRect.top + 60 });
-        } else {
-          setSlashMenuPos({ x: rect.left, y: rect.bottom + 5 });
-        }
-
-        setShowSlashMenu(true);
-      }
-    } else if (showSlashMenu && e.key === "Escape") {
-      e.preventDefault();
-      setShowSlashMenu(false);
-    }
-  };
-
-  const handleSlashMenuSelect = (command: string, value?: string) => {
-    if (!editorRef.current) return;
-
-    setShowSlashMenu(false);
-
-    // Focus the editor to ensure we can execute commands
-    editorRef.current.focus();
-
-    // Get the current selection
-    const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) {
-      return;
-    }
-
-    if (command === "insertHorizontalRule") {
-      // Special handling for horizontal rule
-      const range = sel.getRangeAt(0);
-      const hr = document.createElement("hr");
-      hr.className = "my-8 border-border";
-
-      // Insert the HR and add a new paragraph after it
-      range.insertNode(hr);
-      const newP = document.createElement("p");
-      newP.innerHTML = "<br>";
-      hr.parentNode?.insertBefore(newP, hr.nextSibling);
-
-      // Move cursor to the new paragraph
-      const newRange = document.createRange();
-      newRange.setStart(newP, 0);
-      newRange.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(newRange);
-    } else if (command === "formatBlock" && value) {
-      formatText("formatBlock", value);
-    } else if (
-      command === "insertUnorderedList" ||
-      command === "insertOrderedList"
-    ) {
-      const listType = command === "insertUnorderedList" ? "ul" : "ol";
-      createList(listType);
-    }
-
-    // Update content
-    setTimeout(() => {
-      handleContentChange();
-    }, 20);
-  };
-
-  // Handle paste to clean up content
-  const handlePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-
-    const clipboardData = e.clipboardData;
-
-    // Check for images in clipboard first
-    const items = Array.from(clipboardData.items);
-    const imageItems = items.filter((item) => item.type.startsWith("image/"));
-
-    if (imageItems.length > 0) {
-      // Handle image paste
-      imageItems.forEach((item) => {
-        const file = item.getAsFile();
-        if (file) {
-          insertImage(file);
-        }
+  const updateTitle = (value: string) => {
+    setTitle(value.slice(0, 120));
+    dirtyRef.current = true;
+    setSaveState("unsaved");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (!editor) return;
+      void performSave({
+        title: value.trim() || "Untitled Note",
+        html: editor.getHTML(),
+        json: editor.getJSON(),
       });
+    }, 1000);
+  };
+
+  const copyShareUrl = async () => {
+    await navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const applyLink = () => {
+    if (!editor) return;
+    const href = linkValue.trim();
+    if (!href) {
+      editor.chain().focus().unsetLink().run();
+    } else {
+      editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
+    }
+    setLinkOpen(false);
+    setLinkValue("");
+  };
+
+  const uploadInlineImage = async (file: File) => {
+    if (!editor || !canEdit) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("Images must be smaller than 20 MB");
       return;
     }
 
-    // Handle text paste
-    const pastedData = clipboardData.getData("text/plain");
-
-    if (pastedData) {
-      // Get current selection
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-
-        // Delete current selection
-        range.deleteContents();
-
-        // Split pasted text into paragraphs and insert as clean HTML
-        const paragraphs = pastedData
-          .split("\n")
-          .filter((p) => p.trim().length > 0);
-
-        if (paragraphs.length === 0) return;
-
-        // Insert first paragraph as text node
-        const textNode = document.createTextNode(paragraphs[0]);
-        range.insertNode(textNode);
-
-        // Insert remaining paragraphs as paragraph elements
-        let currentRange = range.cloneRange();
-        currentRange.setStartAfter(textNode);
-        currentRange.collapse(true);
-
-        for (let i = 1; i < paragraphs.length; i++) {
-          const p = document.createElement("p");
-          p.textContent = paragraphs[i];
-          currentRange.insertNode(p);
-          currentRange.setStartAfter(p);
-          currentRange.collapse(true);
-        }
-
-        // Update selection to end of pasted content
-        if (paragraphs.length === 1) {
-          currentRange.setStartAfter(textNode);
-        } else {
-          const lastP = editorRef.current?.querySelector("p:last-of-type");
-          if (lastP) {
-            currentRange.selectNodeContents(lastP);
-            currentRange.collapse(false);
-          }
-        }
-
-        selection.removeAllRanges();
-        selection.addRange(currentRange);
-
-        // Trigger content change
-        handleContentChange();
-      }
-    }
-  };
-
-  // Handle markdown shortcuts
-  const handleMarkdownShortcuts = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      const selection = window.getSelection();
-      if (!selection || !selection.anchorNode) return;
-
-      // Check if we're inside a block element that shouldn't continue
-      let currentElement: Node | null = selection.anchorNode;
-      if (currentElement?.nodeType === Node.TEXT_NODE) {
-        currentElement = currentElement.parentElement;
-      }
-
-      // Find the closest block element
-      while (currentElement && currentElement !== editorRef.current) {
-        if (currentElement instanceof Element) {
-          const tagName = currentElement.tagName;
-
-          // If we're in a heading, code block, or blockquote, create a new paragraph
-          if (
-            ["H1", "H2", "H3", "H4", "H5", "H6", "PRE", "BLOCKQUOTE"].includes(
-              tagName
-            )
-          ) {
-            e.preventDefault();
-
-            // Create a new paragraph element
-            const newP = document.createElement("p");
-            newP.innerHTML = "<br>";
-
-            // Insert after the current block element
-            if (currentElement.parentElement) {
-              currentElement.parentElement.insertBefore(
-                newP,
-                currentElement.nextSibling
-              );
-
-              // Move cursor to the new paragraph
-              const range = document.createRange();
-              range.setStart(newP, 0);
-              range.collapse(true);
-              selection.removeAllRanges();
-              selection.addRange(range);
-            }
-            return;
-          }
-        }
-        const parentElement =
-          currentElement instanceof Element
-            ? currentElement.parentElement
-            : null;
-        currentElement = parentElement;
-      }
-
-      const textContent = selection.anchorNode?.textContent || "";
-      const lineStart = textContent.substring(0, selection.anchorOffset);
-
-      // Handle heading shortcuts
-      if (lineStart.match(/^#{1,4}\s$/)) {
-        e.preventDefault();
-        const level = lineStart.trim().length;
-        formatText("formatBlock", `h${level}`);
-        return;
-      }
-
-      // Handle list shortcuts
-      if (lineStart.match(/^[-*+]\s$/)) {
-        e.preventDefault();
-        formatText("insertUnorderedList");
-        return;
-      }
-
-      if (lineStart.match(/^\d+\.\s$/)) {
-        e.preventDefault();
-        formatText("insertOrderedList");
-        return;
-      }
-    }
-  };
-
-  // Generate QR Code SVG
-  const generateQRCode = (url: string) => {
-    // Simple QR code using qr-server.com API (for demo purposes)
-    // In production, you'd want to use a proper QR library like qrcode or react-qr-code
-    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=128x128&data=${encodeURIComponent(
-      url
-    )}`;
-
-    return `<img 
-      src="${qrApiUrl}" 
-      alt="QR Code for ${url}"
-      class="w-full h-full object-contain"
-      style="max-width: 128px; max-height: 128px;"
-    />`;
-  };
-
-  // Adaptive image optimization using shared compression utility
-  const optimizeImage = async (file: File): Promise<string> => {
-    const { dataUrl } = await compressImageAdaptive(file, {
-      // Slightly smaller target for editor inline images to keep documents lean
-      targetMaxBytes: 380 * 1024,
-      // Editor context can use smaller dimensions than chat gallery
-      desktopMaxDimension: 1200,
-      mobileMaxDimension: 1000,
-    });
-    return dataUrl;
-  };
-
-  // Insert image into editor
-  const insertImage = async (file: File) => {
-    if (!editorRef.current) return;
-
-    // Ensure editor is focused
-    editorRef.current.focus();
-
-    // Create image element with skeleton
-    const imageId = `img-${Date.now()}`;
-    const imageContainer = document.createElement("div");
-    imageContainer.className = "relative group my-4 max-w-full inline-block";
-    imageContainer.innerHTML = `
-      <div id="skeleton-${imageId}" class="animate-pulse bg-muted rounded-lg w-full h-48 flex items-center justify-center">
-        <div class="text-muted-foreground">Loading image...</div>
-      </div>
-    `;
-
-    // Insert at current cursor position or at the end
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      range.insertNode(imageContainer);
-      range.setStartAfter(imageContainer);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    } else {
-      // Simply append to editor
-      editorRef.current.appendChild(imageContainer);
-    }
-
+    setIsUploadingImage(true);
+    let uploadedPath: string | null = null;
     try {
-      // Optimize image
-      const optimizedDataUrl = await optimizeImage(file);
-
-      // Replace skeleton with actual image
-      imageContainer.innerHTML = `
-        <img 
-          id="${imageId}"
-          src="${optimizedDataUrl}" 
-          alt="Uploaded image"
-          class="max-w-full h-auto rounded-lg cursor-pointer"
-          style="max-width: 100%; height: auto;"
-        />
-        <div class="absolute bottom-2 right-2 w-4 h-4 bg-primary/80 rounded-full cursor-nw-resize opacity-0 group-hover:opacity-100 transition-opacity resize-handle"
-             data-image-id="${imageId}">
-          <svg class="w-3 h-3 text-white m-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
-          </svg>
-        </div>
-      `;
-
-      // Add resize functionality
-      addImageResize(imageId);
-
-      // Trigger content change to save
-      handleContentChange();
+      const intent = await createUploadIntent(note.space_id, {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      });
+      const { error } = await supabaseBrowser.storage
+        .from(intent.bucket)
+        .upload(intent.path, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+      if (error) throw error;
+      uploadedPath = intent.path;
+      const dimensions = await createImageBitmap(file)
+        .then((bitmap) => {
+          const result = { width: bitmap.width, height: bitmap.height };
+          bitmap.close();
+          return result;
+        })
+        .catch(() => ({}));
+      await registerNoteAsset(noteSlug, {
+        path: intent.path,
+        type: file.type,
+        size: file.size,
+        ...dimensions,
+      });
+      const url = `/api/files/${intent.path
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}`;
+      editor.chain().focus().setImage({ src: url, alt: file.name }).run();
     } catch (error) {
-      /* console.error("Error processing image:", error); */
-      // Replace skeleton with error state
-      imageContainer.innerHTML = `
-        <div class="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">
-          <div class="text-destructive text-sm">Failed to load image: ${file.name}</div>
-        </div>
-      `;
-    }
-
-    handleContentChange();
-  };
-
-  // Add resize functionality to image
-  const addImageResize = (imageId: string) => {
-    const img = document.getElementById(imageId) as HTMLImageElement;
-    const container = img?.parentElement;
-    const resizeHandle = container?.querySelector(
-      ".resize-handle"
-    ) as HTMLElement;
-
-    if (!img || !container || !resizeHandle) return;
-
-    let isResizing = false;
-    let startX = 0;
-    let startWidth = 0;
-
-    resizeHandle.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      isResizing = true;
-      startX = e.clientX;
-      startWidth = img.offsetWidth;
-
-      document.addEventListener("mousemove", handleResize);
-      document.addEventListener("mouseup", stopResize);
-    });
-
-    const handleResize = (e: MouseEvent) => {
-      if (!isResizing) return;
-
-      const diff = e.clientX - startX;
-      const newWidth = Math.max(100, Math.min(800, startWidth + diff));
-
-      img.style.width = `${newWidth}px`;
-      img.style.height = "auto";
-    };
-
-    const stopResize = () => {
-      isResizing = false;
-      document.removeEventListener("mousemove", handleResize);
-      document.removeEventListener("mouseup", stopResize);
-      handleContentChange();
-    };
-  };
-
-  // Undo/Redo handlers
-  const handleUndo = () => {
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    document.execCommand("undo");
-    setTimeout(() => handleContentChange(), 10);
-  };
-
-  const handleRedo = () => {
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    document.execCommand("redo");
-    setTimeout(() => handleContentChange(), 10);
-  };
-
-  // Zoom controls
-  const handleZoomIn = () => setZoomLevel((z) => Math.min(200, z + 10));
-  const handleZoomOut = () => setZoomLevel((z) => Math.max(50, z - 10));
-
-  // Text alignment
-  const handleAlignment = (alignment: string) => {
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    const cmd =
-      alignment === "justify"
-        ? "justifyFull"
-        : `justify${alignment.charAt(0).toUpperCase() + alignment.slice(1)}`;
-    document.execCommand(cmd);
-    setTimeout(() => handleContentChange(), 10);
-  };
-
-  // Text highlight
-  const handleHighlight = () => {
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) return;
-    document.execCommand("hiliteColor", false, "#fef08a");
-    setTimeout(() => handleContentChange(), 10);
-  };
-
-  // Fullscreen toggle
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen?.();
-      setIsFullscreen(false);
+      if (uploadedPath) {
+        await supabaseBrowser.storage.from("files").remove([uploadedPath]);
+      }
+      toast.error(error instanceof Error ? error.message : "Unable to upload image");
+    } finally {
+      setIsUploadingImage(false);
     }
   };
 
-  // Font family options
-  const fontFamilies = {
-    system: "font-sans",
-    serif: "font-serif",
-    mono: "font-mono",
-  };
+  const saveLabel = useMemo(() => {
+    switch (saveState) {
+      case "saving":
+        return "Saving…";
+      case "unsaved":
+        return "Unsaved";
+      case "offline":
+        return "Offline draft";
+      case "error":
+        return "Save failed";
+      default:
+        return "Saved";
+    }
+  }, [saveState]);
 
-  if (isLoading) {
+  if (note.is_locked && !canEdit) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!note) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold mb-2">Note not found</h1>
-          <p className="text-muted-foreground mb-4">
-            This note doesn&apos;t exist or you don&apos;t have access to it.
+      <main className="flex min-h-screen items-center justify-center p-6">
+        <div className="max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
+            <Lock className="h-5 w-5" />
+          </div>
+          <h1 className="text-xl font-semibold">This note is locked</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Only its creator can open and edit it.
           </p>
-          <Button onClick={() => router.push("/")}>Go Home</Button>
+          <Button className="mt-5" variant="outline" onClick={() => router.push(`/${note.space_slug || ""}`)}>
+            Back to room
+          </Button>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <>
-      <div className="min-h-screen flex flex-col bg-[#f5f6f8] dark:bg-[#0f0f10] transition-colors pb-12">
-        {/* Top bar - hidden from print */}
-        <div className="bg-white dark:bg-[#1a1b1e] border-b border-border/60 print:hidden shrink-0">
-          <div className="max-w-screen-xl mx-auto px-6 py-2 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  if (note?.space_slug) {
-                    router.push(`/${note.space_slug}`);
-                  } else {
-                    router.push("/");
-                  }
-                }}
-                className="h-9 w-9 shrink-0 rounded-lg hover:bg-accent"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-
-              <div className="flex items-center gap-3">
-                {!isEditingTitle ? (
-                  /* Display Mode */
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={startTitleEdit}
-                      className="text-lg font-semibold px-2 py-0.5 rounded-md hover:bg-accent/50 transition-colors truncate max-w-[280px] md:max-w-[400px] text-foreground"
-                      title="Click to edit title"
-                    >
-                      {note.title || "Untitled Note"}
-                    </button>
-                    {isSavingTitle && (
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
-                        <span>Saving...</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Edit Mode */
-                  <div className="flex items-center gap-2">
-                    <Input
-                      ref={titleRef}
-                      value={tempTitle}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        setTempTitle(e.target.value)
-                      }
-                      placeholder="Untitled Note"
-                      className={`border-0 bg-transparent text-lg font-semibold px-2 py-0.5 focus-visible:ring-1 focus-visible:ring-primary rounded-md ${
-                        !tempTitle.trim()
-                          ? "text-red-500 bg-red-50 dark:bg-red-900/20"
-                          : ""
-                      }`}
-                      style={{ width: `${Math.max(tempTitle.length, 12)}ch` }}
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          if (tempTitle.trim()) {
-                            confirmTitleEdit();
-                          } else {
-                            // If empty, revert to original title
-                            setTempTitle(note?.title || "Untitled Note");
-                          }
-                        } else if (e.key === "Escape") {
-                          e.preventDefault();
-                          cancelTitleEdit();
-                        }
-                      }}
-                    />
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (tempTitle.trim()) {
-                            confirmTitleEdit();
-                          } else {
-                            // If empty, revert to original title and cancel
-                            setTempTitle(note?.title || "Untitled Note");
-                            cancelTitleEdit();
-                          }
-                        }}
-                        className="h-8 w-8 p-0 hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-950 dark:hover:text-green-300 transition-colors"
-                        title="Confirm changes (Enter)"
-                        disabled={!tempTitle.trim()}
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={cancelTitleEdit}
-                        className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-950 dark:hover:text-red-300 transition-colors"
-                        title="Cancel changes (Escape)"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Save status (simplified) */}
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                {saveStatus === "saving" || isAutoSaving ? (
-                  <div className="flex items-center gap-2">
-                    <Save className="h-3.5 w-3.5 animate-spin" />
-                    <span>Saving...</span>
-                  </div>
-                ) : saveStatus === "error" ? (
-                  <div className="flex items-center gap-2 text-red-600">
-                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                    <span>Error saving</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                    <span>Saved</span>
-                  </div>
-                )}
-              </div>
-
-              <Button
-                variant="outline"
-                onClick={() => setShareDialogOpen(true)}
-                className="gap-2 hover:scale-105 transition-all duration-200 rounded-xl bg-background/50 hover:bg-primary/10 border-border/50"
-              >
-                <Share className="h-4 w-4" />
-                Share
-              </Button>
-
-              <AnimatedThemeToggler
-                className="relative rounded-full w-9 h-9 flex items-center justify-center border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:border-zinc-300 dark:hover:border-white/20 transition-all duration-200"
-                aria-label="Toggle theme"
-              />
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="hover:scale-105 transition-transform"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem
-                    onClick={() => setAutoSaveEnabled(!autoSaveEnabled)}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center">
-                      <Save className="h-4 w-4 mr-2" />
-                      Auto-save
-                    </div>
-                    <div
-                      className={`w-8 h-4 rounded-full transition-colors ${
-                        autoSaveEnabled ? "bg-green-500" : "bg-gray-300"
-                      } relative`}
-                    >
-                      <div
-                        className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${
-                          autoSaveEnabled ? "translate-x-4" : "translate-x-0.5"
-                        }`}
-                      />
-                    </div>
-                  </DropdownMenuItem>
-
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
+    <div className="min-h-screen overflow-x-hidden bg-muted/20">
+      <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
+          <Link
+            href={`/${note.space_slug || ""}`}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Back to room"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <input
+            value={title}
+            onChange={(event) => updateTitle(event.target.value)}
+            disabled={!canEdit}
+            aria-label="Note title"
+            className="min-w-0 flex-1 truncate bg-transparent px-1 text-sm font-semibold outline-none disabled:opacity-100 sm:text-base"
+          />
+          <span
+            className={`hidden text-[11px] sm:inline ${
+              saveState === "error" ? "text-red-500" : "text-muted-foreground"
+            }`}
+            aria-live="polite"
+          >
+            {saveLabel}
+          </span>
+          <AnimatedThemeToggler className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5"
+            onClick={() => setShareOpen(true)}
+          >
+            <Share2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Share</span>
+          </Button>
+          {canEdit && (
+            <Button
+              size="sm"
+              className="h-9 gap-1.5"
+              disabled={saveState === "saving"}
+              onClick={() => void performSave()}
+            >
+              {saveState === "saving" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">Save</span>
+            </Button>
+          )}
         </div>
+      </header>
 
-        {/* Formatting Toolbar - Centered minimal Google Docs style */}
-        <div className="sticky top-0 z-40 bg-white dark:bg-[#1a1b1e] border-b border-border/60 shadow-sm print:hidden shrink-0">
-          <div className="max-w-screen-xl mx-auto px-4 py-1.5 flex items-center justify-center gap-2 overflow-x-auto select-none">
-            <div className="flex items-center gap-0.5 bg-muted/20 dark:bg-muted/10 rounded-lg p-0.5 border border-border/20">
-              {/* Group 1: Undo/Redo */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleUndo}
-                className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                title="Undo"
-              >
+      {canEdit && editor && (
+        <div className="sticky top-14 z-30 border-b bg-background/90 backdrop-blur-xl">
+          <div className="mx-auto max-w-6xl overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex min-w-max items-center gap-1">
+              <ToolbarButton label="Undo" disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>
                 <Undo2 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleRedo}
-                className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                title="Redo"
-              >
+              </ToolbarButton>
+              <ToolbarButton label="Redo" disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>
                 <Redo2 className="h-4 w-4" />
-              </Button>
-
-              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
-
-              {/* Group 2: Zoom */}
-              <div className="flex items-center gap-0.5">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleZoomOut}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Zoom Out"
-                >
-                  <Minus className="h-3 w-3" />
-                </Button>
-                <span className="text-xs font-mono font-semibold px-1 min-w-[40px] text-center select-none text-foreground">
-                  {zoomLevel}%
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleZoomIn}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Zoom In"
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </div>
-
-              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
-
-              {/* Group 3: Styles Dropdown (Nested heading/paragraph) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 gap-1 rounded hover:bg-accent hover:text-accent-foreground text-xs font-medium text-foreground"
-                  >
-                    Style <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48 bg-popover text-popover-foreground border border-border">
-                  <DropdownMenuItem onClick={() => formatText("formatBlock", "p")} className="cursor-pointer">
-                    Normal text
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="cursor-pointer">Headings</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-40 bg-popover text-popover-foreground border border-border">
-                      <DropdownMenuItem onClick={() => formatText("formatBlock", "h1")} className="cursor-pointer">
-                        Heading 1
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => formatText("formatBlock", "h2")} className="cursor-pointer">
-                        Heading 2
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => formatText("formatBlock", "h3")} className="cursor-pointer">
-                        Heading 3
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => formatText("formatBlock", "h4")} className="cursor-pointer">
-                        Heading 4
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
-
-              {/* Group 4: Text Style Controls */}
-              <div className="flex items-center gap-0.5">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => formatText("bold")}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Bold"
-                >
-                  <Bold className="h-4 w-4 font-bold" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => formatText("italic")}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Italic"
-                >
-                  <Italic className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => formatText("underline")}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Underline"
-                >
-                  <Underline className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => formatText("strikeThrough")}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Strikethrough"
-                >
-                  <Strikethrough className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleHighlight}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground relative"
-                  title="Highlight Text"
-                >
-                  <Highlighter className="h-4 w-4 text-amber-500" />
-                  <span className="absolute bottom-1 right-1 w-2 h-1 bg-amber-400 rounded-full" />
-                </Button>
-              </div>
-
-              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
-
-              {/* Group 5: Text Alignment */}
-              <div className="flex items-center gap-0.5">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleAlignment("left")}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Align Left"
-                >
-                  <AlignLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleAlignment("center")}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Align Center"
-                >
-                  <AlignCenter className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleAlignment("right")}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Align Right"
-                >
-                  <AlignRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleAlignment("justify")}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Justify"
-                >
-                  <AlignJustify className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
-
-              {/* Group 6: Blocks & Lists Dropdown (Nested list types) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 gap-1 rounded hover:bg-accent hover:text-accent-foreground text-xs font-medium text-foreground"
-                    title="Lists & Blocks"
-                  >
-                    Blocks <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48 bg-popover text-popover-foreground border border-border">
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="cursor-pointer">Lists</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-40 bg-popover text-popover-foreground border border-border">
-                      <DropdownMenuItem onClick={() => createList("ul")} className="cursor-pointer">
-                        Bullet List
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => createList("ol")} className="cursor-pointer">
-                        Numbered List
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="cursor-pointer">Blocks</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-40 bg-popover text-popover-foreground border border-border">
-                      <DropdownMenuItem onClick={() => formatText("formatBlock", "blockquote")} className="cursor-pointer">
-                        Blockquote
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => formatText("formatBlock", "pre")} className="cursor-pointer">
-                        Code Block
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <div className="h-4 w-px bg-border/60 mx-1 self-center" />
-
-              {/* Group 7: Actions */}
-              <div className="flex items-center gap-0.5">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    const url = prompt("Enter URL:");
-                    if (url) formatText("createLink", url);
-                  }}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Insert Link"
-                >
-                  <Link className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Insert Image"
-                >
-                  <ImageIcon className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleFullscreen}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-accent-foreground text-foreground"
-                  title="Toggle Fullscreen"
-                >
-                  {isFullscreen ? (
-                    <Minimize2 className="h-4 w-4" />
-                  ) : (
-                    <Maximize2 className="h-4 w-4" />
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={saveNote}
-                  disabled={isSaving}
-                  className="h-8 w-8 rounded hover:bg-accent hover:text-primary text-primary"
-                  title={isSaving ? "Saving..." : "Save Note (Ctrl+S)"}
-                >
-                  <Save className={`h-4 w-4 ${isSaving ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
+              </ToolbarButton>
+              <span className="mx-1 h-5 w-px bg-border" />
+              <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
+                <Bold className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
+                <Italic className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+                <UnderlineIcon className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Strikethrough" active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()}>
+                <Strikethrough className="h-4 w-4" />
+              </ToolbarButton>
+              <span className="mx-1 h-5 w-px bg-border" />
+              <ToolbarButton label="Heading 1" active={editor.isActive("heading", { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
+                <Heading1 className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Heading 2" active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+                <Heading2 className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Bullet list" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+                <List className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Numbered list" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+                <ListOrdered className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Task list" active={editor.isActive("taskList")} onClick={() => editor.chain().focus().toggleTaskList().run()}>
+                <ListChecks className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Quote" active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+                <Quote className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Code block" active={editor.isActive("codeBlock")} onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
+                <Code2 className="h-4 w-4" />
+              </ToolbarButton>
+              <span className="mx-1 h-5 w-px bg-border" />
+              <ToolbarButton label="Align left" active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()}>
+                <AlignLeft className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Align center" active={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()}>
+                <AlignCenter className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Align right" active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()}>
+                <AlignRight className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton label="Add link" active={editor.isActive("link")} onClick={() => {
+                setLinkValue(editor.getAttributes("link").href || "");
+                setLinkOpen(true);
+              }}>
+                <Link2 className="h-4 w-4" />
+              </ToolbarButton>
+              {editor.isActive("link") && (
+                <ToolbarButton label="Remove link" onClick={() => editor.chain().focus().unsetLink().run()}>
+                  <Unlink className="h-4 w-4" />
+                </ToolbarButton>
+              )}
+              <ToolbarButton label="Upload image" disabled={isUploadingImage} onClick={() => imageInputRef.current?.click()}>
+                {isUploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+              </ToolbarButton>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Editor Area with A4 Centered page design */}
-        <div className="flex-1 overflow-auto p-4 md:p-8 flex justify-center bg-[#f5f6f8] dark:bg-[#0f0f10] transition-colors pb-24">
-          <div
-            className="w-full max-w-[850px] transition-all duration-200 origin-top shadow-[0_4px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)] bg-white dark:bg-[#1a1b1e] border border-border/40 rounded-xl relative min-h-[29.7cm] flex flex-col"
-            style={{
-              transform: `scale(${zoomLevel / 100})`,
+      <main className="mx-auto w-full max-w-5xl px-2 py-4 sm:px-6 sm:py-8">
+        <article className="min-h-[calc(100vh-11rem)] overflow-hidden rounded-xl border bg-background shadow-sm sm:rounded-2xl">
+          <EditorContent
+            editor={editor}
+            className="note-editor-content min-h-[calc(100vh-11rem)] px-4 py-6 sm:px-10 sm:py-10 md:px-16"
+          />
+        </article>
+        <div className="flex items-center justify-between px-2 py-3 text-[11px] text-muted-foreground">
+          <span>{canEdit ? saveLabel : "Read only"}</span>
+          <span>{stats.words} words · {stats.characters} characters</span>
+        </div>
+      </main>
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void uploadInlineImage(file);
+          event.target.value = "";
+        }}
+      />
+
+      <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add a link</DialogTitle>
+            <DialogDescription>Paste a complete web address or email link.</DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={linkValue}
+            onChange={(event) => setLinkValue(event.target.value)}
+            placeholder="https://example.com"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") applyLink();
             }}
-          >
-            {/* Editor content */}
-            <div className="relative flex-1 flex flex-col p-10 md:p-16">
-              <div
-                ref={editorRef}
-                contentEditable
-                suppressContentEditableWarning
-                data-placeholder="Start writing your note..."
-                onInput={handleContentChange}
-                onPaste={handlePaste}
-                onKeyDown={(e) => {
-                  handleKeyboardShortcuts(e);
-                  handleSlashMenu(e);
-                  handleMarkdownShortcuts(e);
-                }}
-                onMouseUp={handleSelection}
-                onKeyUp={handleSelection}
-                className={cn(
-                  "flex-1 focus:outline-none prose prose-lg max-w-none w-full text-foreground dark:text-[#e3e3e3] text-left [&_*]:text-left !bg-transparent",
-                  fontFamilies[note.font_family],
-                  "prose-headings:scroll-mt-16",
-                  "prose-h1:text-4xl prose-h1:font-bold prose-h1:mt-8 prose-h1:mb-4 prose-h1:text-foreground",
-                  "prose-h2:text-3xl prose-h2:font-semibold prose-h2:mt-6 prose-h2:mb-3 prose-h2:text-foreground",
-                  "prose-h3:text-2xl prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2 prose-h3:text-foreground",
-                  "prose-h4:text-xl prose-h4:font-medium prose-h4:mt-3 prose-h4:mb-2 prose-h4:text-foreground",
-                  "prose-h5:text-lg prose-h5:font-medium prose-h5:mt-2 prose-h5:mb-1 prose-h5:text-foreground",
-                  "prose-h6:text-base prose-h6:font-medium prose-h6:mt-2 prose-h6:mb-1 prose-h6:text-foreground",
-                  "prose-p:leading-relaxed prose-p:text-foreground prose-p:mb-4 dark:prose-p:text-[#e3e3e3]",
-                  "prose-strong:text-foreground prose-em:text-foreground dark:prose-strong:text-[#ffffff]",
-                  "prose-li:my-1 prose-li:text-foreground dark:prose-li:text-[#e3e3e3]",
-                  "prose-blockquote:border-l-4 prose-blockquote:border-primary/40 prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-muted-foreground prose-blockquote:py-2 prose-blockquote:rounded-r-lg prose-blockquote:my-4",
-                  "prose-code:text-primary prose-code:px-2 prose-code:py-1 prose-code:rounded prose-code:text-sm prose-code:font-mono",
-                  "prose-pre:border prose-pre:border-border/30 prose-pre:rounded-xl prose-pre:p-4 prose-pre:my-4 prose-pre:text-sm prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words",
-                  "prose-ul:list-disc prose-ul:pl-6 prose-ol:list-decimal prose-ol:pl-6 prose-li:marker:text-primary/70",
-                  "prose-hr:border-border/50 prose-hr:my-8",
-                  // Link styling with distinct blue color but default cursor
-                  "prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-a:underline prose-a:underline-offset-2 prose-a:decoration-blue-600/40 dark:prose-a:decoration-blue-400/40 hover:prose-a:decoration-blue-600 dark:hover:prose-a:decoration-blue-400 prose-a:transition-colors hover:prose-a:text-blue-700 dark:hover:prose-a:text-blue-300",
-                  // Links have default cursor and are not directly clickable
-                  "[&_a]:!cursor-default [&_a]:pointer-events-auto [&_a]:select-none",
-                  "dark:prose-invert",
-                  // Enhanced placeholder styles
-                  "empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 empty:before:pointer-events-none empty:before:italic empty:before:text-xl",
-                  // Smooth focus transition
-                  "transition-all duration-200",
-                  // Selection styling
-                  "[&::selection]:bg-primary/20 [&_*::selection]:bg-primary/20"
-                )}
-                style={{
-                  wordBreak: "break-word",
-                  overflowWrap: "break-word",
-                  textAlign: "left",
-                  direction: "ltr",
-                  width: "100%",
-                  boxSizing: "border-box",
-                  lineHeight: "1.75",
-                  fontSize: "16px",
-                }}
-              />
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkOpen(false)}>Cancel</Button>
+            <Button onClick={applyLink}>Apply</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Share note</DialogTitle>
+            <DialogDescription>
+              Room members with this link can view the note. Only its creator can edit it.
+            </DialogDescription>
+          </DialogHeader>
+          {qrCode && (
+            <div className="mx-auto overflow-hidden rounded-xl border bg-white p-3">
+              <Image src={qrCode} alt="Note share QR code" width={220} height={220} unoptimized />
             </div>
-          </div>
-        </div>
-
-        {/* Status Bar fixed to bottom of screen */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#1a1b1e]/80 backdrop-blur border-t border-border/60 px-6 py-2 flex items-center justify-end gap-6 text-xs text-muted-foreground print:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.03)] dark:shadow-[0_-2px_10px_rgba(0,0,0,0.2)]">
-          <div className="flex items-center gap-1">
-            <span className="font-medium text-muted-foreground">Lines:</span>
-            <span className="text-foreground font-semibold font-mono">
-              {stats.lines}
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="font-medium text-muted-foreground">Words:</span>
-            <span className="text-foreground font-semibold font-mono">
-              {stats.words}
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="font-medium text-muted-foreground">Sentences:</span>
-            <span className="text-foreground font-semibold font-mono">
-              {stats.sentences}
-            </span>
-          </div>
-        </div>
-
-        {/* Selection formatting bubble */}
-        {showSelectionBubble && (
-          <div
-            className="fixed z-50 bg-card/95 backdrop-blur-sm border border-border/50 rounded-xl p-1.5 flex items-center gap-1 animate-in fade-in-0 zoom-in-95 duration-200 shadow-md"
-            style={{
-              left: selectionBubblePos.x - 100,
-              top: selectionBubblePos.y,
-            }}
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => formatText("bold")}
-              className="h-8 w-8 p-0 hover:bg-primary/10 hover:scale-105 transition-all duration-200 rounded-lg"
-            >
-              <Bold className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => formatText("italic")}
-              className="h-8 w-8 p-0 hover:bg-primary/10 hover:scale-105 transition-all duration-200 rounded-lg"
-            >
-              <Italic className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => formatText("underline")}
-              className="h-8 w-8 p-0 hover:bg-primary/10 hover:scale-105 transition-all duration-200 rounded-lg"
-            >
-              <Underline className="h-3.5 w-3.5" />
-            </Button>
-            <div className="w-px h-4 bg-border/50 mx-1"></div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const url = prompt("Enter URL:");
-                if (url) formatText("createLink", url);
-              }}
-              className="h-8 w-8 p-0 hover:bg-primary/10 hover:scale-105 transition-all duration-200 rounded-lg"
-            >
-              <Link className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => formatText("formatBlock", "pre")}
-              className="h-8 w-8 p-0 hover:bg-primary/10 hover:scale-105 transition-all duration-200 rounded-lg"
-            >
-              <Code className="h-3.5 w-3.5" />
-            </Button>
-            <div className="w-px h-4 bg-border/50 mx-1"></div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              className="h-8 w-8 p-0 hover:bg-primary/10 hover:scale-105 transition-all duration-200 rounded-lg"
-              title="Insert Image"
-            >
-              <ImageIcon className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-
-        {/* Slash Menu */}
-        <SlashMenu
-          isOpen={showSlashMenu}
-          position={slashMenuPos}
-          onSelect={handleSlashMenuSelect}
-          onClose={() => setShowSlashMenu(false)}
-        />
-
-        {/* Hidden file input for image uploads */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            const files = Array.from(e.target.files || []);
-            files.forEach((file) => insertImage(file));
-            e.target.value = ""; // Reset input
-          }}
-        />
-
-        {/* Share Dialog */}
-        <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Share Note</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Link Section */}
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-sm font-medium">Share Link</label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Input
-                        value={`https://woff.space/n/${note.slug}`}
-                        readOnly
-                        className="flex-1"
-                      />
-                      <Button
-                        onClick={() => {
-                          navigator.clipboard.writeText(
-                            `https://woff.space/n/${note.slug}`
-                          );
-                        }}
-                        variant="outline"
-                        size="sm"
-                      >
-                        Copy
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Anyone with this link can view and edit this note
-                    </p>
-                  </div>
-                </div>
-
-                {/* QR Code Section */}
-                <div className="flex flex-col items-center space-y-2">
-                  <label className="text-sm font-medium">QR Code</label>
-                  <div className="p-4 bg-white rounded-lg border-2 border-border/20">
-                    <div
-                      id={`qr-code-${note.slug}`}
-                      className="w-32 h-32 flex items-center justify-center"
-                      dangerouslySetInnerHTML={{
-                        __html: generateQRCode(
-                          `https://woff.space/n/${note.slug}`
-                        ),
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Scan to open note
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    // Convert HTML to Markdown (simplified)
-                    const content = editorRef.current?.innerHTML || "";
-                    const markdown = content
-                      .replace(/<h1[^>]*>(.*?)<\/h1>/g, "# $1")
-                      .replace(/<h2[^>]*>(.*?)<\/h2>/g, "## $1")
-                      .replace(/<h3[^>]*>(.*?)<\/h3>/g, "### $1")
-                      .replace(/<h4[^>]*>(.*?)<\/h4>/g, "#### $1")
-                      .replace(/<p[^>]*>(.*?)<\/p>/g, "$1\n")
-                      .replace(/<li[^>]*>(.*?)<\/li>/g, "- $1")
-                      .replace(
-                        /<blockquote[^>]*><p[^>]*>(.*?)<\/p><\/blockquote>/g,
-                        "> $1"
-                      )
-                      .replace(
-                        /<pre[^>]*><code[^>]*>(.*?)<\/code><\/pre>/g,
-                        "```\n$1\n```"
-                      )
-                      .replace(/<[^>]*>/g, ""); // Remove remaining HTML tags
-
-                    navigator.clipboard.writeText(
-                      `# ${note.title}\n\n${markdown}`
-                    );
-                  }}
-                >
-                  Copy as Markdown
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    // Add print styles and trigger print
-                    const style = document.createElement("style");
-                    style.textContent = `
-                    @media print {
-                      body * { visibility: hidden; }
-                      .printable-content, .printable-content * { visibility: visible; }
-                      .printable-content { 
-                        position: absolute; 
-                        left: 0; 
-                        top: 0; 
-                        width: 100%; 
-                        background: white !important;
-                        box-shadow: none !important;
-                        border: none !important;
-                        border-radius: 0 !important;
-                      }
-                      .print\\:hidden { display: none !important; }
-                    }
-                  `;
-                    document.head.appendChild(style);
-
-                    // Add printable class to editor container
-                    const editorContainer =
-                      editorRef.current?.closest(".bg-white");
-                    if (editorContainer) {
-                      editorContainer.classList.add("printable-content");
-                    }
-
-                    window.print();
-
-                    // Cleanup
-                    setTimeout(() => {
-                      document.head.removeChild(style);
-                      if (editorContainer) {
-                        editorContainer.classList.remove("printable-content");
-                      }
-                    }, 1000);
-                  }}
-                >
-                  Export PDF
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </>
+          )}
+          <Button className="gap-2" onClick={() => void copyShareUrl()}>
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {copied ? "Copied" : "Copy note link"}
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

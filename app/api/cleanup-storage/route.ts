@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Note: This endpoint should be secured (e.g., using a secret token header) to prevent abuse
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  // Optional: Verify cron secret if configured
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  // Fail closed: an unset secret must never turn this into a public admin route.
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET is not configured" },
+      { status: 503 },
+    );
+  }
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -41,21 +46,16 @@ export async function GET(request: NextRequest) {
       throw fetchError;
     }
 
-    if (!queueItems || queueItems.length === 0) {
-      return NextResponse.json({ message: "No pending spaces in cleanup queue." });
-    }
-
     const processedIds: number[] = [];
     const results = [];
 
     // 2. Process each deleted space
-    for (const item of queueItems) {
+    for (const item of queueItems || []) {
       const spaceId = item.space_id;
       const deletedFiles: string[] = [];
       let hasError = false;
 
       try {
-        let offset = 0;
         const pageSize = 1000;
         let hasMore = true;
 
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
         while (hasMore) {
           const { data: fileList, error: listError } = await supabaseAdmin.storage
             .from("files")
-            .list(spaceId, { limit: pageSize, offset });
+            .list(spaceId, { limit: pageSize, offset: 0 });
 
           if (listError) {
             console.error(`Error listing files for space ${spaceId}:`, listError);
@@ -89,11 +89,8 @@ export async function GET(request: NextRequest) {
 
           deletedFiles.push(...filePaths);
 
-          if (fileList.length < pageSize) {
-            hasMore = false;
-          } else {
-            offset += pageSize;
-          }
+          // Deleting reindexes the directory, so the next page is offset zero.
+          if (fileList.length < pageSize) hasMore = false;
         }
 
         if (!hasError) {
@@ -120,9 +117,56 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 4. Remove individual objects queued when an entry/note is deleted.
+    const { data: keyItems, error: keyFetchError } = await supabaseAdmin
+      .from("deleted_storage_keys")
+      .select("id, bucket_key")
+      .limit(1000);
+    if (keyFetchError) throw keyFetchError;
+
+    let deletedKeyCount = 0;
+    if (keyItems?.length) {
+      const { error: removeKeysError } = await supabaseAdmin.storage
+        .from("files")
+        .remove(keyItems.map((item) => item.bucket_key));
+      if (removeKeysError) throw removeKeysError;
+      const { error: clearKeysError } = await supabaseAdmin
+        .from("deleted_storage_keys")
+        .delete()
+        .in("id", keyItems.map((item) => item.id));
+      if (clearKeysError) throw clearKeysError;
+      deletedKeyCount = keyItems.length;
+    }
+
+    // 5. Expired upload reservations are abandoned uploads. Remove any object
+    // that reached Storage but was never atomically attached to an entry.
+    const { data: expiredIntents, error: intentFetchError } = await supabaseAdmin
+      .from("upload_intents")
+      .select("path")
+      .lt("expires_at", new Date().toISOString())
+      .limit(1000);
+    if (intentFetchError) throw intentFetchError;
+
+    let abandonedUploadCount = 0;
+    if (expiredIntents?.length) {
+      const paths = expiredIntents.map((intent) => intent.path);
+      const { error: removeAbandonedError } = await supabaseAdmin.storage
+        .from("files")
+        .remove(paths);
+      if (removeAbandonedError) throw removeAbandonedError;
+      const { error: clearIntentError } = await supabaseAdmin
+        .from("upload_intents")
+        .delete()
+        .in("path", paths);
+      if (clearIntentError) throw clearIntentError;
+      abandonedUploadCount = paths.length;
+    }
+
     return NextResponse.json({
-      message: `Processed ${queueItems.length} spaces.`,
+      message: `Processed ${queueItems?.length || 0} spaces, ${deletedKeyCount} objects, and ${abandonedUploadCount} abandoned uploads.`,
       results,
+      deletedKeyCount,
+      abandonedUploadCount,
     });
   } catch (error: any) {
     console.error("Cleanup job failed:", error);

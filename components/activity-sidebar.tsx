@@ -22,8 +22,20 @@ import {
 } from "@/components/ui/popover";
 import { format, isToday, isYesterday } from "date-fns";
 import NextImage from "next/image";
-import JSZip from "jszip";
-import jsPDF from "jspdf";
+
+async function createZip() {
+  const JSZip = (await import("jszip")).default;
+  return new JSZip();
+}
+
+async function createPdf(options: {
+  orientation: "portrait" | "landscape";
+  unit: "mm";
+  format: "a4";
+}) {
+  const { jsPDF } = await import("jspdf");
+  return new jsPDF(options);
+}
 
 interface ActivitySidebarProps {
   entries: Entry[];
@@ -323,8 +335,8 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
 
     if (entry.text.startsWith("NOTE:")) {
       const noteData = entry.text.replace("NOTE:", "").split(":");
-      const noteSlug = noteData[0];
-      const noteTitle = noteData[2] || "Untitled note";
+      const noteSlug = entry.meta?.note_slug || noteData[0];
+      const noteTitle = entry.meta?.title || noteData[2] || "Untitled note";
 
       return (
         <a
@@ -439,7 +451,7 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
       } else if (items.length > 1) {
         // Download all files as zip
         try {
-          const zip = new JSZip();
+          const zip = await createZip();
           for (const item of items) {
             const res = await fetch(item.url);
             const blob = await res.blob();
@@ -504,7 +516,7 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
       } else if (photos.length > 1) {
         // Multiple photos - zip download
         try {
-          const zip = new JSZip();
+          const zip = await createZip();
           photos.forEach((dataUrl, index) => {
             if (dataUrl.startsWith("data:image/")) {
               const base64Data = dataUrl.split(",")[1];
@@ -540,8 +552,8 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
     } else if (entry.text?.startsWith("NOTE:")) {
       // Download note as PDF
       const noteData = entry.text.replace("NOTE:", "").split(":");
-      const noteSlug = noteData[0];
-      const noteTitle = noteData[2] || "Untitled Note";
+      const noteSlug = entry.meta?.note_slug || noteData[0];
+      const noteTitle = entry.meta?.title || noteData[2] || "Untitled Note";
 
       try {
         // Fetch note content from API
@@ -550,7 +562,7 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
         const note = await res.json();
 
         // Create PDF
-        const pdf = new jsPDF({
+        const pdf = await createPdf({
           orientation: "portrait",
           unit: "mm",
           format: "a4",
@@ -615,7 +627,7 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
   // Download all items in a date group as zip
   const handleDownloadAll = async (groupEntries: Entry[]) => {
     try {
-      const zip = new JSZip();
+      const zip = await createZip();
 
       for (const entry of groupEntries) {
         // Files
@@ -688,15 +700,15 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
         // Notes as PDF
         else if (entry.text?.startsWith("NOTE:")) {
           const noteData = entry.text.replace("NOTE:", "").split(":");
-          const noteSlug = noteData[0];
-          const noteTitle = noteData[2] || "Untitled Note";
+          const noteSlug = entry.meta?.note_slug || noteData[0];
+          const noteTitle = entry.meta?.title || noteData[2] || "Untitled Note";
 
           try {
             const res = await fetch(`/api/notes/${noteSlug}`);
             if (res.ok) {
               const note = await res.json();
 
-              const pdf = new jsPDF({
+              const pdf = await createPdf({
                 orientation: "portrait",
                 unit: "mm",
                 format: "a4",

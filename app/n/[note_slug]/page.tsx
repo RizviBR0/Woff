@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { NoteEditor } from "@/components/note-editor";
 import { getNote } from "@/lib/actions";
 
@@ -29,6 +30,7 @@ export async function generateMetadata({
 export default async function NotePage({ params }: NotePageProps) {
   const { note_slug } = await params;
   const note = await getNote(note_slug);
+  if (!note) notFound();
 
   return (
     <div className="min-h-screen bg-background">
