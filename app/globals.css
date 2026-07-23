@@ -143,8 +143,34 @@
   display: block;
   max-width: 100%;
   height: auto;
-  margin: 1rem auto;
   border-radius: 0.75rem;
+}
+
+.note-editor-content .tiptap [data-resize-container] {
+  justify-content: center;
+  max-width: 100%;
+  margin: 1rem auto;
+}
+
+.note-editor-content .tiptap [data-resize-wrapper] {
+  max-width: 100%;
+}
+
+.note-editor-content .tiptap [data-resize-handle] {
+  width: 13px;
+  height: 13px;
+  border: 2px solid hsl(var(--background));
+  border-radius: 999px;
+  background: #ff5a00;
+  box-shadow: 0 1px 5px rgb(0 0 0 / 28%);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.note-editor-content .tiptap [data-resize-container]:hover [data-resize-handle],
+.note-editor-content .tiptap [data-resize-container][data-resize-state="true"] [data-resize-handle],
+.note-editor-content .tiptap [data-resize-container].ProseMirror-selectednode [data-resize-handle] {
+  opacity: 1;
 }
 
 .note-editor-content .tiptap p.is-editor-empty:first-child::before {

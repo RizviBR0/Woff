@@ -122,6 +122,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const versionRef = useRef(note?.version || 1);
   const dirtyRef = useRef(false);
   const mountedRef = useRef(false);
+  const pasteImageHandlerRef = useRef<(files: File[]) => void>(() => undefined);
   const draftKey = `woff-note-draft:${noteSlug}`;
 
   const editor = useEditor({
@@ -145,6 +146,15 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       }),
       TiptapImage.configure({
         allowBase64: false,
+        resize: canEdit
+          ? {
+              enabled: true,
+              directions: ["top-left", "top-right", "bottom-left", "bottom-right"],
+              minWidth: 80,
+              minHeight: 48,
+              alwaysPreserveAspectRatio: true,
+            }
+          : false,
         HTMLAttributes: { class: "note-image" },
       }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
@@ -159,6 +169,18 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     // Server-sanitized HTML is the rendering source of truth. JSON remains a
     // versioned storage format but is never trusted directly from the database.
     content: note?.content || note?.content_json || "",
+    editorProps: {
+      handlePaste(_view, event) {
+        if (!canEdit) return false;
+        const images = Array.from(event.clipboardData?.files || []).filter((file) =>
+          file.type.startsWith("image/"),
+        );
+        if (!images.length) return false;
+        event.preventDefault();
+        pasteImageHandlerRef.current(images);
+        return true;
+      },
+    },
     onUpdate({ editor: currentEditor }) {
       if (!mountedRef.current || !canEdit) return;
       dirtyRef.current = true;
@@ -337,60 +359,85 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     setLinkValue("");
   };
 
-  const uploadInlineImage = async (file: File) => {
-    if (!editor || !canEdit) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Choose an image file");
+  const uploadInlineImages = useCallback(async (files: File[]) => {
+    if (!editor || !canEdit || !files.length) return;
+    const invalid = files.find((file) => !file.type.startsWith("image/"));
+    if (invalid) {
+      toast.error("Only images can be pasted into a note");
       return;
     }
-    if (file.size > 20 * 1024 * 1024) {
-      toast.error("Images must be smaller than 20 MB");
+    const tooLarge = files.find((file) => file.size > 20 * 1024 * 1024);
+    if (tooLarge) {
+      toast.error(`${tooLarge.name || "An image"} is larger than 20 MB`);
       return;
     }
-
     setIsUploadingImage(true);
-    let uploadedPath: string | null = null;
     try {
-      const intent = await createUploadIntent(note.space_id, {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-      });
-      const { error } = await supabaseBrowser.storage
-        .from(intent.bucket)
-        .upload(intent.path, file, {
-          contentType: file.type,
-          upsert: false,
-        });
-      if (error) throw error;
-      uploadedPath = intent.path;
-      const dimensions = await createImageBitmap(file)
-        .then((bitmap) => {
-          const result = { width: bitmap.width, height: bitmap.height };
-          bitmap.close();
-          return result;
-        })
-        .catch(() => ({}));
-      await registerNoteAsset(noteSlug, {
-        path: intent.path,
-        type: file.type,
-        size: file.size,
-        ...dimensions,
-      });
-      const url = `/api/files/${intent.path
-        .split("/")
-        .map(encodeURIComponent)
-        .join("/")}`;
-      editor.chain().focus().setImage({ src: url, alt: file.name }).run();
-    } catch (error) {
-      if (uploadedPath) {
-        await supabaseBrowser.storage.from("files").remove([uploadedPath]);
+      for (const file of files) {
+        let uploadedPath: string | null = null;
+        try {
+          const intent = await createUploadIntent(note.space_id, {
+            name: file.name || `pasted-image-${Date.now()}.png`,
+            size: file.size,
+            type: file.type,
+          });
+          const { error } = await supabaseBrowser.storage
+            .from(intent.bucket)
+            .upload(intent.path, file, {
+              contentType: file.type,
+              upsert: false,
+            });
+          if (error) throw error;
+          uploadedPath = intent.path;
+          const dimensions = await createImageBitmap(file)
+            .then((bitmap) => {
+              const result = { width: bitmap.width, height: bitmap.height };
+              bitmap.close();
+              return result;
+            })
+            .catch(() => ({}));
+          await registerNoteAsset(noteSlug, {
+            path: intent.path,
+            type: file.type,
+            size: file.size,
+            ...dimensions,
+          });
+          const url = `/api/files/${intent.path
+            .split("/")
+            .map(encodeURIComponent)
+            .join("/")}`;
+          editor
+            .chain()
+            .focus()
+            .setImage({
+              src: url,
+              alt: file.name || "Pasted image",
+              ...dimensions,
+            })
+            .run();
+        } catch (error) {
+          if (uploadedPath) {
+            await supabaseBrowser.storage.from("files").remove([uploadedPath]);
+          }
+          throw error;
+        }
       }
+      toast.success(files.length === 1 ? "Image added" : `${files.length} images added`);
+    } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to upload image");
     } finally {
       setIsUploadingImage(false);
     }
-  };
+  }, [canEdit, editor, note.space_id, noteSlug]);
+
+  useEffect(() => {
+    pasteImageHandlerRef.current = (files) => {
+      void uploadInlineImages(files);
+    };
+    return () => {
+      pasteImageHandlerRef.current = () => undefined;
+    };
+  }, [uploadInlineImages]);
 
   const saveLabel = useMemo(() => {
     switch (saveState) {
@@ -571,10 +618,11 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
         ref={imageInputRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
         onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) void uploadInlineImage(file);
+          const files = Array.from(event.target.files || []);
+          if (files.length) void uploadInlineImages(files);
           event.target.value = "";
         }}
       />

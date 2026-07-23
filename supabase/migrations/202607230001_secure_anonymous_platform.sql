@@ -53,10 +53,10 @@ alter table public.spaces
   add column if not exists owner_recovery_hash bytea;
 
 update public.spaces
-set expires_at = coalesce(expires_at, last_activity_at + interval '7 days');
+set expires_at = coalesce(expires_at, last_activity_at + interval '48 hours');
 
 alter table public.spaces
-  alter column expires_at set default (now() + interval '7 days');
+  alter column expires_at set default (now() + interval '48 hours');
 
 create index if not exists idx_spaces_slug on public.spaces(slug);
 create index if not exists idx_entries_space_created
@@ -551,7 +551,7 @@ begin
       )
       values (
         candidate, auth.uid()::text, 'unlisted', true,
-        false, now() + interval '7 days',
+        false, now() + interval '48 hours',
         extensions.digest(recovery_key, 'sha256')
       )
       returning * into new_space;
@@ -641,7 +641,7 @@ begin
   where slug = p_slug
     and (
       is_pro
-      or coalesce(expires_at, last_activity_at + interval '7 days') > now()
+      or coalesce(expires_at, last_activity_at + interval '48 hours') > now()
     );
 
   if joined_space.id is null then
@@ -942,7 +942,7 @@ as $$
 begin
   update public.spaces
   set last_activity_at = now(),
-      expires_at = case when is_pro then null else now() + interval '7 days' end
+      expires_at = case when is_pro then null else now() + interval '48 hours' end
   where id = new.space_id;
   return new;
 end
@@ -965,7 +965,7 @@ begin
   with deleted as (
     delete from public.spaces
     where not coalesce(is_pro, false)
-      and coalesce(expires_at, last_activity_at + interval '7 days') < now()
+      and coalesce(expires_at, last_activity_at + interval '48 hours') < now()
     returning id
   )
   select count(*) into removed from deleted;

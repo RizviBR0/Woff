@@ -36,6 +36,7 @@ interface ComposerProps {
   onUpdateEntry: (entryId: string, updates: Partial<Entry>) => void;
   onReplaceEntry: (placeholderId: string, realEntry: Entry) => void;
   onRemoveEntry: (entryId: string) => void;
+  onUploadStateChange?: (active: boolean) => void;
   currentDeviceId?: string | null;
   centered?: boolean;
 }
@@ -82,6 +83,7 @@ export function Composer({
   onUpdateEntry,
   onReplaceEntry,
   onRemoveEntry,
+  onUploadStateChange,
   currentDeviceId,
   centered = false,
 }: ComposerProps) {
@@ -201,6 +203,7 @@ export function Composer({
       }
 
       cancelledRef.current = false;
+      onUploadStateChange?.(true);
       const batchId = existingId || `placeholder-${crypto.randomUUID()}`;
       const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
       const uploadedByIndex = files.map(() => 0);
@@ -298,6 +301,7 @@ export function Composer({
         onUpdateEntry(batchId, { uploadProgress: 100 });
         onReplaceEntry(batchId, entry as Entry);
         setBatch(null);
+        onUploadStateChange?.(false);
         clearPreviews();
         toast.success(files.length === 1 ? "Upload complete" : `${files.length} files uploaded`);
       } catch (error) {
@@ -324,6 +328,7 @@ export function Composer({
       currentDeviceId,
       onNewEntry,
       onReplaceEntry,
+      onUploadStateChange,
       onUpdateEntry,
       spaceId,
       uploadOne,
@@ -339,9 +344,10 @@ export function Composer({
     activeUploadsRef.current.clear();
     if (batch) onRemoveEntry(batch.id);
     setBatch(null);
+    onUploadStateChange?.(false);
     clearPreviews();
     toast.message("Upload cancelled");
-  }, [batch, clearPreviews, onRemoveEntry]);
+  }, [batch, clearPreviews, onRemoveEntry, onUploadStateChange]);
 
   const retryUpload = useCallback(() => {
     if (!batch || batch.status !== "failed") return;

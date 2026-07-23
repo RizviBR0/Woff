@@ -30,6 +30,12 @@ export async function GET(request: NextRequest) {
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
+    // Expire inactive non-Pro rooms first. Their delete trigger queues all
+    // storage cleanup work processed below in the same invocation.
+    const { data: expiredSpaceCount, error: expiryError } = await supabaseAdmin
+      .rpc("cleanup_expired_spaces");
+    if (expiryError) throw expiryError;
+
     // 1. Fetch pending deleted spaces from the queue
     const { data: queueItems, error: fetchError } = await supabaseAdmin
       .from("deleted_spaces_queue")
@@ -163,8 +169,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      message: `Processed ${queueItems?.length || 0} spaces, ${deletedKeyCount} objects, and ${abandonedUploadCount} abandoned uploads.`,
+      message: `Expired ${expiredSpaceCount || 0} inactive spaces; processed ${queueItems?.length || 0} storage queues, ${deletedKeyCount} objects, and ${abandonedUploadCount} abandoned uploads.`,
       results,
+      expiredSpaceCount: expiredSpaceCount || 0,
       deletedKeyCount,
       abandonedUploadCount,
     });

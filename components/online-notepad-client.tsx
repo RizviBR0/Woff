@@ -57,7 +57,7 @@ export function OnlineNotepadClient() {
     },
     {
       q: "How long do my shared notes stay active?",
-      a: "Shared spaces stay active as long as you use them. Inactive, expired spaces are automatically deleted after an extended period to ensure privacy.",
+      a: "Shared spaces stay active while you use them. Non-Pro spaces are automatically deleted after 48 hours without content activity to protect your privacy.",
     },
     {
       q: "Can I share files and images too?",

@@ -26,7 +26,7 @@ import {
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { Space, deleteSpace, recoverSpace } from "@/lib/actions";
-import { getDaysUntilExpiry } from "@/lib/utils";
+import { getHoursUntilExpiry } from "@/lib/utils";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
 import { ProgressiveBlur } from "@/components/ui/progressive-blur";
@@ -81,6 +81,7 @@ export function SpaceContainer({
 }: SpaceContainerProps) {
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const hasPosted = entries.length > 0;
+  const [composerUploadActive, setComposerUploadActive] = useState(false);
   const [copied, setCopied] = useState(false);
   const [navLinkCopied, setNavLinkCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -163,13 +164,21 @@ export function SpaceContainer({
   // Use space prop for pro status
   const isPro = space.is_pro || false;
 
-  // Calculate days until space expires
-  const daysUntilExpiry = useMemo(() => {
+  // Calculate remaining inactivity window. Server timestamps are authoritative;
+  // the 48-hour fallback only supports legacy rows.
+  const hoursUntilExpiry = useMemo(() => {
     if (space.expires_at || space.last_activity_at) {
-      return getDaysUntilExpiry(space.expires_at || space.last_activity_at, Boolean(space.expires_at));
+      return getHoursUntilExpiry(
+        space.expires_at || space.last_activity_at,
+        Boolean(space.expires_at),
+      );
     }
-    return 7;
+    return 48;
   }, [space.expires_at, space.last_activity_at]);
+  const expiryLabel =
+    hoursUntilExpiry <= 0
+      ? "Expired"
+      : `${hoursUntilExpiry}h`;
 
   // User avatar letter (first letter of slug)
   const avatarLetter = (space.slug?.[0] || "W").toUpperCase();
@@ -664,14 +673,14 @@ export function SpaceContainer({
                       {!isPro && (
                         <span
                           className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none flex-shrink-0 ${
-                            daysUntilExpiry <= 2
+                            hoursUntilExpiry <= 6
                               ? "bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-400"
-                              : daysUntilExpiry <= 4
+                              : hoursUntilExpiry <= 24
                                 ? "bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
                                 : "bg-zinc-200 text-zinc-600 dark:bg-white/10 dark:text-zinc-400"
                           }`}
                         >
-                          {daysUntilExpiry}d
+                          {expiryLabel}
                         </span>
                       )}
                     </button>
@@ -684,7 +693,7 @@ export function SpaceContainer({
                         ? "Copied!"
                         : isPro
                           ? `Copy Code: ${space.slug}`
-                          : `Copy Code: ${space.slug} (Expires in ${daysUntilExpiry}d)`
+                          : `Copy Code: ${space.slug} (Expires in ${expiryLabel} without activity)`
                     }
                     onClick={handleCopy}
                     className={
@@ -968,19 +977,19 @@ export function SpaceContainer({
                       className={`
                         flex items-center justify-center h-8 w-8 rounded-full text-[10px] font-semibold border cursor-default select-none shadow-sm transition-all duration-200
                         ${
-                          daysUntilExpiry <= 2
+                          hoursUntilExpiry <= 6
                             ? "bg-red-500/5 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                            : daysUntilExpiry <= 4
+                            : hoursUntilExpiry <= 24
                               ? "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:bg-amber-500/20 dark:border-amber-500/40 dark:text-amber-400"
                               : "bg-zinc-100 border-zinc-200 text-zinc-600 dark:bg-white/5 dark:border-white/[0.06] dark:text-zinc-400"
                         }
                       `}
                     >
-                      {daysUntilExpiry}d
+                      {expiryLabel}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="right" sideOffset={8}>
-                    {`Expires in ${daysUntilExpiry}d`}
+                    {`Expires in ${expiryLabel} without activity`}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -1169,7 +1178,7 @@ export function SpaceContainer({
             </div>
           </header>
           <div className="container mx-auto px-4">
-            {!hasPosted ? (
+            {!hasPosted || composerUploadActive ? (
               // Centered composer for first post
               <div className="flex min-h-screen items-center justify-center">
                 <div className="w-full max-w-4xl">
@@ -1179,6 +1188,7 @@ export function SpaceContainer({
                     onUpdateEntry={handleUpdateEntry}
                     onReplaceEntry={handleReplaceEntry}
                     onRemoveEntry={handleRemoveEntry}
+                    onUploadStateChange={setComposerUploadActive}
                     currentDeviceId={currentDeviceId}
                     centered={true}
                   />
@@ -1219,6 +1229,7 @@ export function SpaceContainer({
                         onUpdateEntry={handleUpdateEntry}
                         onReplaceEntry={handleReplaceEntry}
                         onRemoveEntry={handleRemoveEntry}
+                        onUploadStateChange={setComposerUploadActive}
                         currentDeviceId={currentDeviceId}
                         centered={false}
                       />

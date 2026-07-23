@@ -97,10 +97,58 @@ export const SpaceHeaderSkeleton = memo(function SpaceHeaderSkeleton() {
 export const PageLoadingSkeleton = memo(function PageLoadingSkeleton() {
   return (
     <div className="min-h-screen bg-background">
-      <SpaceHeaderSkeleton />
-      <div className="max-w-4xl mx-auto p-4">
-        <EntriesLoadingSkeleton count={5} />
+      <div className="fixed inset-y-0 left-0 hidden w-[60px] border-r bg-muted/20 p-3 md:block">
+        <Skeleton className="h-9 w-9 rounded-xl" />
+        <Skeleton className="mt-8 h-9 w-9 rounded-xl" />
+        <Skeleton className="mt-3 h-9 w-9 rounded-xl" />
       </div>
+      <div className="md:pl-[60px]">
+        <SpaceHeaderSkeleton />
+        <div className="flex min-h-[calc(100vh-65px)] items-center justify-center p-4">
+          <div className="w-full max-w-4xl rounded-[28px] border p-5">
+            <Skeleton className="h-24 w-full rounded-2xl" />
+            <div className="mt-5 flex items-center gap-4">
+              <Skeleton className="h-8 w-20 rounded-lg" />
+              <Skeleton className="h-8 w-20 rounded-lg" />
+              <Skeleton className="h-8 w-20 rounded-lg" />
+              <Skeleton className="ml-auto h-10 w-24 rounded-xl" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+export const NoteLoadingSkeleton = memo(function NoteLoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-muted/20">
+      <div className="sticky top-0 border-b bg-background/90 px-3 py-2 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center gap-3">
+          <Skeleton className="h-9 w-9 rounded-lg" />
+          <Skeleton className="h-8 w-48 max-w-[42vw]" />
+          <div className="ml-auto flex gap-2">
+            <Skeleton className="h-9 w-9 rounded-lg" />
+            <Skeleton className="h-9 w-20 rounded-lg" />
+          </div>
+        </div>
+      </div>
+      <div className="border-b bg-background px-3 py-2">
+        <div className="mx-auto flex max-w-5xl gap-2 overflow-hidden">
+          {Array.from({ length: 9 }).map((_, index) => (
+            <Skeleton key={index} className="h-8 w-8 shrink-0 rounded-md" />
+          ))}
+        </div>
+      </div>
+      <main className="mx-auto max-w-5xl px-2 py-4 sm:px-6 sm:py-8">
+        <div className="min-h-[calc(100vh-11rem)] rounded-xl border bg-background p-6 sm:rounded-2xl sm:p-10 md:p-16">
+          <Skeleton className="h-9 w-2/3" />
+          <Skeleton className="mt-8 h-4 w-full" />
+          <Skeleton className="mt-3 h-4 w-11/12" />
+          <Skeleton className="mt-3 h-4 w-4/5" />
+          <Skeleton className="mt-8 h-44 w-full rounded-xl" />
+        </div>
+      </main>
     </div>
   );
 });
