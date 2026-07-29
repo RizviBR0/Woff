@@ -121,6 +121,14 @@ const ImageUploadPlaceholder = Extension.create({
                   preview.src = previewUrl;
                   preview.alt = "";
 
+                  const previewSkeleton = document.createElement("span");
+                  previewSkeleton.className = "note-image-upload-placeholder__preview";
+
+                  const shimmer = document.createElement("span");
+                  shimmer.className = "note-image-upload-placeholder__shimmer";
+                  shimmer.setAttribute("aria-hidden", "true");
+                  previewSkeleton.append(preview, shimmer);
+
                   const message = document.createElement("span");
                   message.className = "note-image-upload-placeholder__message";
 
@@ -132,7 +140,7 @@ const ImageUploadPlaceholder = Extension.create({
                   text.textContent = "Uploading image here…";
 
                   message.append(spinner, text);
-                  container.append(preview, message);
+                  container.append(previewSkeleton, message);
                   return container;
                 },
                 { id, side: -1 },
@@ -958,7 +966,9 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
         <article className="min-h-[calc(100vh-11rem)] overflow-hidden rounded-xl border bg-background shadow-sm sm:rounded-2xl">
           <EditorContent
             editor={editor}
-            className="note-editor-content min-h-[calc(100vh-11rem)] px-4 py-6 sm:px-10 sm:py-10 md:px-16"
+            className={`note-editor-content min-h-[calc(100vh-11rem)] px-4 py-6 sm:px-10 sm:py-10 md:px-16 ${
+              isUploadingImage ? "note-editor-content--uploading" : ""
+            }`}
           />
         </article>
         <div className="flex items-center justify-between px-2 py-3 text-[11px] text-muted-foreground">

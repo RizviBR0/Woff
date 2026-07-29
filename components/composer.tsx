@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import * as tus from "tus-js-client";
 import {
@@ -601,34 +602,37 @@ export function Composer({
           </div>
         )}
 
-        {noteCreationStage && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm">
-            <div
-              className="w-full max-w-sm rounded-3xl border bg-background p-6 text-center shadow-2xl"
-              role="status"
-              aria-live="polite"
-            >
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-600">
-                <Loader2 className="h-5 w-5 animate-spin" />
+        {noteCreationStage &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div className="fixed inset-0 z-[9998] flex h-dvh w-screen items-center justify-center bg-background/80 p-6 backdrop-blur-sm">
+              <div
+                className="w-full max-w-sm rounded-3xl border bg-background p-6 text-center shadow-2xl"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-600">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+                <p className="mt-4 text-base font-semibold">
+                  {noteCreationStage === "creating" ? "Creating your note…" : "Opening the editor…"}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {noteCreationStage === "creating"
+                    ? "This usually takes just a moment. You only need to click once."
+                    : "Your note is ready. Loading the writing space now."}
+                </p>
+                <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full rounded-full bg-orange-500 transition-all duration-500 ${
+                      noteCreationStage === "creating" ? "w-1/2 animate-pulse" : "w-full"
+                    }`}
+                  />
+                </div>
               </div>
-              <p className="mt-4 text-base font-semibold">
-                {noteCreationStage === "creating" ? "Creating your note…" : "Opening the editor…"}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {noteCreationStage === "creating"
-                  ? "This usually takes just a moment. You only need to click once."
-                  : "Your note is ready. Loading the writing space now."}
-              </p>
-              <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={`h-full rounded-full bg-orange-500 transition-all duration-500 ${
-                    noteCreationStage === "creating" ? "w-1/2 animate-pulse" : "w-full"
-                  }`}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+            </div>,
+            document.body,
+          )}
 
         {batch && (
           <div

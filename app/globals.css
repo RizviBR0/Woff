@@ -212,13 +212,35 @@
   vertical-align: middle;
 }
 
-.note-image-upload-placeholder > img {
+.note-image-upload-placeholder__preview {
+  position: relative;
   width: 5.5rem;
   height: 4rem;
   flex: none;
+  overflow: hidden;
   border-radius: 0.6rem;
+  background: hsl(var(--muted));
+}
+
+.note-image-upload-placeholder__preview > img {
+  width: 5.5rem;
+  height: 4rem;
   object-fit: cover;
-  opacity: 0.72;
+  opacity: 0.38;
+  filter: saturate(0.75);
+}
+
+.note-image-upload-placeholder__shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 20%,
+    rgb(255 255 255 / 58%) 46%,
+    transparent 72%
+  );
+  transform: translateX(-120%);
+  animation: note-image-skeleton 1.25s ease-in-out infinite;
 }
 
 .note-image-upload-placeholder__message {
@@ -246,6 +268,16 @@
   height: 0;
   color: hsl(var(--muted-foreground));
   pointer-events: none;
+}
+
+.note-editor-content--uploading .tiptap p.is-editor-empty:first-child::before {
+  content: none;
+}
+
+@keyframes note-image-skeleton {
+  to {
+    transform: translateX(120%);
+  }
 }
 
 @layer base {
