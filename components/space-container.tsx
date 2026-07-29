@@ -81,7 +81,8 @@ export function SpaceContainer({
 }: SpaceContainerProps) {
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const hasPosted = entries.length > 0;
-  const [composerUploadActive, setComposerUploadActive] = useState(false);
+  const [keepInitialComposerDuringUpload, setKeepInitialComposerDuringUpload] =
+    useState(false);
   const [copied, setCopied] = useState(false);
   const [navLinkCopied, setNavLinkCopied] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -346,6 +347,18 @@ export function SpaceContainer({
   const handleRemoveEntry = useCallback((entryId: string) => {
     setEntries((prev) => prev.filter((entry) => entry.id !== entryId));
   }, []);
+
+  const handleComposerUploadStateChange = useCallback(
+    (active: boolean) => {
+      // The first optimistic file entry must not unmount its own centered
+      // composer. Once the timeline exists, uploads must never switch layouts
+      // because unmounting the compact composer aborts its active TUS uploads.
+      setKeepInitialComposerDuringUpload((current) =>
+        active ? current || !hasPosted : false,
+      );
+    },
+    [hasPosted],
+  );
 
   const handleCopy = async () => {
     try {
@@ -1178,7 +1191,7 @@ export function SpaceContainer({
             </div>
           </header>
           <div className="container mx-auto px-4">
-            {!hasPosted || composerUploadActive ? (
+            {!hasPosted || keepInitialComposerDuringUpload ? (
               // Centered composer for first post
               <div className="flex min-h-screen items-center justify-center">
                 <div className="w-full max-w-4xl">
@@ -1188,7 +1201,7 @@ export function SpaceContainer({
                     onUpdateEntry={handleUpdateEntry}
                     onReplaceEntry={handleReplaceEntry}
                     onRemoveEntry={handleRemoveEntry}
-                    onUploadStateChange={setComposerUploadActive}
+                    onUploadStateChange={handleComposerUploadStateChange}
                     currentDeviceId={currentDeviceId}
                     centered={true}
                   />
@@ -1229,7 +1242,7 @@ export function SpaceContainer({
                         onUpdateEntry={handleUpdateEntry}
                         onReplaceEntry={handleReplaceEntry}
                         onRemoveEntry={handleRemoveEntry}
-                        onUploadStateChange={setComposerUploadActive}
+                        onUploadStateChange={handleComposerUploadStateChange}
                         currentDeviceId={currentDeviceId}
                         centered={false}
                       />
