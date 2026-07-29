@@ -15,6 +15,8 @@ import {
   Loader2,
   MoreVertical,
   Flag,
+  Save,
+  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -30,8 +32,15 @@ import { useState, useEffect, memo } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { displayNameForDevice } from "@/lib/display-name";
-import { deleteEntry, reportEntry } from "@/lib/actions";
+import {
+  createUploadedEntry,
+  createUploadIntents,
+  deleteEntry,
+  reportEntry,
+  updateTextEntry,
+} from "@/lib/actions";
 import NextImage from "next/image";
+import { supabaseBrowser } from "@/lib/supabase-browser";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +56,18 @@ import {
 const GlobalImageViewer = dynamic(
   () =>
     import("./global-image-viewer").then((module) => module.GlobalImageViewer),
+  { ssr: false },
+);
+
+const GlobalVideoViewer = dynamic(
+  () =>
+    import("./global-video-viewer").then((module) => module.GlobalVideoViewer),
+  { ssr: false },
+);
+
+const ImageMarkupEditor = dynamic(
+  () =>
+    import("./image-markup-editor").then((module) => module.ImageMarkupEditor),
   { ssr: false },
 );
 
@@ -70,12 +91,30 @@ interface EntryCardProps {
   entry: Entry;
   currentDeviceId?: string | null;
   onDelete?: (entryId: string) => void;
+  onUpdate?: (entryId: string, updates: Partial<Entry>) => void;
+  onNewEntry?: (entry: Entry) => void;
+}
+
+function isImageFile(type?: string, name?: string) {
+  return (
+    Boolean(type?.startsWith("image/")) ||
+    /\.(jpg|jpeg|png|gif|webp|avif|svg)$/i.test(name || "")
+  );
+}
+
+function isVideoFile(type?: string, name?: string) {
+  return (
+    Boolean(type?.startsWith("video/")) ||
+    /\.(mp4|webm|mov|m4v|ogv)$/i.test(name || "")
+  );
 }
 
 export const EntryCard = memo(function EntryCard({
   entry,
   currentDeviceId = null,
   onDelete,
+  onUpdate,
+  onNewEntry,
 }: EntryCardProps) {
   const [isNoteLocked, setIsNoteLocked] = useState(false);
   const [noteLoaded, setNoteLoaded] = useState(false);
@@ -86,6 +125,11 @@ export const EntryCard = memo(function EntryCard({
   const [copied, setCopied] = useState(false);
   const [showAllFiles, setShowAllFiles] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [markupImage, setMarkupImage] = useState<string | null>(null);
+  const [video, setVideo] = useState<{ src: string; title: string } | null>(null);
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [editText, setEditText] = useState(entry.text || "");
+  const [isSavingText, setIsSavingText] = useState(false);
 
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
@@ -142,6 +186,14 @@ export const EntryCard = memo(function EntryCard({
     !!entry.created_by_device_id &&
     !!currentDeviceId &&
     entry.created_by_device_id === currentDeviceId;
+  const isRegularText =
+    entry.kind === "text" &&
+    Boolean(entry.text) &&
+    !/^(NOTE:|PHOTO:|PHOTOS:|DRAWING:)/.test(entry.text || "");
+
+  useEffect(() => {
+    if (!isEditingText) setEditText(entry.text || "");
+  }, [entry.text, isEditingText]);
 
   const nameLabel = isMine
     ? "You"
@@ -251,6 +303,123 @@ export const EntryCard = memo(function EntryCard({
     setGalleryImages(images);
     setGalleryIndex(index);
     setShowGallery(true);
+  };
+
+  const openMarkupEditor = (imageUrl: string) => {
+    setShowGallery(false);
+    setMarkupImage(imageUrl);
+  };
+
+  const saveEditedImage = async (blob: Blob) => {
+    if (!onNewEntry) {
+      throw new Error("This room cannot receive the edited image right now");
+    }
+    const file = new File([blob], `edited-image-${Date.now()}.png`, {
+      type: "image/png",
+    });
+    const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!projectUrl || !apiKey) {
+      throw new Error("Upload service is not configured");
+    }
+
+    const bitmapPromise =
+      typeof createImageBitmap === "function"
+        ? createImageBitmap(file).catch(() => null)
+        : Promise.resolve(null);
+    const [intents, authResult, bitmap] = await Promise.all([
+      createUploadIntents(entry.space_id, [
+        { name: file.name, size: file.size, type: file.type },
+      ]),
+      supabaseBrowser.auth.getSession(),
+      bitmapPromise,
+    ]);
+    const session = authResult.data.session;
+    if (!session) {
+      bitmap?.close();
+      throw new Error("Your anonymous session expired. Refresh and retry.");
+    }
+
+    const parsedUrl = new URL(projectUrl);
+    const projectId = parsedUrl.hostname.endsWith(".supabase.co")
+      ? parsedUrl.hostname.split(".")[0]
+      : null;
+    const storageOrigin = projectId
+      ? `https://${projectId}.storage.supabase.co`
+      : parsedUrl.origin;
+    const intent = intents[0];
+    const { Upload } = await import("tus-js-client");
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const upload = new Upload(file, {
+          endpoint: `${storageOrigin}/storage/v1/upload/resumable`,
+          retryDelays: [0, 3000, 5000, 10_000],
+          headers: {
+            authorization: `Bearer ${session.access_token}`,
+            apikey: apiKey,
+          },
+          uploadDataDuringCreation: true,
+          removeFingerprintOnSuccess: true,
+          chunkSize: 6 * 1024 * 1024,
+          metadata: {
+            bucketName: intent.bucket,
+            objectName: intent.path,
+            contentType: file.type,
+            cacheControl: "3600",
+          },
+          onError: reject,
+          onSuccess: () => resolve(),
+        });
+        upload.start();
+      });
+
+      const created = await createUploadedEntry(
+        entry.space_id,
+        [
+          {
+            path: intent.path,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            width: bitmap?.width,
+            height: bitmap?.height,
+          },
+        ],
+        "drawing",
+      );
+      onNewEntry(created as Entry);
+      toast.success("Edited image sent");
+    } catch (error) {
+      await supabaseBrowser.storage
+        .from("files")
+        .remove([intent.path])
+        .catch(() => undefined);
+      throw error;
+    } finally {
+      bitmap?.close();
+    }
+  };
+
+  const saveTextEdit = async () => {
+    const nextText = editText.trim();
+    if (!nextText || nextText === entry.text || isSavingText) {
+      if (nextText === entry.text) setIsEditingText(false);
+      return;
+    }
+    setIsSavingText(true);
+    try {
+      const updated = await updateTextEntry(entry.id, nextText);
+      onUpdate?.(entry.id, updated as Entry);
+      setIsEditingText(false);
+      toast.success("Message updated");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to edit this message",
+      );
+    } finally {
+      setIsSavingText(false);
+    }
   };
 
   const handleCopyText = async (text: string) => {
@@ -518,6 +687,11 @@ export const EntryCard = memo(function EntryCard({
             onClick: () => handleView(dataUrl),
           },
           {
+            label: "Edit Drawing",
+            icon: <Edit className="h-4 w-4" />,
+            onClick: () => openMarkupEditor(dataUrl),
+          },
+          {
             label: "Download Drawing",
             icon: <Download className="h-4 w-4" />,
             onClick: () => handleDownload(dataUrl, `drawing-${entry.id}.png`),
@@ -530,6 +704,11 @@ export const EntryCard = memo(function EntryCard({
             label: "View Photo",
             icon: <Eye className="h-4 w-4" />,
             onClick: () => handleView(dataUrl),
+          },
+          {
+            label: "Edit Photo",
+            icon: <Edit className="h-4 w-4" />,
+            onClick: () => openMarkupEditor(dataUrl),
           },
           {
             label: "Download Photo",
@@ -575,11 +754,20 @@ export const EntryCard = memo(function EntryCard({
         );
       } else {
         // Regular text
-        options.push({
-          label: copied ? "Copied!" : "Copy Text",
-          icon: copied ? <Check className="h-4 w-4 text-green-600 dark:text-green-400" /> : <Copy className="h-4 w-4" />,
-          onClick: () => handleCopyText(entry.text || ""),
-        });
+        options.push(
+          {
+            label: copied ? "Copied!" : "Copy Text",
+            icon: copied ? <Check className="h-4 w-4 text-green-600 dark:text-green-400" /> : <Copy className="h-4 w-4" />,
+            onClick: () => handleCopyText(entry.text || ""),
+          },
+          ...(isMine && isRegularText
+            ? [{
+                label: "Edit Message",
+                icon: <Edit className="h-4 w-4" />,
+                onClick: () => setIsEditingText(true),
+              }]
+            : []),
+        );
       }
     }
 
@@ -587,6 +775,20 @@ export const EntryCard = memo(function EntryCard({
     if (entry.kind === "file" && entry.meta?.type === "files") {
       const items = entry.meta.items || [];
       if (items.length === 1) {
+        if (isImageFile(items[0].type, items[0].name)) {
+          options.push({
+            label: "Edit Image",
+            icon: <Edit className="h-4 w-4" />,
+            onClick: () => openMarkupEditor(items[0].url),
+          });
+        }
+        if (isVideoFile(items[0].type, items[0].name)) {
+          options.push({
+            label: "View Video",
+            icon: <Play className="h-4 w-4" />,
+            onClick: () => setVideo({ src: items[0].url, title: items[0].name }),
+          });
+        }
         options.push({
           label: "Download File",
           icon: <Download className="h-4 w-4" />,
@@ -759,19 +961,34 @@ export const EntryCard = memo(function EntryCard({
 
 
   const globalViewerModal = (
-    <GlobalImageViewer 
-      images={galleryImages} 
-      initialIndex={galleryIndex} 
-      isOpen={showGallery} 
-      onClose={() => setShowGallery(false)} 
-      getDownloadFilename={(index) => {
-        if (entry.meta?.presentation === "drawing") return `drawing-${entry.id}.png`;
-        if (entry.text?.startsWith("DRAWING:")) return `drawing-${entry.id}.png`;
-        if (entry.text?.startsWith("PHOTO:")) return `photo-${entry.id}.jpg`;
-        if (entry.text?.startsWith("PHOTOS:")) return `photo-${index + 1}-${entry.id}.jpg`;
-        return `image-${entry.id}`;
-      }}
-    />
+    <>
+      <GlobalImageViewer
+        images={galleryImages}
+        initialIndex={galleryIndex}
+        isOpen={showGallery}
+        onClose={() => setShowGallery(false)}
+        onEdit={(imageUrl) => openMarkupEditor(imageUrl)}
+        getDownloadFilename={(index) => {
+          if (entry.meta?.presentation === "drawing") return `drawing-${entry.id}.png`;
+          if (entry.text?.startsWith("DRAWING:")) return `drawing-${entry.id}.png`;
+          if (entry.text?.startsWith("PHOTO:")) return `photo-${entry.id}.jpg`;
+          if (entry.text?.startsWith("PHOTOS:")) return `photo-${index + 1}-${entry.id}.jpg`;
+          return `image-${entry.id}`;
+        }}
+      />
+      <ImageMarkupEditor
+        imageUrl={markupImage}
+        isOpen={Boolean(markupImage)}
+        onClose={() => setMarkupImage(null)}
+        onSend={saveEditedImage}
+      />
+      <GlobalVideoViewer
+        isOpen={Boolean(video)}
+        src={video?.src || null}
+        title={video?.title}
+        onClose={() => setVideo(null)}
+      />
+    </>
   );
 
   // Handle placeholder/loading entries from optimistic UI
@@ -1217,6 +1434,15 @@ export const EntryCard = memo(function EntryCard({
                   size="sm"
                   variant="ghost"
                   className="h-7 px-2 text-xs"
+                  onClick={() => openMarkupEditor(drawingUrl)}
+                >
+                  <Edit className="mr-1 h-3 w-3" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
                   onClick={() =>
                     handleDownload(drawingUrl, drawing.name || `drawing-${entry.id}.png`)
                   }
@@ -1300,6 +1526,15 @@ export const EntryCard = memo(function EntryCard({
                   size="sm"
                   variant="ghost"
                   className="h-7 px-2 text-xs"
+                  onClick={() => openMarkupEditor(dataUrl)}
+                >
+                  <Edit className="h-3 w-3 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
                   onClick={() =>
                     handleDownload(dataUrl, `drawing-${entry.id}.png`)
                   }
@@ -1376,6 +1611,15 @@ export const EntryCard = memo(function EntryCard({
                 >
                   <Eye className="h-3 w-3 mr-1" />
                   View
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => openMarkupEditor(dataUrl)}
+                >
+                  <Edit className="h-3 w-3 mr-1" />
+                  Edit
                 </Button>
                 <Button
                   size="sm"
@@ -1667,45 +1911,127 @@ export const EntryCard = memo(function EntryCard({
             <span className="text-xs text-muted-foreground/60">
               {formatTime(entry.created_at)}
             </span>
+            {entry.meta?.edited_at && (
+              <span className="text-[10px] text-muted-foreground/60">
+                edited
+              </span>
+            )}
           </div>
 
           {/* Message text */}
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/90 dark:text-foreground/95">
-            {(() => {
-              if (!entry.text) return "";
-              
-              // URL matching regex: matches http://, https://, and www. links
-              const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-              const parts = entry.text.split(urlRegex);
-              if (parts.length === 1) {
-                return entry.text;
-              }
-              
-              return parts.map((part, index) => {
-                const lowerPart = part.toLowerCase();
-                const isUrl = lowerPart.startsWith("http://") || lowerPart.startsWith("https://") || lowerPart.startsWith("www.");
-                
-                if (isUrl) {
-                  const href = lowerPart.startsWith("www.") ? `https://${part}` : part;
-                  return (
-                    <a
-                      key={index}
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#ff5a00] hover:text-[#ff3600] dark:text-[#ff7d3b] dark:hover:text-[#ff5a00] underline font-medium transition-colors break-all"
-                    >
-                      {part}
-                    </a>
-                  );
+          {isEditingText ? (
+            <div className="space-y-2">
+              <textarea
+                autoFocus
+                value={editText}
+                onChange={(event) => setEditText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setEditText(entry.text || "");
+                    setIsEditingText(false);
+                  } else if (
+                    event.key === "Enter" &&
+                    (event.ctrlKey || event.metaKey)
+                  ) {
+                    event.preventDefault();
+                    void saveTextEdit();
+                  }
+                }}
+                maxLength={50_000}
+                disabled={isSavingText}
+                className="min-h-24 w-full resize-y rounded-xl border bg-background px-3 py-2 text-sm leading-relaxed outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                aria-label="Edit message"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  disabled={
+                    isSavingText ||
+                    !editText.trim() ||
+                    editText.trim() === entry.text
+                  }
+                  onClick={() => void saveTextEdit()}
+                >
+                  {isSavingText ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" />
+                  )}
+                  Save
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8"
+                  disabled={isSavingText}
+                  onClick={() => {
+                    setEditText(entry.text || "");
+                    setIsEditingText(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <span className="text-[10px] text-muted-foreground">
+                  Ctrl/⌘ + Enter to save
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/90 dark:text-foreground/95">
+              {(() => {
+                if (!entry.text) return "";
+
+                // URL matching regex: matches http://, https://, and www. links
+                const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+                const parts = entry.text.split(urlRegex);
+                if (parts.length === 1) {
+                  return entry.text;
                 }
-                return part;
-              });
-            })()}
-          </p>
+
+                return parts.map((part, index) => {
+                  const lowerPart = part.toLowerCase();
+                  const isUrl =
+                    lowerPart.startsWith("http://") ||
+                    lowerPart.startsWith("https://") ||
+                    lowerPart.startsWith("www.");
+
+                  if (isUrl) {
+                    const href = lowerPart.startsWith("www.")
+                      ? `https://${part}`
+                      : part;
+                    return (
+                      <a
+                        key={index}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#ff5a00] hover:text-[#ff3600] dark:text-[#ff7d3b] dark:hover:text-[#ff5a00] underline font-medium transition-colors break-all"
+                      >
+                        {part}
+                      </a>
+                    );
+                  }
+                  return part;
+                });
+              })()}
+            </p>
+          )}
 
           {/* Action button - shown on hover */}
-          <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {!isEditingText && (
+          <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            {isMine && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={() => setIsEditingText(true)}
+              >
+                <Edit className="h-3 w-3 mr-1" />
+                Edit
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -1729,6 +2055,7 @@ export const EntryCard = memo(function EntryCard({
               )}
             </Button>
           </div>
+          )}
         </div>
         </div>
         <Dialogs />
@@ -1750,15 +2077,11 @@ export const EntryCard = memo(function EntryCard({
 
     // Helper to check if file is an image
     const isImage = (type: string, name: string) => {
-      return (
-        type?.startsWith("image/") ||
-        /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(name)
-      );
+      return isImageFile(type, name);
     };
 
-    const allImages =
-      items.length > 0 && items.every((it) => isImage(it.type, it.name));
-    const icon = allImages ? "🖼️" : "📄";
+    const imageItems = items.filter((item) => isImage(item.type, item.name));
+    const imageUrls = imageItems.map((item) => item.url);
 
     return (
       <>
@@ -1797,6 +2120,10 @@ export const EntryCard = memo(function EntryCard({
             <div className="divide-y rounded-md border border-border/20 bg-background">
               {(showAllFiles ? items : items.slice(0, 3)).map((it) => {
                 const isImg = isImage(it.type, it.name);
+                const isVideo = isVideoFile(it.type, it.name);
+                const imageIndex = isImg
+                  ? imageItems.findIndex((item) => item.url === it.url)
+                  : -1;
                 return (
                   <div
                     key={it.path || it.url}
@@ -1804,9 +2131,11 @@ export const EntryCard = memo(function EntryCard({
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       {isImg ? (
-                        <div
+                        <button
+                          type="button"
                           className="relative h-10 w-10 flex-shrink-0 bg-muted rounded overflow-hidden border cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={() => handleView(it.url)}
+                          onClick={() => handleViewMultiple(imageUrls, imageIndex)}
+                          aria-label={`View ${it.name}`}
                         >
                           <NextImage
                             src={it.url}
@@ -1815,7 +2144,16 @@ export const EntryCard = memo(function EntryCard({
                             unoptimized
                             className="object-cover"
                           />
-                        </div>
+                        </button>
+                      ) : isVideo ? (
+                        <button
+                          type="button"
+                          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded border bg-black text-white transition hover:bg-black/80"
+                          onClick={() => setVideo({ src: it.url, title: it.name })}
+                          aria-label={`Play ${it.name}`}
+                        >
+                          <Play className="h-5 w-5 fill-current" />
+                        </button>
                       ) : (
                         <div className="h-10 w-10 flex items-center justify-center bg-muted rounded flex-shrink-0 text-muted-foreground border">
                           <FileText className="h-5 w-5" />
@@ -1841,10 +2179,33 @@ export const EntryCard = memo(function EntryCard({
                           size="sm"
                           variant="ghost"
                           className="h-8 px-2"
-                          onClick={() => handleView(it.url)}
+                          onClick={() => handleViewMultiple(imageUrls, imageIndex)}
                           title="View"
                         >
                           <Eye className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {isImg && items.length === 1 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2"
+                          onClick={() => openMarkupEditor(it.url)}
+                          title="Edit image"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {isVideo && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 gap-1 px-2"
+                          onClick={() => setVideo({ src: it.url, title: it.name })}
+                          title="View video fullscreen"
+                        >
+                          <Play className="h-4 w-4" />
+                          <span className="hidden sm:inline">View</span>
                         </Button>
                       )}
                       <Button

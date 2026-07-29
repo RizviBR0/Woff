@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   DownloadIcon,
+  Edit3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -19,6 +20,7 @@ interface GlobalImageViewerProps {
   onClose: () => void;
   // Optional callback to determine the filename for the single image download
   getDownloadFilename?: (index: number) => string;
+  onEdit?: (imageUrl: string, index: number) => void;
 }
 
 export function GlobalImageViewer({
@@ -27,6 +29,7 @@ export function GlobalImageViewer({
   isOpen,
   onClose,
   getDownloadFilename,
+  onEdit,
 }: GlobalImageViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isBright, setIsBright] = useState(false);
@@ -239,6 +242,21 @@ export function GlobalImageViewer({
 
         {/* Top Right Controls */}
         <div className="absolute top-4 right-4 z-50 flex gap-3">
+          {onEdit && (
+            <Button
+              size="icon"
+              variant="secondary"
+              className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border backdrop-blur-md transition-all duration-300 hover:scale-105 ${btnClasses}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(images[currentIndex], currentIndex);
+              }}
+              title="Edit image"
+              aria-label="Edit image"
+            >
+              <Edit3 className="h-5 w-5 md:h-6 md:w-6" />
+            </Button>
+          )}
           <Button
             size="icon"
             variant="secondary"

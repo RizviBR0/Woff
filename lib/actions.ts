@@ -270,6 +270,63 @@ export async function createEntry(
   return data as Entry;
 }
 
+export async function updateTextEntry(
+  entryId: string,
+  text: string,
+): Promise<Entry> {
+  const { supabase, user } = await requireAnonymousUser();
+  await assertRateLimit(supabase, "update_entry", 60);
+  const cleanText = text.trim();
+
+  if (!cleanText) {
+    throw new Error("A message cannot be empty");
+  }
+  if (cleanText.length > MAX_TEXT_LENGTH) {
+    throw new Error(`Messages can be at most ${MAX_TEXT_LENGTH} characters`);
+  }
+  if (cleanText.startsWith("data:") || cleanText.includes(";base64,")) {
+    throw new Error("Binary data must be uploaded as a file");
+  }
+
+  const { data: existing } = await supabase
+    .from("entries")
+    .select("id, kind, text, meta, created_by_device_id")
+    .eq("id", entryId)
+    .single();
+
+  if (!existing || existing.created_by_device_id !== user.id) {
+    throw new Error("You can only edit messages you sent");
+  }
+  if (
+    existing.kind !== "text" ||
+    /^(NOTE:|PHOTO:|PHOTOS:|DRAWING:)/.test(existing.text || "")
+  ) {
+    throw new Error("This entry cannot be edited as a text message");
+  }
+
+  const nextMeta = {
+    ...(existing.meta || {}),
+    edited_at: new Date().toISOString(),
+  };
+  const metaBytes = Buffer.byteLength(JSON.stringify(nextMeta), "utf8");
+  if (metaBytes > MAX_META_BYTES) {
+    throw new Error("Entry metadata is too large");
+  }
+
+  const { data, error } = await supabase
+    .from("entries")
+    .update({ text: cleanText, meta: nextMeta })
+    .eq("id", entryId)
+    .eq("created_by_device_id", user.id)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || "Unable to edit this message");
+  }
+  return data as Entry;
+}
+
 export async function createUploadIntent(
   spaceId: string,
   file: UploadIntentInput,

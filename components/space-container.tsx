@@ -1220,6 +1220,8 @@ export function SpaceContainer({
                       entry={entry}
                       currentDeviceId={currentDeviceId || null}
                       onDelete={handleRemoveEntry}
+                      onUpdate={handleUpdateEntry}
+                      onNewEntry={handleNewEntry}
                     />
                   ))}
                 </div>
