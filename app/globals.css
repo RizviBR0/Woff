@@ -146,10 +146,33 @@
   border-radius: 0.75rem;
 }
 
+.note-editor-content .tiptap .note-image[data-align="left"] {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.note-editor-content .tiptap .note-image[data-align="center"] {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.note-editor-content .tiptap .note-image[data-align="right"] {
+  margin-right: 0;
+  margin-left: auto;
+}
+
 .note-editor-content .tiptap [data-resize-container] {
-  justify-content: center;
+  justify-content: flex-start;
   max-width: 100%;
-  margin: 1rem auto;
+  margin: 1rem 0;
+}
+
+.note-editor-content .tiptap [data-resize-container]:has(.note-image[data-align="center"]) {
+  justify-content: center;
+}
+
+.note-editor-content .tiptap [data-resize-container]:has(.note-image[data-align="right"]) {
+  justify-content: flex-end;
 }
 
 .note-editor-content .tiptap [data-resize-wrapper] {
@@ -171,6 +194,50 @@
 .note-editor-content .tiptap [data-resize-container][data-resize-state="true"] [data-resize-handle],
 .note-editor-content .tiptap [data-resize-container].ProseMirror-selectednode [data-resize-handle] {
   opacity: 1;
+}
+
+.note-image-upload-placeholder {
+  display: flex;
+  width: min(100%, 28rem);
+  min-height: 5.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 0.65rem;
+  border: 1px dashed rgb(249 115 22 / 55%);
+  border-radius: 0.85rem;
+  background: rgb(249 115 22 / 7%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 5%);
+  color: hsl(var(--foreground));
+  vertical-align: middle;
+}
+
+.note-image-upload-placeholder > img {
+  width: 5.5rem;
+  height: 4rem;
+  flex: none;
+  border-radius: 0.6rem;
+  object-fit: cover;
+  opacity: 0.72;
+}
+
+.note-image-upload-placeholder__message {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.note-image-upload-placeholder__spinner {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  border: 2px solid rgb(249 115 22 / 25%);
+  border-top-color: rgb(249 115 22);
+  border-radius: 999px;
+  animation: spin 0.8s linear infinite;
 }
 
 .note-editor-content .tiptap p.is-editor-empty:first-child::before {

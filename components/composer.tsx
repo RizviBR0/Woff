@@ -90,6 +90,7 @@ export function Composer({
   const router = useRouter();
   const [text, setText] = useState("");
   const [isPosting, setIsPosting] = useState(false);
+  const [noteCreationStage, setNoteCreationStage] = useState<"creating" | "opening" | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [drawingOpen, setDrawingOpen] = useState(false);
   const [batch, setBatch] = useState<BatchState | null>(null);
@@ -231,7 +232,11 @@ export function Composer({
         presentation === "photos"
           ? {
               type: "photos",
-              previewUrls: [],
+              previewUrls: files.map((file) => {
+                const url = URL.createObjectURL(file);
+                previewUrlsRef.current.push(url);
+                return url;
+              }),
               count: files.length,
               items: files.map((file) => ({
                 name: file.name,
@@ -240,7 +245,11 @@ export function Composer({
               })),
             }
           : presentation === "drawing"
-            ? { type: "drawing" }
+            ? (() => {
+                const previewUrl = URL.createObjectURL(files[0]);
+                previewUrlsRef.current.push(previewUrl);
+                return { type: "drawing", previewUrl };
+              })()
             : {
                 type: "files",
                 items: files.map((file) => ({
@@ -408,8 +417,8 @@ export function Composer({
   };
 
   const createNote = async () => {
-    if (isPosting) return;
-    setIsPosting(true);
+    if (isPosting || noteCreationStage) return;
+    setNoteCreationStage("creating");
     try {
       const result = await createNoteEntry(spaceId);
       onNewEntry({
@@ -426,11 +435,12 @@ export function Composer({
         created_by_device_id: currentDeviceId || null,
         created_at: new Date().toISOString(),
       });
+      setNoteCreationStage("opening");
+      router.prefetch(`/n/${result.noteSlug}`);
       router.push(`/n/${result.noteSlug}`);
     } catch (error) {
+      setNoteCreationStage(null);
       toast.error(error instanceof Error ? error.message : "Unable to create note");
-    } finally {
-      setIsPosting(false);
     }
   };
 
@@ -448,12 +458,21 @@ export function Composer({
   );
 
   const saveDrawing = useCallback(
-    async (dataUrl: string) => {
-      const blob = await (await fetch(dataUrl)).blob();
+    async (blob: Blob) => {
+      if (batch?.status === "uploading") {
+        throw new Error("Wait for the current upload or cancel it");
+      }
       const file = new File([blob], `drawing-${Date.now()}.png`, { type: "image/png" });
-      receiveFiles([file], "drawing");
+      const upload = runUpload([file], "drawing");
+      void upload.catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Unable to send drawing");
+      });
+      // runUpload creates the visible timeline placeholder synchronously before
+      // its first network wait. Yield once so the canvas closes only after that
+      // handoff is visible to the user.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     },
-    [receiveFiles],
+    [batch?.status, runUpload],
   );
 
   useEffect(() => {
@@ -582,6 +601,35 @@ export function Composer({
           </div>
         )}
 
+        {noteCreationStage && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm">
+            <div
+              className="w-full max-w-sm rounded-3xl border bg-background p-6 text-center shadow-2xl"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-600">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+              <p className="mt-4 text-base font-semibold">
+                {noteCreationStage === "creating" ? "Creating your note…" : "Opening the editor…"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {noteCreationStage === "creating"
+                  ? "This usually takes just a moment. You only need to click once."
+                  : "Your note is ready. Loading the writing space now."}
+              </p>
+              <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className={`h-full rounded-full bg-orange-500 transition-all duration-500 ${
+                    noteCreationStage === "creating" ? "w-1/2 animate-pulse" : "w-full"
+                  }`}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {batch && (
           <div
             className={`relative z-20 rounded-xl border border-border bg-background/80 p-3 ${
@@ -683,6 +731,7 @@ export function Composer({
             </button>
             <button
               onClick={() => setDrawingOpen(true)}
+              disabled={Boolean(noteCreationStage)}
               className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
               aria-label="Open drawing canvas"
             >
@@ -691,16 +740,23 @@ export function Composer({
             </button>
             <button
               onClick={() => void createNote()}
-              className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
+              disabled={Boolean(noteCreationStage) || isPosting}
+              className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 disabled:cursor-wait disabled:opacity-60 dark:text-zinc-400 dark:hover:text-orange-400"
               aria-label="Create note"
             >
-              <FileText className="h-4 w-4" />
-              <span className="hidden md:inline">Note</span>
+              {noteCreationStage ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              <span className="hidden md:inline">
+                {noteCreationStage ? "Opening…" : "Note"}
+              </span>
             </button>
           </div>
           <button
             onClick={() => void sendText()}
-            disabled={!text.trim() || isPosting}
+            disabled={!text.trim() || isPosting || Boolean(noteCreationStage)}
             className="cta-button-glow flex h-9 items-center gap-2 rounded-xl px-3.5 text-xs font-semibold text-white shadow-[0_4px_12px_rgba(255,90,0,0.2)] transition hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
           >
             {isPosting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -734,7 +790,7 @@ export function Composer({
       <DrawingCanvas
         isOpen={drawingOpen}
         onClose={() => setDrawingOpen(false)}
-        onSave={(dataUrl) => void saveDrawing(dataUrl)}
+        onSave={saveDrawing}
       />
     </>
   );

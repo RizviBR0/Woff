@@ -6,6 +6,7 @@ import {
   Check,
   Download,
   Eraser,
+  Loader2,
   Minus,
   Pen,
   Plus,
@@ -14,12 +15,13 @@ import {
   Undo2,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
 interface DrawingCanvasProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (dataUrl: string) => void;
+  onSave: (blob: Blob) => Promise<void>;
 }
 
 type Point = { x: number; y: number };
@@ -55,6 +57,7 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
   const [color, setColor] = useState("#1a1a1a");
   const [size, setSize] = useState(4);
   const [eraser, setEraser] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     strokesRef.current = strokes;
@@ -200,7 +203,14 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
     const completed = currentStrokeRef.current;
     activePointerRef.current = null;
     currentStrokeRef.current = null;
-    if (completed) setStrokes((existing) => [...existing, completed]);
+    if (completed) {
+      setStrokes((existing) => {
+        const next = [...existing, completed];
+        // Keep the export source current even before React's effect runs.
+        strokesRef.current = next;
+        return next;
+      });
+    }
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -231,11 +241,28 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
     currentStrokeRef.current = null;
   };
 
-  const save = () => {
+  const save = async () => {
     const canvas = canvasRef.current;
-    if (!canvas || !strokesRef.current.length) return;
-    onSave(canvas.toDataURL("image/png"));
-    onClose();
+    if (!canvas || !strokesRef.current.length || isSending) return;
+    setIsSending(true);
+    try {
+      // A final animation frame guarantees the last pointer stroke is painted
+      // before the canvas is encoded.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      renderCanvas();
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((value) => {
+          if (value) resolve(value);
+          else reject(new Error("Unable to prepare this drawing"));
+        }, "image/png");
+      });
+      await onSave(blob);
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send drawing");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const download = () => {
@@ -255,6 +282,7 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
         <div className="flex items-center gap-2">
           <button
             onClick={onClose}
+            disabled={isSending}
             className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted"
             aria-label="Close drawing canvas"
           >
@@ -267,9 +295,13 @@ export function DrawingCanvas({ isOpen, onClose, onSave }: DrawingCanvasProps) {
             <Download className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Export</span>
           </Button>
-          <Button size="sm" className="h-8 gap-1.5" disabled={!strokes.length} onClick={save}>
-            <Check className="h-3.5 w-3.5" />
-            Send
+          <Button size="sm" className="h-8 gap-1.5" disabled={!strokes.length || isSending} onClick={() => void save()}>
+            {isSending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            {isSending ? "Sending…" : "Send"}
           </Button>
         </div>
       </header>

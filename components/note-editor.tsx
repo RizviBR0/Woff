@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { Extension } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -13,6 +14,8 @@ import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import QRCode from "qrcode";
 import {
   AlignCenter,
@@ -69,6 +72,111 @@ interface NoteEditorProps {
 }
 
 type SaveState = "saved" | "unsaved" | "saving" | "error" | "offline";
+type ImageAlignment = "left" | "center" | "right";
+type ImageUploadSource = "clipboard" | "drop" | "picker";
+type ImageUploadState = {
+  total: number;
+  completed: number;
+  currentName: string;
+  source: ImageUploadSource;
+};
+
+const imageUploadPlaceholderKey = new PluginKey<DecorationSet>(
+  "imageUploadPlaceholder",
+);
+
+const ImageUploadPlaceholder = Extension.create({
+  name: "imageUploadPlaceholder",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: imageUploadPlaceholderKey,
+        state: {
+          init: () => DecorationSet.empty,
+          apply(transaction, decorations) {
+            let next = decorations.map(transaction.mapping, transaction.doc);
+            const action = transaction.getMeta(imageUploadPlaceholderKey) as
+              | {
+                  add?: {
+                    id: string;
+                    pos: number;
+                    previewUrl: string;
+                    name: string;
+                  };
+                  remove?: { id: string };
+                }
+              | undefined;
+
+            if (action?.add) {
+              const { id, pos, previewUrl, name } = action.add;
+              const widget = Decoration.widget(
+                pos,
+                () => {
+                  const container = document.createElement("span");
+                  container.className = "note-image-upload-placeholder";
+                  container.setAttribute("role", "status");
+                  container.setAttribute("aria-label", `Uploading ${name} here`);
+
+                  const preview = document.createElement("img");
+                  preview.src = previewUrl;
+                  preview.alt = "";
+
+                  const message = document.createElement("span");
+                  message.className = "note-image-upload-placeholder__message";
+
+                  const spinner = document.createElement("span");
+                  spinner.className = "note-image-upload-placeholder__spinner";
+                  spinner.setAttribute("aria-hidden", "true");
+
+                  const text = document.createElement("span");
+                  text.textContent = "Uploading image here…";
+
+                  message.append(spinner, text);
+                  container.append(preview, message);
+                  return container;
+                },
+                { id, side: -1 },
+              );
+              next = next.add(transaction.doc, [widget]);
+            }
+
+            if (action?.remove) {
+              next = next.remove(
+                next.find(
+                  undefined,
+                  undefined,
+                  (spec) => spec.id === action.remove?.id,
+                ),
+              );
+            }
+            return next;
+          },
+        },
+        props: {
+          decorations(state) {
+            return imageUploadPlaceholderKey.getState(state);
+          },
+        },
+      }),
+    ];
+  },
+});
+
+const NoteImage = TiptapImage.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      align: {
+        default: "left",
+        parseHTML: (element) =>
+          (element.getAttribute("data-align") as ImageAlignment | null) || "left",
+        renderHTML: (attributes) => ({
+          "data-align": attributes.align || "left",
+        }),
+      },
+    };
+  },
+});
 
 function getClipboardImages(data: DataTransfer | null): File[] {
   const itemFiles = Array.from(data?.items || [])
@@ -129,6 +237,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const [qrCode, setQrCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadState, setImageUploadState] = useState<ImageUploadState | null>(null);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [stats, setStats] = useState({ words: 0, characters: 0 });
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -137,7 +246,10 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const versionRef = useRef(note?.version || 1);
   const dirtyRef = useRef(false);
   const mountedRef = useRef(false);
-  const pasteImageHandlerRef = useRef<(files: File[]) => void>(() => undefined);
+  const imageUploadBusyRef = useRef(false);
+  const pasteImageHandlerRef = useRef<
+    (files: File[], source: ImageUploadSource) => void
+  >(() => undefined);
   const draftKey = `woff-note-draft:${noteSlug}`;
 
   const editor = useEditor({
@@ -159,7 +271,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
           target: "_blank",
         },
       }),
-      TiptapImage.configure({
+      NoteImage.configure({
         allowBase64: false,
         resize: canEdit
           ? {
@@ -173,6 +285,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
         HTMLAttributes: { class: "note-image" },
       }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
+      ImageUploadPlaceholder,
       Placeholder.configure({
         placeholder: canEdit
           ? "Start writing… Markdown shortcuts like “# ” and “- ” work here."
@@ -190,7 +303,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
         const images = getClipboardImages(event.clipboardData);
         if (!images.length) return false;
         event.preventDefault();
-        pasteImageHandlerRef.current(images);
+        pasteImageHandlerRef.current(images, "clipboard");
         return true;
       },
     },
@@ -372,8 +485,15 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     setLinkValue("");
   };
 
-  const uploadInlineImages = useCallback(async (files: File[]) => {
+  const uploadInlineImages = useCallback(async (
+    files: File[],
+    source: ImageUploadSource = "picker",
+  ) => {
     if (!editor || !canEdit || !files.length) return;
+    if (imageUploadBusyRef.current) {
+      toast.info("An image is already uploading. It will appear at the highlighted position.");
+      return;
+    }
     const invalid = files.find((file) => !file.type.startsWith("image/"));
     if (invalid) {
       toast.error("Only images can be pasted into a note");
@@ -384,9 +504,57 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       toast.error(`${tooLarge.name || "An image"} is larger than 50 MB`);
       return;
     }
+
+    imageUploadBusyRef.current = true;
     setIsUploadingImage(true);
+    setImageUploadState({
+      total: files.length,
+      completed: 0,
+      currentName: files[0].name || "Clipboard image",
+      source,
+    });
+
+    const insertionPos = editor.state.selection.from;
+    const placeholders = files.map((file, index) => {
+      const id = `image-upload-${crypto.randomUUID()}`;
+      const previewUrl = URL.createObjectURL(file);
+      editor.view.dispatch(
+        editor.state.tr.setMeta(imageUploadPlaceholderKey, {
+          add: {
+            id,
+            pos: insertionPos,
+            previewUrl,
+            name: file.name || `Image ${index + 1}`,
+          },
+        }),
+      );
+      return { id, previewUrl };
+    });
+
+    const removePlaceholder = (id: string) => {
+      const decorations = imageUploadPlaceholderKey.getState(editor.state);
+      const position =
+        decorations?.find(
+          undefined,
+          undefined,
+          (spec) => spec.id === id,
+        )[0]?.from ?? editor.state.selection.from;
+      editor.view.dispatch(
+        editor.state.tr.setMeta(imageUploadPlaceholderKey, {
+          remove: { id },
+        }),
+      );
+      return position;
+    };
+
     try {
-      for (const file of files) {
+      for (const [index, file] of files.entries()) {
+        setImageUploadState({
+          total: files.length,
+          completed: index,
+          currentName: file.name || `Image ${index + 1}`,
+          source,
+        });
         let uploadedPath: string | null = null;
         try {
           const intent = await createUploadIntent(note.space_id, {
@@ -419,15 +587,27 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
             .split("/")
             .map(encodeURIComponent)
             .join("/")}`;
+          const position = removePlaceholder(placeholders[index].id);
+          URL.revokeObjectURL(placeholders[index].previewUrl);
           editor
             .chain()
             .focus()
-            .setImage({
-              src: url,
-              alt: file.name || "Pasted image",
-              ...dimensions,
+            .insertContentAt(position, {
+              type: "image",
+              attrs: {
+                src: url,
+                alt: file.name || "Pasted image",
+                align: "left",
+                ...dimensions,
+              },
             })
             .run();
+          setImageUploadState({
+            total: files.length,
+            completed: index + 1,
+            currentName: file.name || `Image ${index + 1}`,
+            source,
+          });
         } catch (error) {
           if (uploadedPath) {
             await supabaseBrowser.storage.from("files").remove([uploadedPath]);
@@ -439,13 +619,19 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to upload image");
     } finally {
+      placeholders.forEach(({ id, previewUrl }) => {
+        removePlaceholder(id);
+        URL.revokeObjectURL(previewUrl);
+      });
+      imageUploadBusyRef.current = false;
       setIsUploadingImage(false);
+      setImageUploadState(null);
     }
   }, [canEdit, editor, note.space_id, noteSlug]);
 
   useEffect(() => {
-    pasteImageHandlerRef.current = (files) => {
-      void uploadInlineImages(files);
+    pasteImageHandlerRef.current = (files, source) => {
+      void uploadInlineImages(files, source);
     };
     return () => {
       pasteImageHandlerRef.current = () => undefined;
@@ -464,7 +650,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       const images = getClipboardImages(event.clipboardData);
       if (!images.length) return;
       event.preventDefault();
-      void uploadInlineImages(images);
+      void uploadInlineImages(images, "clipboard");
     };
     const onDragEnter = (event: DragEvent) => {
       if (!containsFiles(event)) return;
@@ -507,7 +693,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       if (position !== undefined) {
         editor.chain().focus().setTextSelection(position).run();
       }
-      void uploadInlineImages(images);
+      void uploadInlineImages(images, "drop");
     };
 
     window.addEventListener("paste", onPaste);
@@ -523,6 +709,29 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       window.removeEventListener("drop", onDrop);
     };
   }, [canEdit, editor, uploadInlineImages]);
+
+  const setContentAlignment = (align: ImageAlignment) => {
+    if (!editor) return;
+    if (editor.isActive("image")) {
+      editor.chain().focus().updateAttributes("image", { align }).run();
+      // Tiptap's resizable image view keeps its DOM node mounted on attribute
+      // changes, so mirror the persisted value immediately for visual feedback.
+      requestAnimationFrame(() => {
+        const selectedImage = editor.view.dom.querySelector(
+          '[data-resize-container].ProseMirror-selectednode .note-image, .note-image.ProseMirror-selectednode',
+        );
+        selectedImage?.setAttribute("data-align", align);
+      });
+      return;
+    }
+    editor.chain().focus().setTextAlign(align).run();
+  };
+
+  const isAlignmentActive = (align: ImageAlignment) =>
+    Boolean(
+      editor?.isActive("image", { align }) ||
+        editor?.isActive({ textAlign: align }),
+    );
 
   const saveLabel = useMemo(() => {
     switch (saveState) {
@@ -671,13 +880,18 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
                 <Code2 className="h-4 w-4" />
               </ToolbarButton>
               <span className="mx-1 h-5 w-px bg-border" />
-              <ToolbarButton label="Align left" active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()}>
+              {editor.isActive("image") && (
+                <span className="mr-1 rounded-full bg-orange-500/10 px-2 py-1 text-[10px] font-semibold text-orange-600 dark:text-orange-400">
+                  Image alignment
+                </span>
+              )}
+              <ToolbarButton label={editor.isActive("image") ? "Align image left" : "Align left"} active={isAlignmentActive("left")} onClick={() => setContentAlignment("left")}>
                 <AlignLeft className="h-4 w-4" />
               </ToolbarButton>
-              <ToolbarButton label="Align center" active={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()}>
+              <ToolbarButton label={editor.isActive("image") ? "Align image center" : "Align center"} active={isAlignmentActive("center")} onClick={() => setContentAlignment("center")}>
                 <AlignCenter className="h-4 w-4" />
               </ToolbarButton>
-              <ToolbarButton label="Align right" active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()}>
+              <ToolbarButton label={editor.isActive("image") ? "Align image right" : "Align right"} active={isAlignmentActive("right")} onClick={() => setContentAlignment("right")}>
                 <AlignRight className="h-4 w-4" />
               </ToolbarButton>
               <ToolbarButton label="Add link" active={editor.isActive("link")} onClick={() => {
@@ -694,6 +908,47 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
               <ToolbarButton label="Upload image" disabled={isUploadingImage} onClick={() => imageInputRef.current?.click()}>
                 {isUploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
               </ToolbarButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imageUploadState && (
+        <div className="mx-auto mt-3 w-[calc(100%-1rem)] max-w-5xl" role="status" aria-live="polite">
+          <div className="overflow-hidden rounded-xl border border-orange-500/25 bg-orange-500/[0.06] shadow-sm">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">
+                  {imageUploadState.source === "clipboard" ? "Pasting" : "Uploading"}{" "}
+                  {imageUploadState.currentName}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Uploading to this note at the highlighted cursor position
+                  {imageUploadState.total > 1
+                    ? ` · ${Math.min(
+                        imageUploadState.completed + 1,
+                        imageUploadState.total,
+                      )} of ${imageUploadState.total}`
+                    : ""}
+                </p>
+              </div>
+              <span className="hidden text-xs font-medium text-orange-700 sm:inline dark:text-orange-300">
+                Keep writing—this will insert automatically
+              </span>
+            </div>
+            <div className="h-1 bg-orange-500/10">
+              <div
+                className="h-full rounded-r-full bg-orange-500 transition-all duration-300"
+                style={{
+                  width: `${Math.max(
+                    8,
+                    (imageUploadState.completed / imageUploadState.total) * 100,
+                  )}%`,
+                }}
+              />
             </div>
           </div>
         </div>
@@ -720,7 +975,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
         className="hidden"
         onChange={(event) => {
           const files = Array.from(event.target.files || []);
-          if (files.length) void uploadInlineImages(files);
+          if (files.length) void uploadInlineImages(files, "picker");
           event.target.value = "";
         }}
       />

@@ -71,7 +71,7 @@ const nextConfig = {
           "object-src 'none'",
           "frame-ancestors 'none'",
           "form-action 'self'",
-          `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""} https://www.googletagmanager.com`,
+          `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""} https://www.googletagmanager.com https://va.vercel-scripts.com`,
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' data: https://fonts.gstatic.com",
           "img-src 'self' data: blob: https://*.supabase.co https://picsum.photos https://fastly.picsum.photos",

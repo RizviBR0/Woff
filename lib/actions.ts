@@ -101,7 +101,7 @@ function sanitizeNoteHtml(value: string): string {
     allowedTags: allowedHtmlTags,
     allowedAttributes: {
       a: ["href", "target", "rel"],
-      img: ["src", "alt", "title", "width", "height"],
+      img: ["src", "alt", "title", "width", "height", "data-align"],
       span: ["data-type", "data-checked"],
       div: ["data-type"],
       li: ["data-checked"],

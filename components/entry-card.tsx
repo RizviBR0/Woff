@@ -765,6 +765,7 @@ export const EntryCard = memo(function EntryCard({
       isOpen={showGallery} 
       onClose={() => setShowGallery(false)} 
       getDownloadFilename={(index) => {
+        if (entry.meta?.presentation === "drawing") return `drawing-${entry.id}.png`;
         if (entry.text?.startsWith("DRAWING:")) return `drawing-${entry.id}.png`;
         if (entry.text?.startsWith("PHOTO:")) return `photo-${entry.id}.jpg`;
         if (entry.text?.startsWith("PHOTOS:")) return `photo-${index + 1}-${entry.id}.jpg`;
@@ -777,7 +778,7 @@ export const EntryCard = memo(function EntryCard({
   if (entry.id.startsWith("placeholder-")) {
     const meta = entry.meta || {};
     const metaType = meta.type || "";
-    const isError = !entry.isLoading;
+    const isError = Boolean(entry.isError);
 
     // Determine icon and label based on meta type
     let icon = "📤";
@@ -1151,6 +1152,86 @@ export const EntryCard = memo(function EntryCard({
         </div>
       </div>
     );
+  }
+
+  if (
+    entry.kind === "file" &&
+    entry.meta?.type === "files" &&
+    entry.meta?.presentation === "drawing"
+  ) {
+    const drawing = entry.meta.items?.[0] as
+      | { name?: string; url?: string; path?: string }
+      | undefined;
+    const drawingUrl = drawing?.url;
+
+    if (drawingUrl) {
+      return (
+        <>
+          <div
+            id={`entry-${entry.id}`}
+            onContextMenu={handleContextMenu}
+            className="group relative mb-4 flex items-start gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-accent/30 dark:hover:bg-accent/20"
+          >
+            <ActionsMenu />
+            {avatar}
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-baseline gap-2">
+                <span
+                  className={`text-sm font-semibold ${
+                    isMine ? "text-blue-600 dark:text-blue-400" : "text-foreground"
+                  }`}
+                >
+                  {nameLabel}
+                </span>
+                <span className="text-xs text-muted-foreground/60">
+                  {formatTime(entry.created_at)}
+                </span>
+                <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] font-semibold text-orange-600 dark:text-orange-400">
+                  Drawing
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleView(drawingUrl)}
+                className="mt-2 block max-w-full overflow-hidden rounded-2xl border border-border/40 bg-white p-2 text-left shadow-sm transition hover:ring-2 hover:ring-orange-500/20 dark:bg-neutral-900"
+                aria-label="Open drawing"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={drawingUrl}
+                  alt={drawing.name || "Shared drawing"}
+                  className="max-h-[450px] max-w-full rounded-xl object-contain"
+                />
+              </button>
+              <div className="mt-2 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => handleView(drawingUrl)}
+                >
+                  <Eye className="mr-1 h-3 w-3" />
+                  View
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() =>
+                    handleDownload(drawingUrl, drawing.name || `drawing-${entry.id}.png`)
+                  }
+                >
+                  <Download className="mr-1 h-3 w-3" />
+                  Download
+                </Button>
+              </div>
+            </div>
+          </div>
+          {globalViewerModal}
+          <Dialogs />
+        </>
+      );
+    }
   }
 
   if (entry.kind === "text" && entry.text) {
