@@ -197,69 +197,106 @@
 }
 
 .note-image-upload-placeholder {
-  display: flex;
-  width: min(100%, 28rem);
-  min-height: 5.5rem;
-  align-items: center;
-  gap: 0.75rem;
+  display: block;
+  width: 100%;
   margin: 1rem 0;
-  padding: 0.65rem;
-  border: 1px dashed rgb(249 115 22 / 55%);
-  border-radius: 0.85rem;
-  background: rgb(249 115 22 / 7%);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 5%);
-  color: hsl(var(--foreground));
   vertical-align: middle;
 }
 
 .note-image-upload-placeholder__preview {
   position: relative;
-  width: 5.5rem;
-  height: 4rem;
-  flex: none;
+  display: inline-block;
+  max-width: 100%;
   overflow: hidden;
-  border-radius: 0.6rem;
+  border-radius: 0.75rem;
   background: hsl(var(--muted));
+  box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
 }
 
 .note-image-upload-placeholder__preview > img {
-  width: 5.5rem;
-  height: 4rem;
-  object-fit: cover;
-  opacity: 0.38;
-  filter: saturate(0.75);
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 34rem;
+  object-fit: contain;
+  border-radius: inherit;
 }
 
-.note-image-upload-placeholder__shimmer {
+.note-image-upload-placeholder__overlay {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 20%,
-    rgb(255 255 255 / 58%) 46%,
-    transparent 72%
-  );
-  transform: translateX(-120%);
-  animation: note-image-skeleton 1.25s ease-in-out infinite;
-}
-
-.note-image-upload-placeholder__message {
   display: flex;
-  min-width: 0;
+  top: 0.65rem;
+  right: 0.65rem;
+  width: 2rem;
+  height: 2rem;
   align-items: center;
-  gap: 0.55rem;
-  font-size: 0.8rem;
-  font-weight: 600;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 62%);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 18%);
+  backdrop-filter: blur(6px);
+  transition: inset 160ms ease, width 160ms ease, height 160ms ease,
+    border-radius 160ms ease, background-color 160ms ease;
 }
 
 .note-image-upload-placeholder__spinner {
   width: 1rem;
   height: 1rem;
   flex: none;
-  border: 2px solid rgb(249 115 22 / 25%);
-  border-top-color: rgb(249 115 22);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-top-color: white;
   border-radius: 999px;
   animation: spin 0.8s linear infinite;
+}
+
+.note-image-upload-placeholder__retry {
+  display: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 55%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 92%);
+  color: rgb(194 65 12);
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 5px 18px rgb(0 0 0 / 25%);
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.note-image-upload-placeholder__retry:hover {
+  transform: scale(1.06);
+  background: white;
+}
+
+.note-image-upload-placeholder.is-failed
+  .note-image-upload-placeholder__preview
+  > img {
+  opacity: 0.72;
+}
+
+.note-image-upload-placeholder.is-failed
+  .note-image-upload-placeholder__overlay {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: rgb(0 0 0 / 32%);
+}
+
+.note-image-upload-placeholder.is-failed
+  .note-image-upload-placeholder__spinner {
+  display: none;
+}
+
+.note-image-upload-placeholder.is-failed
+  .note-image-upload-placeholder__retry {
+  display: flex;
 }
 
 .note-editor-content .tiptap p.is-editor-empty:first-child::before {
@@ -274,10 +311,10 @@
   content: none;
 }
 
-@keyframes note-image-skeleton {
-  to {
-    transform: translateX(120%);
-  }
+.note-editor-content
+  .tiptap:has(.note-image-upload-placeholder)
+  p.is-editor-empty:first-child::before {
+  content: none;
 }
 
 @layer base {

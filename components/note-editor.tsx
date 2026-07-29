@@ -73,13 +73,6 @@ interface NoteEditorProps {
 
 type SaveState = "saved" | "unsaved" | "saving" | "error" | "offline";
 type ImageAlignment = "left" | "center" | "right";
-type ImageUploadSource = "clipboard" | "drop" | "picker";
-type ImageUploadState = {
-  total: number;
-  completed: number;
-  currentName: string;
-  source: ImageUploadSource;
-};
 
 const imageUploadPlaceholderKey = new PluginKey<DecorationSet>(
   "imageUploadPlaceholder",
@@ -102,48 +95,60 @@ const ImageUploadPlaceholder = Extension.create({
                     pos: number;
                     previewUrl: string;
                     name: string;
+                    order: number;
+                    retry: () => void;
                   };
                   remove?: { id: string };
                 }
               | undefined;
 
             if (action?.add) {
-              const { id, pos, previewUrl, name } = action.add;
+              const { id, pos, previewUrl, name, order, retry } = action.add;
               const widget = Decoration.widget(
                 pos,
                 () => {
                   const container = document.createElement("span");
                   container.className = "note-image-upload-placeholder";
+                  container.dataset.imageUploadId = id;
                   container.setAttribute("role", "status");
                   container.setAttribute("aria-label", `Uploading ${name} here`);
 
                   const preview = document.createElement("img");
                   preview.src = previewUrl;
-                  preview.alt = "";
+                  preview.alt = `Preview of ${name}`;
 
-                  const previewSkeleton = document.createElement("span");
-                  previewSkeleton.className = "note-image-upload-placeholder__preview";
+                  const previewContainer = document.createElement("span");
+                  previewContainer.className = "note-image-upload-placeholder__preview";
 
-                  const shimmer = document.createElement("span");
-                  shimmer.className = "note-image-upload-placeholder__shimmer";
-                  shimmer.setAttribute("aria-hidden", "true");
-                  previewSkeleton.append(preview, shimmer);
-
-                  const message = document.createElement("span");
-                  message.className = "note-image-upload-placeholder__message";
+                  const overlay = document.createElement("span");
+                  overlay.className = "note-image-upload-placeholder__overlay";
 
                   const spinner = document.createElement("span");
                   spinner.className = "note-image-upload-placeholder__spinner";
                   spinner.setAttribute("aria-hidden", "true");
 
-                  const text = document.createElement("span");
-                  text.textContent = "Uploading image here…";
+                  const retryButton = document.createElement("button");
+                  retryButton.type = "button";
+                  retryButton.className = "note-image-upload-placeholder__retry";
+                  retryButton.title = "Retry image upload";
+                  retryButton.setAttribute("aria-label", `Retry uploading ${name}`);
+                  retryButton.textContent = "↻";
+                  retryButton.addEventListener("mousedown", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  });
+                  retryButton.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    retry();
+                  });
 
-                  message.append(spinner, text);
-                  container.append(previewSkeleton, message);
+                  overlay.append(spinner, retryButton);
+                  previewContainer.append(preview, overlay);
+                  container.append(previewContainer);
                   return container;
                 },
-                { id, side: -1 },
+                { id, side: order + 1 },
               );
               next = next.add(transaction.doc, [widget]);
             }
@@ -245,7 +250,6 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const [qrCode, setQrCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [imageUploadState, setImageUploadState] = useState<ImageUploadState | null>(null);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [stats, setStats] = useState({ words: 0, characters: 0 });
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -255,9 +259,8 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const dirtyRef = useRef(false);
   const mountedRef = useRef(false);
   const imageUploadBusyRef = useRef(false);
-  const pasteImageHandlerRef = useRef<
-    (files: File[], source: ImageUploadSource) => void
-  >(() => undefined);
+  const pendingImagePreviewsRef = useRef<Map<string, string>>(new Map());
+  const pasteImageHandlerRef = useRef<(files: File[]) => void>(() => undefined);
   const draftKey = `woff-note-draft:${noteSlug}`;
 
   const editor = useEditor({
@@ -311,7 +314,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
         const images = getClipboardImages(event.clipboardData);
         if (!images.length) return false;
         event.preventDefault();
-        pasteImageHandlerRef.current(images, "clipboard");
+        pasteImageHandlerRef.current(images);
         return true;
       },
     },
@@ -391,6 +394,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
 
   useEffect(() => {
     mountedRef.current = true;
+    const pendingImagePreviews = pendingImagePreviewsRef.current;
     if (editor) {
       const text = editor.getText();
       setStats({
@@ -428,12 +432,19 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     return () => {
       mountedRef.current = false;
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      pendingImagePreviews.forEach((url) => URL.revokeObjectURL(url));
+      pendingImagePreviews.clear();
     };
   }, [canEdit, draftKey, editor, note.title, note.updated_at]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (!dirtyRef.current) return;
+      if (
+        !dirtyRef.current &&
+        pendingImagePreviewsRef.current.size === 0
+      ) {
+        return;
+      }
       event.preventDefault();
       event.returnValue = "";
     };
@@ -493,13 +504,10 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     setLinkValue("");
   };
 
-  const uploadInlineImages = useCallback(async (
-    files: File[],
-    source: ImageUploadSource = "picker",
-  ) => {
+  const uploadInlineImages = useCallback(async (files: File[]) => {
     if (!editor || !canEdit || !files.length) return;
     if (imageUploadBusyRef.current) {
-      toast.info("An image is already uploading. It will appear at the highlighted position.");
+      toast.info("Another image is uploading in the background");
       return;
     }
     const invalid = files.find((file) => !file.type.startsWith("image/"));
@@ -513,19 +521,73 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       return;
     }
 
-    imageUploadBusyRef.current = true;
-    setIsUploadingImage(true);
-    setImageUploadState({
-      total: files.length,
-      completed: 0,
-      currentName: files[0].name || "Clipboard image",
-      source,
-    });
-
     const insertionPos = editor.state.selection.from;
-    const placeholders = files.map((file, index) => {
+    type PendingImage = {
+      id: string;
+      previewUrl: string;
+      file: File;
+      index: number;
+      status: "pending" | "uploading" | "failed" | "complete";
+    };
+    const placeholders: PendingImage[] = [];
+    let processQueue: (startIndex: number) => Promise<void>;
+
+    const setPlaceholderStatus = (
+      placeholder: PendingImage,
+      status: PendingImage["status"],
+    ) => {
+      placeholder.status = status;
+      const container = editor.view.dom.querySelector<HTMLElement>(
+        `[data-image-upload-id="${placeholder.id}"]`,
+      );
+      if (!container) return;
+      container.classList.toggle("is-failed", status === "failed");
+      container.classList.toggle("is-uploading", status === "uploading");
+      if (status === "failed") {
+        container.setAttribute("role", "alert");
+        container.setAttribute(
+          "aria-label",
+          `${placeholder.file.name || "Image"} failed to upload. Select retry.`,
+        );
+      } else {
+        container.setAttribute("role", "status");
+        container.setAttribute(
+          "aria-label",
+          `Uploading ${placeholder.file.name || "image"} in the background`,
+        );
+      }
+    };
+
+    const removePlaceholder = (placeholder: PendingImage) => {
+      const decorations = imageUploadPlaceholderKey.getState(editor.state);
+      const position =
+        decorations?.find(
+          undefined,
+          undefined,
+          (spec) => spec.id === placeholder.id,
+        )[0]?.from ?? editor.state.selection.from;
+      editor.view.dispatch(
+        editor.state.tr.setMeta(imageUploadPlaceholderKey, {
+          remove: { id: placeholder.id },
+        }),
+      );
+      pendingImagePreviewsRef.current.delete(placeholder.id);
+      URL.revokeObjectURL(placeholder.previewUrl);
+      return position;
+    };
+
+    files.forEach((file, index) => {
       const id = `image-upload-${crypto.randomUUID()}`;
       const previewUrl = URL.createObjectURL(file);
+      pendingImagePreviewsRef.current.set(id, previewUrl);
+      const placeholder: PendingImage = {
+        id,
+        previewUrl,
+        file,
+        index,
+        status: "pending",
+      };
+      placeholders.push(placeholder);
       editor.view.dispatch(
         editor.state.tr.setMeta(imageUploadPlaceholderKey, {
           add: {
@@ -533,113 +595,128 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
             pos: insertionPos,
             previewUrl,
             name: file.name || `Image ${index + 1}`,
+            order: index,
+            retry: () => {
+              if (placeholder.status !== "failed") return;
+              void processQueue(index);
+            },
           },
         }),
       );
-      return { id, previewUrl };
     });
 
-    const removePlaceholder = (id: string) => {
-      const decorations = imageUploadPlaceholderKey.getState(editor.state);
-      const position =
-        decorations?.find(
-          undefined,
-          undefined,
-          (spec) => spec.id === id,
-        )[0]?.from ?? editor.state.selection.from;
-      editor.view.dispatch(
-        editor.state.tr.setMeta(imageUploadPlaceholderKey, {
-          remove: { id },
-        }),
-      );
-      return position;
+    const uploadOne = async (placeholder: PendingImage) => {
+      const { file } = placeholder;
+      setPlaceholderStatus(placeholder, "uploading");
+      let uploadedPath: string | null = null;
+      try {
+        const intent = await createUploadIntent(note.space_id, {
+          name: file.name || `pasted-image-${Date.now()}.png`,
+          size: file.size,
+          type: file.type,
+        });
+        const { error } = await supabaseBrowser.storage
+          .from(intent.bucket)
+          .upload(intent.path, file, {
+            contentType: file.type,
+            upsert: false,
+          });
+        if (error) throw error;
+        uploadedPath = intent.path;
+        const dimensions = await createImageBitmap(file)
+          .then((bitmap) => {
+            const result = { width: bitmap.width, height: bitmap.height };
+            bitmap.close();
+            return result;
+          })
+          .catch(() => ({}));
+        await registerNoteAsset(noteSlug, {
+          path: intent.path,
+          type: file.type,
+          size: file.size,
+          ...dimensions,
+        });
+        const url = `/api/files/${intent.path
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}`;
+        // Warm and decode the permanent URL before swapping out the local
+        // preview. The replacement is then visually seamless instead of
+        // showing a second loading phase.
+        const permanentImage = new window.Image();
+        permanentImage.src = url;
+        await permanentImage.decode().catch(() => undefined);
+        const position = removePlaceholder(placeholder);
+        placeholder.status = "complete";
+        // Do not move focus: the user can keep writing while this transaction
+        // replaces the mapped local preview in the background.
+        editor
+          .chain()
+          .insertContentAt(position, {
+            type: "image",
+            attrs: {
+              src: url,
+              alt: file.name || "Pasted image",
+              align: "left",
+              ...dimensions,
+            },
+          })
+          .run();
+        return true;
+      } catch (error) {
+        if (uploadedPath) {
+          await supabaseBrowser.storage.from("files").remove([uploadedPath]);
+        }
+        setPlaceholderStatus(placeholder, "failed");
+        toast.error(
+          error instanceof Error
+            ? `${error.message}. Select retry on the image.`
+            : "Image upload failed. Select retry on the image.",
+        );
+        return false;
+      }
     };
 
-    try {
-      for (const [index, file] of files.entries()) {
-        setImageUploadState({
-          total: files.length,
-          completed: index,
-          currentName: file.name || `Image ${index + 1}`,
-          source,
-        });
-        let uploadedPath: string | null = null;
-        try {
-          const intent = await createUploadIntent(note.space_id, {
-            name: file.name || `pasted-image-${Date.now()}.png`,
-            size: file.size,
-            type: file.type,
-          });
-          const { error } = await supabaseBrowser.storage
-            .from(intent.bucket)
-            .upload(intent.path, file, {
-              contentType: file.type,
-              upsert: false,
-            });
-          if (error) throw error;
-          uploadedPath = intent.path;
-          const dimensions = await createImageBitmap(file)
-            .then((bitmap) => {
-              const result = { width: bitmap.width, height: bitmap.height };
-              bitmap.close();
-              return result;
-            })
-            .catch(() => ({}));
-          await registerNoteAsset(noteSlug, {
-            path: intent.path,
-            type: file.type,
-            size: file.size,
-            ...dimensions,
-          });
-          const url = `/api/files/${intent.path
-            .split("/")
-            .map(encodeURIComponent)
-            .join("/")}`;
-          const position = removePlaceholder(placeholders[index].id);
-          URL.revokeObjectURL(placeholders[index].previewUrl);
-          editor
-            .chain()
-            .focus()
-            .insertContentAt(position, {
-              type: "image",
-              attrs: {
-                src: url,
-                alt: file.name || "Pasted image",
-                align: "left",
-                ...dimensions,
-              },
-            })
-            .run();
-          setImageUploadState({
-            total: files.length,
-            completed: index + 1,
-            currentName: file.name || `Image ${index + 1}`,
-            source,
-          });
-        } catch (error) {
-          if (uploadedPath) {
-            await supabaseBrowser.storage.from("files").remove([uploadedPath]);
-          }
-          throw error;
-        }
+    processQueue = async (startIndex: number) => {
+      if (imageUploadBusyRef.current) {
+        toast.info("Another image is uploading in the background");
+        return;
       }
-      toast.success(files.length === 1 ? "Image added" : `${files.length} images added`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to upload image");
-    } finally {
-      placeholders.forEach(({ id, previewUrl }) => {
-        removePlaceholder(id);
-        URL.revokeObjectURL(previewUrl);
-      });
-      imageUploadBusyRef.current = false;
-      setIsUploadingImage(false);
-      setImageUploadState(null);
-    }
+      imageUploadBusyRef.current = true;
+      setIsUploadingImage(true);
+      let allComplete = true;
+      try {
+        // Keep replacements ordered. If one fails, later previews remain in
+        // place and resume automatically after that image is retried.
+        for (let index = startIndex; index < placeholders.length; index += 1) {
+          const placeholder = placeholders[index];
+          if (placeholder.status === "complete") continue;
+          const uploaded = await uploadOne(placeholder);
+          if (!uploaded) {
+            allComplete = false;
+            break;
+          }
+        }
+      } finally {
+        imageUploadBusyRef.current = false;
+        setIsUploadingImage(false);
+      }
+
+      if (allComplete && placeholders.every((item) => item.status === "complete")) {
+        toast.success(
+          placeholders.length === 1
+            ? "Image uploaded"
+            : `${placeholders.length} images uploaded in order`,
+        );
+      }
+    };
+
+    await processQueue(0);
   }, [canEdit, editor, note.space_id, noteSlug]);
 
   useEffect(() => {
-    pasteImageHandlerRef.current = (files, source) => {
-      void uploadInlineImages(files, source);
+    pasteImageHandlerRef.current = (files) => {
+      void uploadInlineImages(files);
     };
     return () => {
       pasteImageHandlerRef.current = () => undefined;
@@ -658,7 +735,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       const images = getClipboardImages(event.clipboardData);
       if (!images.length) return;
       event.preventDefault();
-      void uploadInlineImages(images, "clipboard");
+      void uploadInlineImages(images);
     };
     const onDragEnter = (event: DragEvent) => {
       if (!containsFiles(event)) return;
@@ -701,7 +778,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       if (position !== undefined) {
         editor.chain().focus().setTextSelection(position).run();
       }
-      void uploadInlineImages(images, "drop");
+      void uploadInlineImages(images);
     };
 
     window.addEventListener("paste", onPaste);
@@ -921,47 +998,6 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
         </div>
       )}
 
-      {imageUploadState && (
-        <div className="mx-auto mt-3 w-[calc(100%-1rem)] max-w-5xl" role="status" aria-live="polite">
-          <div className="overflow-hidden rounded-xl border border-orange-500/25 bg-orange-500/[0.06] shadow-sm">
-            <div className="flex items-center gap-3 px-4 py-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600">
-                <Loader2 className="h-4 w-4 animate-spin" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">
-                  {imageUploadState.source === "clipboard" ? "Pasting" : "Uploading"}{" "}
-                  {imageUploadState.currentName}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Uploading to this note at the highlighted cursor position
-                  {imageUploadState.total > 1
-                    ? ` · ${Math.min(
-                        imageUploadState.completed + 1,
-                        imageUploadState.total,
-                      )} of ${imageUploadState.total}`
-                    : ""}
-                </p>
-              </div>
-              <span className="hidden text-xs font-medium text-orange-700 sm:inline dark:text-orange-300">
-                Keep writing—this will insert automatically
-              </span>
-            </div>
-            <div className="h-1 bg-orange-500/10">
-              <div
-                className="h-full rounded-r-full bg-orange-500 transition-all duration-300"
-                style={{
-                  width: `${Math.max(
-                    8,
-                    (imageUploadState.completed / imageUploadState.total) * 100,
-                  )}%`,
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       <main className="mx-auto w-full max-w-5xl px-2 py-4 sm:px-6 sm:py-8">
         <article className="min-h-[calc(100vh-11rem)] overflow-hidden rounded-xl border bg-background shadow-sm sm:rounded-2xl">
           <EditorContent
@@ -985,7 +1021,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
         className="hidden"
         onChange={(event) => {
           const files = Array.from(event.target.files || []);
-          if (files.length) void uploadInlineImages(files, "picker");
+          if (files.length) void uploadInlineImages(files);
           event.target.value = "";
         }}
       />
