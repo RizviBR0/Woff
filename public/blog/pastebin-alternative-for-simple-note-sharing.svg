@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg5" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#09090b"/>
+      <stop offset="50%" stop-color="#141416"/>
+      <stop offset="100%" stop-color="#18181b"/>
+    </linearGradient>
+    <filter id="glow5" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="70" result="blur"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg5)"/>
+
+  <!-- Subtle Grid -->
+  <g stroke="#ffffff" stroke-opacity="0.03" stroke-width="1">
+    <line x1="0" y1="105" x2="1200" y2="105"/>
+    <line x1="0" y1="210" x2="1200" y2="210"/>
+    <line x1="0" y1="315" x2="1200" y2="315"/>
+    <line x1="0" y1="420" x2="1200" y2="420"/>
+    <line x1="0" y1="525" x2="1200" y2="525"/>
+    <line x1="200" y1="0" x2="200" y2="630"/>
+    <line x1="400" y1="0" x2="400" y2="630"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="800" y1="0" x2="800" y2="630"/>
+    <line x1="1000" y1="0" x2="1000" y2="630"/>
+  </g>
+
+  <circle cx="950" cy="300" r="180" fill="#f97316" opacity="0.15" filter="url(#glow5)"/>
+  <circle cx="350" cy="200" r="140" fill="#a855f7" opacity="0.12" filter="url(#glow5)"/>
+
+  <!-- Top Badge -->
+  <g transform="translate(80, 75)">
+    <rect width="170" height="32" rx="16" fill="#a855f7" fill-opacity="0.15" stroke="#a855f7" stroke-opacity="0.4"/>
+    <text x="85" y="21" text-anchor="middle" fill="#c084fc" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="12" letter-spacing="1.5">COMPARISON</text>
+  </g>
+
+  <!-- Left Header -->
+  <text x="80" y="170" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" letter-spacing="-1">
+    Pastebin Alternative
+  </text>
+  <text x="80" y="225" fill="#f97316" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" letter-spacing="-1">
+    For Simple Note Sharing
+  </text>
+  <text x="80" y="275" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="18">
+    Beyond raw text: rich markdown, image cards,
+  </text>
+  <text x="80" y="302" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="18">
+    files, and modern temporary spaces.
+  </text>
+
+  <g transform="translate(80, 360)">
+    <rect width="140" height="36" rx="8" fill="#18181b" stroke="#27272a"/>
+    <text x="70" y="23" text-anchor="middle" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">✨ Rich Notes</text>
+
+    <rect x="155" width="140" height="36" rx="8" fill="#18181b" stroke="#27272a"/>
+    <text x="225" y="23" text-anchor="middle" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">🖼️ Image Handoff</text>
+
+    <rect x="310" width="130" height="36" rx="8" fill="#18181b" stroke="#27272a"/>
+    <text x="375" y="23" text-anchor="middle" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">⚡ 0s Setup</text>
+  </g>
+
+  <!-- Right Visual: Split Comparison Modern Woff vs Legacy Pastebin -->
+  <g transform="translate(560, 95)">
+    <!-- Legacy Paste Card (Background, Left Tilt) -->
+    <g transform="translate(0, 40) rotate(-2)">
+      <rect width="250" height="340" rx="12" fill="#1c1917" stroke="#44403c" stroke-dasharray="4 3"/>
+      <rect x="16" y="16" width="90" height="14" rx="4" fill="#57534e"/>
+      <text x="16" y="48" fill="#78716c" font-family="monospace" font-size="11">Raw Paste (Plain text only)</text>
+      <rect x="16" y="66" width="210" height="6" rx="3" fill="#292524"/>
+      <rect x="16" y="78" width="190" height="6" rx="3" fill="#292524"/>
+      <rect x="16" y="90" width="170" height="6" rx="3" fill="#292524"/>
+      <rect x="16" y="102" width="150" height="6" rx="3" fill="#292524"/>
+      <text x="16" y="140" fill="#ef4444" font-family="system-ui, sans-serif" font-size="11" font-weight="600">✕ No formatted notes</text>
+      <text x="16" y="165" fill="#ef4444" font-family="system-ui, sans-serif" font-size="11" font-weight="600">✕ No image markup</text>
+    </g>
+
+    <!-- Modern Woff Card (Foreground, glowing) -->
+    <g transform="translate(180, 0)">
+      <rect width="360" height="430" rx="18" fill="#09090b" stroke="#f97316" stroke-width="2"/>
+      
+      <!-- Top header -->
+      <rect width="360" height="46" rx="18" fill="#18181b"/>
+      <circle cx="20" cy="23" r="4.5" fill="#ef4444"/>
+      <circle cx="34" cy="23" r="4.5" fill="#eab308"/>
+      <circle cx="48" cy="23" r="4.5" fill="#22c55e"/>
+      <text x="180" y="27" text-anchor="middle" fill="#f97316" font-family="system-ui, sans-serif" font-weight="700" font-size="12">Woff Modern Space</text>
+
+      <!-- Rich Card Content -->
+      <g transform="translate(20, 65)">
+        <text x="0" y="20" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="700" font-size="17">Design Feedback &amp; Assets</text>
+        <text x="0" y="44" fill="#a1a1aa" font-family="system-ui, sans-serif" font-size="13">Notes, images, and snippets combined.</text>
+
+        <!-- Media Attachment Mockup -->
+        <g transform="translate(0, 62)">
+          <rect width="320" height="100" rx="10" fill="#18181b" stroke="#27272a"/>
+          <rect x="15" y="15" width="70" height="70" rx="8" fill="#f97316" fill-opacity="0.2"/>
+          <text x="50" y="55" text-anchor="middle" fill="#f97316" font-size="20">🖼️</text>
+          <text x="100" y="42" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="600" font-size="13">header-mockup.png</text>
+          <text x="100" y="62" fill="#71717a" font-family="monospace" font-size="11">1.2 MB • Ready to download</text>
+        </g>
+
+        <!-- Code Block Pill -->
+        <g transform="translate(0, 180)">
+          <rect width="320" height="60" rx="10" fill="#18181b" stroke="#27272a"/>
+          <text x="16" y="26" fill="#38bdf8" font-family="monospace" font-size="11">const shareUrl = "woff.space/821";</text>
+          <text x="16" y="46" fill="#22c55e" font-family="monospace" font-size="11">✓ Instant no-account access</text>
+        </g>
+
+        <!-- Bottom Link button -->
+        <g transform="translate(0, 260)">
+          <rect width="320" height="38" rx="8" fill="#f97316"/>
+          <text x="160" y="24" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="700" font-size="12">Share Everything with 1 Link ↗</text>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

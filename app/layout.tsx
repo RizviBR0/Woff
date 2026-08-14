@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/toaster";
 import { Almarai } from "next/font/google";
 import { PrivacySafeAnalytics } from "@/components/privacy-safe-analytics";
 

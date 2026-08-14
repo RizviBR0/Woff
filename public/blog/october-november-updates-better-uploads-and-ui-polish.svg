@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg19" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#09090b"/>
+      <stop offset="50%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#18181b"/>
+    </linearGradient>
+    <filter id="glow19" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="70" result="blur"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg19)"/>
+
+  <!-- Subtle Grid -->
+  <g stroke="#ffffff" stroke-opacity="0.03" stroke-width="1">
+    <line x1="0" y1="105" x2="1200" y2="105"/>
+    <line x1="0" y1="210" x2="1200" y2="210"/>
+    <line x1="0" y1="315" x2="1200" y2="315"/>
+    <line x1="0" y1="420" x2="1200" y2="420"/>
+    <line x1="0" y1="525" x2="1200" y2="525"/>
+    <line x1="200" y1="0" x2="200" y2="630"/>
+    <line x1="400" y1="0" x2="400" y2="630"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="800" y1="0" x2="800" y2="630"/>
+    <line x1="1000" y1="0" x2="1000" y2="630"/>
+  </g>
+
+  <circle cx="850" cy="280" r="180" fill="#38bdf8" opacity="0.16" filter="url(#glow19)"/>
+  <circle cx="280" cy="380" r="140" fill="#f97316" opacity="0.12" filter="url(#glow19)"/>
+
+  <!-- Top Badge -->
+  <g transform="translate(80, 75)">
+    <rect width="175" height="32" rx="16" fill="#38bdf8" fill-opacity="0.15" stroke="#38bdf8" stroke-opacity="0.4"/>
+    <text x="87" y="21" text-anchor="middle" fill="#38bdf8" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="12" letter-spacing="1.5">PRODUCT CHANGELOG</text>
+  </g>
+
+  <!-- Left Header -->
+  <text x="80" y="170" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" letter-spacing="-1">
+    Woff Product Updates:
+  </text>
+  <text x="80" y="225" fill="#38bdf8" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" letter-spacing="-1">
+    Better Uploads &amp; Polish
+  </text>
+  <text x="80" y="275" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="18">
+    Reliable multi-file batch uploads, richer media
+  </text>
+  <text x="80" y="302" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="18">
+    previews, and clearer realtime room activity.
+  </text>
+
+  <g transform="translate(80, 360)">
+    <rect width="130" height="36" rx="8" fill="#18181b" stroke="#27272a"/>
+    <text x="65" y="23" text-anchor="middle" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">📦 Batch Upload</text>
+
+    <rect x="145" width="130" height="36" rx="8" fill="#18181b" stroke="#27272a"/>
+    <text x="210" y="23" text-anchor="middle" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">🖼️ Media Viewer</text>
+
+    <rect x="290" width="130" height="36" rx="8" fill="#18181b" stroke="#27272a"/>
+    <text x="355" y="23" text-anchor="middle" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">⚡ Fast Rooms</text>
+  </g>
+
+  <!-- Right Visual: Batch Upload Progress & Media Showcase -->
+  <g transform="translate(560, 95)">
+    <rect width="560" height="440" rx="18" fill="#09090b" stroke="#27272a" stroke-width="1.5"/>
+    
+    <!-- Top Header -->
+    <rect width="560" height="50" rx="18" fill="#18181b"/>
+    <text x="30" y="32" fill="#38bdf8" font-family="system-ui, sans-serif" font-weight="700" font-size="15">🚀 Release v2.4 Overview</text>
+    
+    <g transform="translate(420, 12)">
+      <rect width="110" height="26" rx="6" fill="#22c55e"/>
+      <text x="55" y="17" text-anchor="middle" fill="#09090b" font-family="system-ui, sans-serif" font-weight="700" font-size="11">Deployed Live</text>
+    </g>
+
+    <!-- Upload Batch Component -->
+    <g transform="translate(30, 75)">
+      <!-- File 1 Upload -->
+      <g transform="translate(0, 0)">
+        <rect width="500" height="60" rx="10" fill="#18181b" stroke="#27272a"/>
+        <text x="20" y="26" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="600" font-size="13">📸 hero_banner_4k.png (4.8 MB)</text>
+        <text x="440" y="26" text-anchor="end" fill="#22c55e" font-family="monospace" font-size="11">100% Uploaded</text>
+        <!-- Progress bar -->
+        <rect x="20" y="38" width="460" height="6" rx="3" fill="#27272a"/>
+        <rect x="20" y="38" width="460" height="6" rx="3" fill="#22c55e"/>
+      </g>
+
+      <!-- File 2 Upload -->
+      <g transform="translate(0, 70)">
+        <rect width="500" height="60" rx="10" fill="#18181b" stroke="#27272a"/>
+        <text x="20" y="26" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="600" font-size="13">📊 quarterly_metrics.pdf (1.2 MB)</text>
+        <text x="440" y="26" text-anchor="end" fill="#22c55e" font-family="monospace" font-size="11">100% Uploaded</text>
+        <rect x="20" y="38" width="460" height="6" rx="3" fill="#27272a"/>
+        <rect x="20" y="38" width="460" height="6" rx="3" fill="#22c55e"/>
+      </g>
+
+      <!-- Download as ZIP banner -->
+      <g transform="translate(0, 145)">
+        <rect width="500" height="50" rx="10" fill="#1e293b" stroke="#38bdf8"/>
+        <text x="20" y="31" fill="#38bdf8" font-family="system-ui, sans-serif" font-weight="700" font-size="13">📦 Multi-File ZIP Package Ready</text>
+        
+        <rect x="360" y="10" width="120" height="30" rx="6" fill="#38bdf8"/>
+        <text x="420" y="29" text-anchor="middle" fill="#09090b" font-family="system-ui, sans-serif" font-weight="700" font-size="11">Download All ⬇</text>
+      </g>
+
+      <!-- Real-time presence indicator -->
+      <g transform="translate(0, 210)">
+        <rect width="500" height="45" rx="8" fill="#18181b" stroke="#27272a"/>
+        <circle cx="25" cy="22" r="5" fill="#22c55e"/>
+        <text x="40" y="27" fill="#a1a1aa" font-family="system-ui, sans-serif" font-size="12">Realtime presence active • 4 participants in room</text>
+      </g>
+    </g>
+  </g>
+</svg>

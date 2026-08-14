@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg9" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#09090b"/>
+      <stop offset="50%" stop-color="#0c1829"/>
+      <stop offset="100%" stop-color="#172554"/>
+    </linearGradient>
+    <filter id="glow9" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="70" result="blur"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg9)"/>
+
+  <!-- Subtle Grid -->
+  <g stroke="#ffffff" stroke-opacity="0.03" stroke-width="1">
+    <line x1="0" y1="105" x2="1200" y2="105"/>
+    <line x1="0" y1="210" x2="1200" y2="210"/>
+    <line x1="0" y1="315" x2="1200" y2="315"/>
+    <line x1="0" y1="420" x2="1200" y2="420"/>
+    <line x1="0" y1="525" x2="1200" y2="525"/>
+    <line x1="200" y1="0" x2="200" y2="630"/>
+    <line x1="400" y1="0" x2="400" y2="630"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="800" y1="0" x2="800" y2="630"/>
+    <line x1="1000" y1="0" x2="1000" y2="630"/>
+  </g>
+
+  <circle cx="850" cy="280" r="180" fill="#3b82f6" opacity="0.15" filter="url(#glow9)"/>
+  <circle cx="280" cy="380" r="140" fill="#f97316" opacity="0.12" filter="url(#glow9)"/>
+
+  <!-- Top Badge -->
+  <g transform="translate(80, 75)">
+    <rect width="165" height="32" rx="16" fill="#3b82f6" fill-opacity="0.2" stroke="#3b82f6" stroke-opacity="0.5"/>
+    <text x="82" y="21" text-anchor="middle" fill="#60a5fa" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="12" letter-spacing="1.5">REMOTE TEAMS</text>
+  </g>
+
+  <!-- Left Header -->
+  <text x="80" y="170" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" letter-spacing="-1">
+    Fastest Way to Share
+  </text>
+  <text x="80" y="225" fill="#60a5fa" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" letter-spacing="-1">
+    Meeting Notes Online
+  </text>
+  <text x="80" y="275" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="18">
+    Capture decisions and action items immediately after
+  </text>
+  <text x="80" y="302" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="18">
+    a call without document onboarding friction.
+  </text>
+
+  <g transform="translate(80, 360)">
+    <rect width="130" height="36" rx="8" fill="#1e293b" stroke="#334155"/>
+    <text x="65" y="23" text-anchor="middle" fill="#f1f5f9" font-family="system-ui, sans-serif" font-size="13" font-weight="500">🎯 Decisions</text>
+
+    <rect x="145" width="130" height="36" rx="8" fill="#1e293b" stroke="#334155"/>
+    <text x="210" y="23" text-anchor="middle" fill="#f1f5f9" font-family="system-ui, sans-serif" font-size="13" font-weight="500">📋 Action Items</text>
+
+    <rect x="290" width="130" height="36" rx="8" fill="#1e293b" stroke="#334155"/>
+    <text x="355" y="23" text-anchor="middle" fill="#f1f5f9" font-family="system-ui, sans-serif" font-size="13" font-weight="500">⚡ 1-Sec Link</text>
+  </g>
+
+  <!-- Right Visual: Meeting Decision & Action Board Mockup -->
+  <g transform="translate(560, 95)">
+    <rect width="560" height="440" rx="18" fill="#0f172a" stroke="#1e3a8a" stroke-width="1.5"/>
+    
+    <!-- Top Header -->
+    <rect width="560" height="50" rx="18" fill="#1e293b"/>
+    <text x="30" y="32" fill="#60a5fa" font-family="system-ui, sans-serif" font-weight="700" font-size="15">🎙️ Product Sync • Post-Call Summary</text>
+    
+    <g transform="translate(420, 12)">
+      <rect width="110" height="26" rx="6" fill="#3b82f6"/>
+      <text x="55" y="17" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="600" font-size="11">Broadcasted</text>
+    </g>
+
+    <!-- Content -->
+    <g transform="translate(30, 75)">
+      <!-- Decisions Block -->
+      <g transform="translate(0, 0)">
+        <rect width="500" height="85" rx="12" fill="#1e293b" stroke="#334155"/>
+        <text x="20" y="26" fill="#38bdf8" font-family="system-ui, sans-serif" font-weight="700" font-size="13">KEY DECISIONS</text>
+        <text x="20" y="50" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="13">✓ Ship v2.4 instant link redesign this Thursday</text>
+        <text x="20" y="70" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12">• Deprecate forced email verification modal across guest rooms</text>
+      </g>
+
+      <!-- Action Items Block -->
+      <g transform="translate(0, 95)">
+        <rect width="500" height="110" rx="12" fill="#1e293b" stroke="#334155"/>
+        <text x="20" y="26" fill="#f59e0b" font-family="system-ui, sans-serif" font-weight="700" font-size="13">ACTION ITEMS (ASSIGNED)</text>
+        
+        <g transform="translate(20, 42)">
+          <circle cx="6" cy="6" r="5" fill="#22c55e"/>
+          <text x="18" y="10" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">Sarah: Review mobile responsive layout</text>
+          <text x="400" y="10" fill="#94a3b8" font-family="monospace" font-size="11">Due Wed</text>
+        </g>
+
+        <g transform="translate(20, 70)">
+          <circle cx="6" cy="6" r="5" fill="#f97316"/>
+          <text x="18" y="10" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">Alex: Setup caching headers on CDN</text>
+          <text x="400" y="10" fill="#94a3b8" font-family="monospace" font-size="11">Due Thu</text>
+        </g>
+      </g>
+
+      <!-- Bottom link bar -->
+      <g transform="translate(0, 220)">
+        <rect width="500" height="44" rx="8" fill="#1e3a8a" stroke="#3b82f6"/>
+        <text x="250" y="27" text-anchor="middle" fill="#bfdbfe" font-family="monospace" font-size="12">🔗 woff.space/m/team-sync-94 • Shared to Slack &amp; Discord</text>
+      </g>
+    </g>
+  </g>
+</svg>

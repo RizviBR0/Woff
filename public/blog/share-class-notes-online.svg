@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg7" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#09090b"/>
+      <stop offset="50%" stop-color="#064e3b"/>
+      <stop offset="100%" stop-color="#022c22"/>
+    </linearGradient>
+    <filter id="glow7" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="70" result="blur"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg7)"/>
+
+  <!-- Subtle Grid -->
+  <g stroke="#ffffff" stroke-opacity="0.03" stroke-width="1">
+    <line x1="0" y1="105" x2="1200" y2="105"/>
+    <line x1="0" y1="210" x2="1200" y2="210"/>
+    <line x1="0" y1="315" x2="1200" y2="315"/>
+    <line x1="0" y1="420" x2="1200" y2="420"/>
+    <line x1="0" y1="525" x2="1200" y2="525"/>
+    <line x1="200" y1="0" x2="200" y2="630"/>
+    <line x1="400" y1="0" x2="400" y2="630"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="800" y1="0" x2="800" y2="630"/>
+    <line x1="1000" y1="0" x2="1000" y2="630"/>
+  </g>
+
+  <circle cx="880" cy="280" r="180" fill="#10b981" opacity="0.15" filter="url(#glow7)"/>
+  <circle cx="280" cy="380" r="140" fill="#f97316" opacity="0.12" filter="url(#glow7)"/>
+
+  <!-- Top Badge -->
+  <g transform="translate(80, 75)">
+    <rect width="160" height="32" rx="16" fill="#10b981" fill-opacity="0.15" stroke="#10b981" stroke-opacity="0.4"/>
+    <text x="80" y="21" text-anchor="middle" fill="#34d399" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="12" letter-spacing="1.5">EDUCATION</text>
+  </g>
+
+  <!-- Left Header -->
+  <text x="80" y="170" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" letter-spacing="-1">
+    How Teachers Share
+  </text>
+  <text x="80" y="225" fill="#34d399" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" letter-spacing="-1">
+    Class Notes Online
+  </text>
+  <text x="80" y="275" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="18">
+    Distribute lesson summaries, homework, and formulas
+  </text>
+  <text x="80" y="302" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="18">
+    without student accounts or complex portal logins.
+  </text>
+
+  <g transform="translate(80, 360)">
+    <rect width="130" height="36" rx="8" fill="#064e3b" stroke="#047857"/>
+    <text x="65" y="23" text-anchor="middle" fill="#ecfdf5" font-family="system-ui, sans-serif" font-size="13" font-weight="500">🎓 Zero Signup</text>
+
+    <rect x="145" width="130" height="36" rx="8" fill="#064e3b" stroke="#047857"/>
+    <text x="210" y="23" text-anchor="middle" fill="#ecfdf5" font-family="system-ui, sans-serif" font-size="13" font-weight="500">📱 Mobile Ready</text>
+
+    <rect x="290" width="130" height="36" rx="8" fill="#064e3b" stroke="#047857"/>
+    <text x="355" y="23" text-anchor="middle" fill="#ecfdf5" font-family="system-ui, sans-serif" font-size="13" font-weight="500">🔒 Passcode</text>
+  </g>
+
+  <!-- Right Visual: Classroom Note Card Mockup -->
+  <g transform="translate(560, 95)">
+    <rect width="560" height="440" rx="18" fill="#064e3b" stroke="#059669" stroke-width="1.5"/>
+    
+    <!-- Top Classroom Header -->
+    <rect width="560" height="50" rx="18" fill="#022c22"/>
+    <text x="30" y="32" fill="#34d399" font-family="system-ui, sans-serif" font-weight="700" font-size="15">📚 AP Physics • Lecture 12 Notes</text>
+    <rect x="420" y="12" width="110" height="26" rx="6" fill="#10b981"/>
+    <text x="475" y="29" text-anchor="middle" fill="#022c22" font-family="system-ui, sans-serif" font-weight="700" font-size="11">Classroom Link</text>
+
+    <!-- Lecture Content Body -->
+    <g transform="translate(30, 75)">
+      <text x="0" y="22" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="700" font-size="18">Kinematics &amp; Motion Review</text>
+      <text x="0" y="44" fill="#a7f3d0" font-family="monospace" font-size="12">Teacher: Dr. Miller • Date: Oct 14</text>
+
+      <!-- Key Concept Box -->
+      <g transform="translate(0, 60)">
+        <rect width="500" height="85" rx="10" fill="#022c22" stroke="#047857"/>
+        <text x="18" y="26" fill="#34d399" font-family="system-ui, sans-serif" font-weight="700" font-size="13">KEY FORMULAS</text>
+        <text x="18" y="52" fill="#ffffff" font-family="monospace" font-size="14">v = v₀ + at &amp;bull; x = v₀t + ½at² &amp;bull; v² = v₀² + 2ax</text>
+        <text x="18" y="72" fill="#6ee7b7" font-family="monospace" font-size="11">✓ Remember to convert units to m/s before calculation</text>
+      </g>
+
+      <!-- Homework Checklist -->
+      <g transform="translate(0, 160)">
+        <rect width="500" height="95" rx="10" fill="#022c22" stroke="#047857"/>
+        <text x="18" y="26" fill="#fbbf24" font-family="system-ui, sans-serif" font-weight="700" font-size="13">HOMEWORK &amp; SUBMISSION</text>
+        <text x="18" y="50" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">1. Complete practice problems #14 to #22 on Chapter 3</text>
+        <text x="18" y="74" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">2. Submit working via shared room before Friday 5 PM</text>
+      </g>
+
+      <!-- Share bar -->
+      <g transform="translate(0, 275)">
+        <rect width="500" height="42" rx="8" fill="#10b981"/>
+        <text x="250" y="26" text-anchor="middle" fill="#022c22" font-family="system-ui, sans-serif" font-weight="700" font-size="13">🔗 woff.space/physics-101 • Open on any device</text>
+      </g>
+    </g>
+  </g>
+</svg>

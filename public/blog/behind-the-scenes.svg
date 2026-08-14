@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg16" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#09090b"/>
+      <stop offset="50%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#1e1026"/>
+    </linearGradient>
+    <filter id="glow16" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="70" result="blur"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg16)"/>
+
+  <!-- Subtle Grid -->
+  <g stroke="#ffffff" stroke-opacity="0.03" stroke-width="1">
+    <line x1="0" y1="105" x2="1200" y2="105"/>
+    <line x1="0" y1="210" x2="1200" y2="210"/>
+    <line x1="0" y1="315" x2="1200" y2="315"/>
+    <line x1="0" y1="420" x2="1200" y2="420"/>
+    <line x1="0" y1="525" x2="1200" y2="525"/>
+    <line x1="200" y1="0" x2="200" y2="630"/>
+    <line x1="400" y1="0" x2="400" y2="630"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="800" y1="0" x2="800" y2="630"/>
+    <line x1="1000" y1="0" x2="1000" y2="630"/>
+  </g>
+
+  <circle cx="850" cy="280" r="180" fill="#a855f7" opacity="0.15" filter="url(#glow16)"/>
+  <circle cx="280" cy="380" r="140" fill="#f97316" opacity="0.12" filter="url(#glow16)"/>
+
+  <!-- Top Badge -->
+  <g transform="translate(80, 75)">
+    <rect width="165" height="32" rx="16" fill="#a855f7" fill-opacity="0.15" stroke="#a855f7" stroke-opacity="0.4"/>
+    <text x="82" y="21" text-anchor="middle" fill="#c084fc" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="12" letter-spacing="1.5">DESIGN &amp; UI/UX</text>
+  </g>
+
+  <!-- Left Header -->
+  <text x="80" y="170" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" letter-spacing="-1">
+    Behind the Scenes
+  </text>
+  <text x="80" y="225" fill="#c084fc" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" letter-spacing="-1">
+    Designing Woff
+  </text>
+  <text x="80" y="275" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="18">
+    The principles that drive our design decisions:
+  </text>
+  <text x="80" y="302" fill="#a1a1aa" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="18">
+    speed, visual clarity, and deliberate minimalism.
+  </text>
+
+  <g transform="translate(80, 360)">
+    <rect width="130" height="36" rx="8" fill="#18181b" stroke="#27272a"/>
+    <text x="65" y="23" text-anchor="middle" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">🎨 Design System</text>
+
+    <rect x="145" width="130" height="36" rx="8" fill="#18181b" stroke="#27272a"/>
+    <text x="210" y="23" text-anchor="middle" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">📐 Wireframes</text>
+
+    <rect x="290" width="130" height="36" rx="8" fill="#18181b" stroke="#27272a"/>
+    <text x="355" y="23" text-anchor="middle" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="13" font-weight="500">✨ Micro-Interactions</text>
+  </g>
+
+  <!-- Right Visual: Design System & Wireframe Artboard -->
+  <g transform="translate(560, 95)">
+    <rect width="560" height="440" rx="18" fill="#09090b" stroke="#3b0764" stroke-width="1.5"/>
+    
+    <!-- Top Artboard Bar -->
+    <rect width="560" height="50" rx="18" fill="#18181b"/>
+    <text x="30" y="32" fill="#c084fc" font-family="system-ui, sans-serif" font-weight="700" font-size="15">🎨 Woff Design System v2.0 Artboard</text>
+    
+    <!-- Swatches and Tokens -->
+    <g transform="translate(30, 75)">
+      <!-- Color Palette Row -->
+      <g transform="translate(0, 0)">
+        <rect width="90" height="40" rx="8" fill="#f97316"/>
+        <text x="45" y="25" text-anchor="middle" fill="#fff" font-family="monospace" font-size="10">#f97316</text>
+
+        <rect x="100" width="90" height="40" rx="8" fill="#18181b" stroke="#27272a"/>
+        <text x="145" y="25" text-anchor="middle" fill="#fff" font-family="monospace" font-size="10">#18181b</text>
+
+        <rect x="200" width="90" height="40" rx="8" fill="#38bdf8"/>
+        <text x="245" y="25" text-anchor="middle" fill="#000" font-family="monospace" font-size="10">#38bdf8</text>
+
+        <rect x="300" width="90" height="40" rx="8" fill="#22c55e"/>
+        <text x="345" y="25" text-anchor="middle" fill="#000" font-family="monospace" font-size="10">#22c55e</text>
+
+        <rect x="400" width="90" height="40" rx="8" fill="#a855f7"/>
+        <text x="445" y="25" text-anchor="middle" fill="#fff" font-family="monospace" font-size="10">#a855f7</text>
+      </g>
+
+      <!-- Component Wireframe Previews -->
+      <g transform="translate(0, 60)">
+        <!-- Button Component -->
+        <rect width="240" height="130" rx="10" fill="#18181b" stroke="#27272a"/>
+        <text x="18" y="28" fill="#a1a1aa" font-family="system-ui, sans-serif" font-weight="700" font-size="12">BUTTON SYSTEM</text>
+        <rect x="18" y="42" width="95" height="32" rx="6" fill="#f97316"/>
+        <text x="65" y="62" text-anchor="middle" fill="#fff" font-family="system-ui, sans-serif" font-size="11" font-weight="bold">Primary</text>
+        
+        <rect x="125" y="42" width="95" height="32" rx="6" fill="#27272a" stroke="#3f3f46"/>
+        <text x="172" y="62" text-anchor="middle" fill="#e4e4e7" font-family="system-ui, sans-serif" font-size="11">Secondary</text>
+
+        <text x="18" y="105" fill="#71717a" font-family="monospace" font-size="10">4px radius • 0.2s cubic ease</text>
+
+        <!-- Input Component -->
+        <g transform="translate(260, 0)">
+          <rect width="240" height="130" rx="10" fill="#18181b" stroke="#27272a"/>
+          <text x="18" y="28" fill="#a1a1aa" font-family="system-ui, sans-serif" font-weight="700" font-size="12">LINK INPUT FIELD</text>
+          <rect x="18" y="42" width="204" height="34" rx="6" fill="#09090b" stroke="#f97316"/>
+          <text x="28" y="63" fill="#f97316" font-family="monospace" font-size="11">woff.space/8492</text>
+          <text x="18" y="105" fill="#71717a" font-family="monospace" font-size="10">Active focus state with glowing border</text>
+        </g>
+      </g>
+
+      <!-- Typography Scale -->
+      <g transform="translate(0, 205)">
+        <rect width="500" height="85" rx="10" fill="#18181b" stroke="#27272a"/>
+        <text x="20" y="28" fill="#a1a1aa" font-family="system-ui, sans-serif" font-weight="700" font-size="12">TYPOGRAPHY HIERARCHY</text>
+        <text x="20" y="55" fill="#ffffff" font-family="system-ui, sans-serif" font-weight="800" font-size="18">Display Title (48px / -0.04em tracking)</text>
+        <text x="20" y="75" fill="#71717a" font-family="monospace" font-size="11">Geist Mono 12px for badges and live codes</text>
+      </g>
+    </g>
+  </g>
+</svg>

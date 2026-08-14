@@ -27,8 +27,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-06-01",
     tags: ["Productivity", "Guides"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/how-to-share-notes/1200/630",
-    coverAlt: "A browser note ready to be shared with a short link",
+    coverImageUrl: "/blog/how-to-share-notes-online-without-login.svg",
+    coverAlt: "Share notes online without login - instant link generation and sharing interface",
     featured: true,
     takeaways: [
       "Use a link-based note when speed matters more than long-term document management.",
@@ -138,7 +138,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-06-01",
     tags: ["Productivity", "Tools"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/best-notepad/1200/630",
+    coverImageUrl: "/blog/best-online-notepad-with-shareable-link.svg",
+    coverAlt: "Best online notepad editor with one-click shareable URL bar",
     content: [
       "An online notepad becomes much more useful when it gives you a shareable link.",
       "Instead of copying text from one app to another, you can create a note, copy the link, and send it to anyone.",
@@ -224,7 +225,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-06-01",
     tags: ["Productivity", "Guides"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/cross-device/1200/630",
+    coverImageUrl: "/blog/how-to-share-text-between-devices-instantly.svg",
+    coverAlt: "Instant cross-device text sharing across mobile phone, laptop, and tablet",
     content: [
       "Moving text between devices should be simple.",
       "But in real life, it often becomes annoying. You copy something on your laptop, then need it on your phone. Or you write something on your phone and want to continue on your desktop.",
@@ -317,7 +319,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-06-01",
     tags: ["Developer Tools", "Guides"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/share-code/1200/630",
+    coverImageUrl: "/blog/how-to-share-code-snippets-online.svg",
+    coverAlt: "Syntax highlighted code snippet sharing window with instant URL",
     content: [
       "Developers share code every day.",
       "Sometimes it is a bug example. Sometimes it is a command. Sometimes it is a short function, config file, API response, or terminal output.",
@@ -423,7 +426,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-06-01",
     tags: ["Developer Tools", "Comparison"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/pastebin-alt/1200/630",
+    coverImageUrl: "/blog/pastebin-alternative-for-simple-note-sharing.svg",
+    coverAlt: "Modern Pastebin alternative with formatted notes, markdown, and file sharing",
     content: [
       "Pastebin is well known for sharing plain text and code snippets. It is useful, familiar, and simple.",
       "But sometimes you need more than a basic paste.",
@@ -528,7 +532,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-08-12",
     tags: ["comparison", "online-notepad", "2026"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-best-free/1200/630",
+    coverImageUrl: "/blog/best-free-online-notepad-tools-2026.svg",
+    coverAlt: "2026 comparison benchmark of the best free online notepad tools",
     content: [
       "Online notepads shine when you need speed and simplicity. We review popular options and where each excels.",
       "If instant sharing is your priority, Woff's no-login, shareable link model keeps you moving.",
@@ -542,7 +547,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-08-08",
     tags: ["education", "teachers", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-teachers/1200/630",
+    coverImageUrl: "/blog/share-class-notes-online.svg",
+    coverAlt: "Classroom lecture note sharing for teachers and students without login",
     content: [
       "Teachers often need to get notes out fast. Woff creates a link you can post in LMS, email, or chat.",
       "Open Woff, paste your notes, click Share. Students can view instantly on any device.",
@@ -556,7 +562,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-08-04",
     tags: ["students", "study", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-students/1200/630",
+    coverImageUrl: "/blog/share-notes-online-for-students.svg",
+    coverAlt: "Collaborative study group revision sheets and exam prep notes",
     content: [
       "Group chats get messy; screenshots are hard to read. A single Woff link keeps everyone on the same page.",
       "Paste your notes, add headings or bullet points, share the link with your study group.",
@@ -570,7 +577,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-07-30",
     tags: ["remote", "teams", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-remote/1200/630",
+    coverImageUrl: "/blog/share-meeting-notes-online.svg",
+    coverAlt: "Remote team meeting recap with decisions and assigned action items",
     content: [
       "After a call, speed matters. Open Woff, drop your notes, click Share, and post the link in chat.",
       "No file attachments, no permission hurdles — just one link the team can open anywhere.",
@@ -584,7 +592,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-07-25",
     tags: ["family", "lists", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-family/1200/630",
+    coverImageUrl: "/blog/share-lists-online-with-family.svg",
+    coverAlt: "Shared family to-do and grocery list with live sync checkboxes",
     content: [
       "Create a list in Woff and share the link with family. Everyone can reference the same page.",
       "Update the list before heading out; the latest version is always just a tap away.",
@@ -598,7 +607,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-07-20",
     tags: ["productivity", "note-taking"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-minimal/1200/630",
+    coverImageUrl: "/blog/minimalist-note-taking.svg",
+    coverAlt: "Minimalist distraction-free note taking canvas and 3-step capture framework",
     content: [
       "Less is more: concise notes are faster to review and reuse.",
       "Use quick headings, short bullets, and one link to share or reference across devices.",
@@ -612,7 +622,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-07-15",
     tags: ["comparison", "note-taking"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-compare/1200/630",
+    coverImageUrl: "/blog/online-notepad-vs-note-taking-apps.svg",
+    coverAlt: "Comparison between lightweight online notepad and full document suites",
     content: [
       "Use an online notepad for speed: quick capture, share a link, move on.",
       "Use full apps for structure: collaboration, formatting, and long-term archives.",
@@ -626,7 +637,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-07-12",
     tags: ["online-notepad", "comparison", "guide"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-online-notepad/1200/630",
+    coverImageUrl: "/blog/what-is-an-online-notepad.svg",
+    coverAlt: "Speed comparison between instant in-browser notepad, cloud docs, and email",
     content: [
       "An online notepad is a lightweight, in-browser editor where you can type or paste text and share it instantly with a link.",
       "Unlike email or full document tools, it removes setup steps — no files, permissions, or formatting overhead to slow you down.",
@@ -642,7 +654,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-07-10",
     tags: ["announcement", "product"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-intro/1200/630",
+    coverImageUrl: "/blog/introducing-woff.svg",
+    coverAlt: "Introducing Woff - simple shareable spaces with live multi-user cursors and 4-digit code",
     content: [
       "We built Woff to remove friction from sharing ideas. Create a space instantly, share a URL or QR code, and collaborate in real-time.",
       "No accounts are required to get started, and you can add a passcode if you need privacy.",
@@ -656,7 +669,8 @@ const baseBlogPosts: BlogPost[] = [
     date: "2026-07-05",
     tags: ["tips", "productivity"],
     author: { name: "Rizvi", avatarUrl: "/rizvi.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-tips/1200/630",
+    coverImageUrl: "/blog/tips-for-faster-sharing.svg",
+    coverAlt: "5 power user tips for faster sharing including QR codes, clipboard paste, and markup",
     content: [
       "Use the '+' menu to quickly add photos, notes, or drawings.",
       "Share a space via QR code for instant access across devices.",
@@ -675,7 +689,8 @@ const baseBlogPosts: BlogPost[] = [
       name: "Woff Design",
       avatarUrl: "/woff_team.png",
     },
-    coverImageUrl: "https://picsum.photos/seed/woff-design/1200/630",
+    coverImageUrl: "/blog/behind-the-scenes.svg",
+    coverAlt: "Behind the scenes design system, UI components, and color palette artboard",
     content: [
       "Woff is built on a few principles: clarity, speed, and focus.",
       "We optimize common actions and keep UI elements purposeful and minimal.",
@@ -689,7 +704,8 @@ const baseBlogPosts: BlogPost[] = [
     excerpt: "See why short-lived, link-based rooms are a better fit for quick notes, annotated images, and file handoffs.",
     tags: ["Product", "Launch"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-launch/1200/630",
+    coverImageUrl: "/blog/introducing-woff-simple-shareable-spaces.svg",
+    coverAlt: "Why Woff uses temporary shareable spaces with disposable room lifecycle",
     content: [
       "Woff helps you spin up a clean, minimal space instantly. No setup. No signup required for quick sharing.",
       "Each space gets a short link you can share. Drop text, images, drawings, and files — everything stays simple and delightful.",
@@ -703,7 +719,8 @@ const baseBlogPosts: BlogPost[] = [
     excerpt: "Three power-user tips to move faster in Woff: keyboard actions, instant uploads, and clean sharing.",
     tags: ["Tips", "Guides"],
     author: { name: "Rizvi", avatarUrl: "/rizvi.png" },
-    coverImageUrl: "https://picsum.photos/seed/woff-tips2/1200/630",
+    coverImageUrl: "/blog/quick-tips-speed-up-your-workflows.svg",
+    coverAlt: "Keyboard shortcuts and fast drag-and-drop actions to speed up your workflow",
     content: [
       "Use keyboard-driven actions to keep momentum. Common actions like copy, download, and open are right where you need them.",
       "Drag and drop images or files directly into a space — they upload instantly and render beautifully.",
@@ -720,7 +737,8 @@ const baseBlogPosts: BlogPost[] = [
       name: "Woff Engineering",
       avatarUrl: "/woff_team.png",
     },
-    coverImageUrl: "https://picsum.photos/seed/woff-changelog/1200/630",
+    coverImageUrl: "/blog/october-november-updates-better-uploads-and-ui-polish.svg",
+    coverAlt: "Woff product updates featuring batch file uploads, ZIP downloads, and media viewer",
     content: [
       "Photos now support multi-select galleries with quick ZIP downloads.",
       "We introduced a cleaner chat-style layout with avatars and simplified timestamps.",
@@ -909,17 +927,11 @@ const contentEnhancements: Record<string, string[]> = {
 };
 
 export const blogPosts: BlogPost[] = baseBlogPosts
-  .map((post, index) => ({
+  .map((post) => ({
     ...post,
-    // Product screenshots are faster, stable, and relevant to the article;
-    // random remote stock photos made the archive slower and less trustworthy.
-    coverImageUrl: post.featured
-      ? "/og-image.png"
-      : index % 2 === 0
-        ? "/screenshot_woff_light.jpeg"
-        : "/screenshot_woff_dark.jpeg",
+    coverImageUrl: post.coverImageUrl || `/blog/${post.slug}.svg`,
     coverAlt:
-      post.coverAlt || `Woff Space interface for ${post.title.toLowerCase()}`,
+      post.coverAlt || `Visual guide and overview for ${post.title.toLowerCase()}`,
     content: [...post.content, ...(contentEnhancements[post.slug] || [])],
   }))
   .sort((a, b) => b.date.localeCompare(a.date));
