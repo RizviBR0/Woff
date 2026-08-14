@@ -44,7 +44,7 @@ export async function generateMetadata({
 }: SpacePageProps): Promise<Metadata> {
   const { slug } = await params;
   return {
-    title: `Space ${slug} - Woff`,
+    title: { absolute: `Space ${slug} – Woff` },
     description: "A private-by-code shared Woff space",
     referrer: "no-referrer",
     robots: { index: false, follow: false, nocache: true },

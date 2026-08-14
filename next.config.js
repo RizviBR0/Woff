@@ -24,10 +24,6 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "picsum.photos",
-      },
-      {
-        protocol: "https",
         hostname: "i.pravatar.cc",
       },
       {
@@ -74,8 +70,8 @@ const nextConfig = {
           `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""} https://www.googletagmanager.com https://va.vercel-scripts.com`,
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' data: https://fonts.gstatic.com",
-          "img-src 'self' data: blob: https://*.supabase.co https://picsum.photos https://fastly.picsum.photos",
-          "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://vitals.vercel-insights.com",
+          "img-src 'self' data: blob: https://*.supabase.co",
+          "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.google.com https://vitals.vercel-insights.com",
           "worker-src 'self' blob:",
           "upgrade-insecure-requests",
         ].join("; "),

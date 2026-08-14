@@ -16,7 +16,6 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import QRCode from "qrcode";
 import {
   AlignCenter,
   AlignLeft,
@@ -468,7 +467,11 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   useEffect(() => {
     if (!shareOpen) return;
     const url = window.location.href;
-    void QRCode.toDataURL(url, { width: 220, margin: 1 }).then(setQrCode);
+    void import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toDataURL(url, { width: 220, margin: 1 }),
+      )
+      .then(setQrCode);
   }, [shareOpen]);
 
   const updateTitle = (value: string) => {

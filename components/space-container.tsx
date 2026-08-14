@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import {
+  Fragment,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -34,7 +41,6 @@ import { Logo } from "./logo";
 import { createClientSupabaseClient } from "@/lib/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import QRCode from "qrcode";
 import {
   Popover,
   PopoverContent,
@@ -73,6 +79,29 @@ interface SpaceContainerProps {
 const SIDEBAR_COLLAPSED_W = 60;
 const SIDEBAR_EXPANDED_W = 240;
 
+type AudioWindow = Window &
+  typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+
+function playMessageChime(context: AudioContext) {
+  const now = context.currentTime;
+  const gain = context.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.12, now + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+  gain.connect(context.destination);
+
+  [660, 880].forEach((frequency, index) => {
+    const oscillator = context.createOscillator();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, now + index * 0.08);
+    oscillator.connect(gain);
+    oscillator.start(now + index * 0.08);
+    oscillator.stop(now + 0.24 + index * 0.08);
+  });
+}
+
 export function SpaceContainer({
   space,
   initialEntries,
@@ -99,10 +128,27 @@ export function SpaceContainer({
     "connecting" | "connected" | "disconnected"
   >("connecting");
   const [newItemsCount, setNewItemsCount] = useState(0);
+  const [firstUnseenEntryId, setFirstUnseenEntryId] = useState<string | null>(
+    null,
+  );
+  const [unseenMessageCount, setUnseenMessageCount] = useState(0);
+  const [tabUnreadCount, setTabUnreadCount] = useState(0);
   const [shareHost, setShareHost] = useState("woff.space");
   const [onlineCount, setOnlineCount] = useState(1);
   const isNearBottomRef = useRef(true);
+  const knownEntryIdsRef = useRef(
+    new Set(initialEntries.map((entry) => entry.id)),
+  );
+  const audioContextRef = useRef<AudioContext | null>(null);
   const router = useRouter();
+
+  const normalDocumentTitle = useMemo(
+    () =>
+      space.title?.trim()
+        ? `${space.title.trim()} – Woff`
+        : `Space ${space.slug} – Woff`,
+    [space.slug, space.title],
+  );
 
   // Sidebar state
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
@@ -198,16 +244,119 @@ export function SpaceContainer({
     setNewItemsCount(0);
   }, []);
 
-  // Helper function to safely add entry without duplicates
+  // Helper function to safely add entry without duplicates. The Set makes the
+  // decision synchronous, so reconnects cannot produce duplicate sounds.
   const addEntryIfNotExists = useCallback((newEntry: Entry) => {
+    if (knownEntryIdsRef.current.has(newEntry.id)) return false;
+    knownEntryIdsRef.current.add(newEntry.id);
     setEntries((prev) => {
-      const exists = prev.some((entry) => entry.id === newEntry.id);
-      if (exists) {
-        return prev;
-      }
       return [...prev, newEntry];
     });
+    return true;
   }, []);
+
+  const playIncomingMessageSound = useCallback(() => {
+    const context = audioContextRef.current;
+    if (!context) return;
+    const play = () => playMessageChime(context);
+    if (context.state === "suspended") {
+      void context.resume().then(play).catch(() => undefined);
+    } else {
+      play();
+    }
+  }, []);
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (!audioContextRef.current) {
+        const AudioContextConstructor =
+          window.AudioContext || (window as AudioWindow).webkitAudioContext;
+        if (!AudioContextConstructor) return;
+        audioContextRef.current = new AudioContextConstructor();
+      }
+      if (audioContextRef.current.state === "suspended") {
+        void audioContextRef.current.resume().catch(() => undefined);
+      }
+      window.removeEventListener("pointerdown", unlockAudio, true);
+      window.removeEventListener("keydown", unlockAudio, true);
+    };
+    window.addEventListener("pointerdown", unlockAudio, true);
+    window.addEventListener("keydown", unlockAudio, true);
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio, true);
+      window.removeEventListener("keydown", unlockAudio, true);
+      const context = audioContextRef.current;
+      audioContextRef.current = null;
+      if (context && context.state !== "closed") {
+        void context.close().catch(() => undefined);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    document.title = tabUnreadCount
+      ? `${normalDocumentTitle} | ${tabUnreadCount} new ${
+          tabUnreadCount === 1 ? "message" : "messages"
+        }`
+      : normalDocumentTitle;
+    return () => {
+      document.title = normalDocumentTitle;
+    };
+  }, [normalDocumentTitle, tabUnreadCount]);
+
+  useEffect(() => {
+    const clearTabCounter = () => {
+      if (document.visibilityState === "visible" && document.hasFocus()) {
+        setTabUnreadCount(0);
+      }
+    };
+    window.addEventListener("focus", clearTabCounter);
+    document.addEventListener("visibilitychange", clearTabCounter);
+    return () => {
+      window.removeEventListener("focus", clearTabCounter);
+      document.removeEventListener("visibilitychange", clearTabCounter);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!firstUnseenEntryId) return;
+    let seenTimer: number | null = null;
+    const checkIfSeen = () => {
+      if (document.visibilityState !== "visible" || !document.hasFocus()) {
+        if (seenTimer) window.clearTimeout(seenTimer);
+        seenTimer = null;
+        return;
+      }
+      const target = document.getElementById(`entry-${firstUnseenEntryId}`);
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      const visibleHeight =
+        Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
+      const isSeen = visibleHeight >= Math.min(rect.height * 0.5, 120);
+      if (isSeen && !seenTimer) {
+        seenTimer = window.setTimeout(() => {
+          setFirstUnseenEntryId(null);
+          setUnseenMessageCount(0);
+        }, 700);
+      } else if (!isSeen && seenTimer) {
+        window.clearTimeout(seenTimer);
+        seenTimer = null;
+      }
+    };
+    const frame = requestAnimationFrame(checkIfSeen);
+    window.addEventListener("scroll", checkIfSeen, { passive: true });
+    window.addEventListener("resize", checkIfSeen, { passive: true });
+    window.addEventListener("focus", checkIfSeen);
+    document.addEventListener("visibilitychange", checkIfSeen);
+    return () => {
+      cancelAnimationFrame(frame);
+      if (seenTimer) window.clearTimeout(seenTimer);
+      window.removeEventListener("scroll", checkIfSeen);
+      window.removeEventListener("resize", checkIfSeen);
+      window.removeEventListener("focus", checkIfSeen);
+      document.removeEventListener("visibilitychange", checkIfSeen);
+    };
+  }, [firstUnseenEntryId]);
 
   // Track whether new content can be revealed without interrupting reading.
   useEffect(() => {
@@ -246,8 +395,18 @@ export function SpaceContainer({
         },
         (payload) => {
           const newEntry = payload.new as Entry;
-
-          addEntryIfNotExists(newEntry);
+          const added = addEntryIfNotExists(newEntry);
+          if (!added) return;
+          const isIncoming =
+            newEntry.created_by_device_id !== currentDeviceId;
+          if (isIncoming) {
+            playIncomingMessageSound();
+            setFirstUnseenEntryId((current) => current || newEntry.id);
+            setUnseenMessageCount((count) => count + 1);
+            if (document.hidden || !document.hasFocus()) {
+              setTabUnreadCount((count) => count + 1);
+            }
+          }
           if (isNearBottomRef.current) {
             requestAnimationFrame(scrollToBottom);
           } else {
@@ -304,7 +463,14 @@ export function SpaceContainer({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [space.id, currentDeviceId, currentDisplayName, addEntryIfNotExists, scrollToBottom]);
+  }, [
+    space.id,
+    currentDeviceId,
+    currentDisplayName,
+    addEntryIfNotExists,
+    playIncomingMessageSound,
+    scrollToBottom,
+  ]);
 
   const handleNewEntry = useCallback(
     (entry: Entry) => {
@@ -330,6 +496,8 @@ export function SpaceContainer({
 
   const handleReplaceEntry = useCallback(
     (placeholderId: string, realEntry: Entry) => {
+      knownEntryIdsRef.current.delete(placeholderId);
+      knownEntryIdsRef.current.add(realEntry.id);
       setEntries((prev) => {
         // First, remove any duplicate that real-time may have already inserted
         const withoutRealtimeDup = prev.filter(
@@ -345,6 +513,7 @@ export function SpaceContainer({
   );
 
   const handleRemoveEntry = useCallback((entryId: string) => {
+    knownEntryIdsRef.current.delete(entryId);
     setEntries((prev) => prev.filter((entry) => entry.id !== entryId));
   }, []);
 
@@ -432,6 +601,7 @@ export function SpaceContainer({
 
   const generateQRCode = async (url: string) => {
     try {
+      const QRCode = (await import("qrcode")).default;
       const qrUrl = await QRCode.toDataURL(url, {
         margin: 2,
         width: 256,
@@ -1215,14 +1385,30 @@ export function SpaceContainer({
               <div className="pb-40">
                 <div className="mx-auto max-w-2xl space-y-6 py-8">
                   {entries.map((entry) => (
-                    <EntryCard
-                      key={entry.id}
-                      entry={entry}
-                      currentDeviceId={currentDeviceId || null}
-                      onDelete={handleRemoveEntry}
-                      onUpdate={handleUpdateEntry}
-                      onNewEntry={handleNewEntry}
-                    />
+                    <Fragment key={entry.id}>
+                      {entry.id === firstUnseenEntryId && (
+                        <div
+                          className="flex items-center gap-3 px-3 py-1"
+                          role="separator"
+                          aria-label={`${unseenMessageCount} new ${
+                            unseenMessageCount === 1 ? "message" : "messages"
+                          }`}
+                        >
+                          <span className="h-px flex-1 bg-orange-500/35" />
+                          <span className="rounded-full bg-orange-500 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white shadow-sm">
+                            New {unseenMessageCount > 1 ? `· ${unseenMessageCount}` : ""}
+                          </span>
+                          <span className="h-px flex-1 bg-orange-500/35" />
+                        </div>
+                      )}
+                      <EntryCard
+                        entry={entry}
+                        currentDeviceId={currentDeviceId || null}
+                        onDelete={handleRemoveEntry}
+                        onUpdate={handleUpdateEntry}
+                        onNewEntry={handleNewEntry}
+                      />
+                    </Fragment>
                   ))}
                 </div>
 

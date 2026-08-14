@@ -330,6 +330,14 @@
   }
 }
 
+/* Long rooms skip layout and paint work for messages outside the viewport. */
+@supports (content-visibility: auto) {
+  [id^="entry-"] {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 132px;
+  }
+}
+
 @layer utilities {
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);

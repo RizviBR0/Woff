@@ -10,9 +10,16 @@ export type BlogPost = {
     avatarUrl?: string;
   };
   coverImageUrl?: string;
+  coverAlt?: string;
+  updatedDate?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  takeaways?: string[];
+  faq?: Array<{ question: string; answer: string }>;
+  featured?: boolean;
 };
 
-export const blogPosts: BlogPost[] = [
+const baseBlogPosts: BlogPost[] = [
   {
     slug: "how-to-share-notes-online-without-login",
     title: "How to Share Notes Online Without Login",
@@ -21,6 +28,25 @@ export const blogPosts: BlogPost[] = [
     tags: ["Productivity", "Guides"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/how-to-share-notes/1200/630",
+    coverAlt: "A browser note ready to be shared with a short link",
+    featured: true,
+    takeaways: [
+      "Use a link-based note when speed matters more than long-term document management.",
+      "Keep sensitive credentials and private personal data out of temporary shared spaces.",
+      "Structure the note for scanning: a clear purpose, short sections, and one next action.",
+    ],
+    faq: [
+      {
+        question: "Can someone read a shared note without creating an account?",
+        answer:
+          "Yes. A recipient can open a Woff space from its link or four-digit code without creating a traditional account.",
+      },
+      {
+        question: "What should I avoid putting in a quick shared note?",
+        answer:
+          "Do not share passwords, access tokens, private keys, banking information, identity documents, or confidential customer data.",
+      },
+    ],
     content: [
       "Sharing notes should not feel like setting up a full project management system. Sometimes you just want to write something, create a link, and send it to someone.",
       "That is exactly where no login note sharing tools help.",
@@ -499,7 +525,7 @@ export const blogPosts: BlogPost[] = [
     slug: "best-free-online-notepad-tools-2026",
     title: "Best Free Online Notepad Tools in 2026 (and When You Should Use Woff)",
     excerpt: "Compare the top free online notepads in 2026 and learn when a fast, link-based notepad like Woff is the best fit.",
-    date: "2026-11-16",
+    date: "2026-08-12",
     tags: ["comparison", "online-notepad", "2026"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-best-free/1200/630",
@@ -513,7 +539,7 @@ export const blogPosts: BlogPost[] = [
     slug: "share-class-notes-online",
     title: "How Teachers Can Share Class Notes Online With Students for Free",
     excerpt: "A quick, free way for teachers to share class notes online: create, paste, share a link — no accounts required.",
-    date: "2026-11-16",
+    date: "2026-08-08",
     tags: ["education", "teachers", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-teachers/1200/630",
@@ -527,7 +553,7 @@ export const blogPosts: BlogPost[] = [
     slug: "share-notes-online-for-students",
     title: "How Students Can Share Notes Online With Friends Before Exams",
     excerpt: "The fastest way for students to share notes online with friends before exams — create, paste, share one link.",
-    date: "2026-11-16",
+    date: "2026-08-04",
     tags: ["students", "study", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-students/1200/630",
@@ -541,7 +567,7 @@ export const blogPosts: BlogPost[] = [
     slug: "share-meeting-notes-online",
     title: "The Fastest Way to Share Meeting Notes Online With a Remote Team",
     excerpt: "Capture meeting notes and share them online with a remote team in seconds using an instant link.",
-    date: "2026-11-16",
+    date: "2026-07-30",
     tags: ["remote", "teams", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-remote/1200/630",
@@ -555,7 +581,7 @@ export const blogPosts: BlogPost[] = [
     slug: "share-lists-online-with-family",
     title: "A Simple Way to Share To-Do Lists and Grocery Lists Online With Family",
     excerpt: "Keep family to-do and grocery lists in sync by sharing a single link that anyone can open on any device.",
-    date: "2026-11-16",
+    date: "2026-07-25",
     tags: ["family", "lists", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-family/1200/630",
@@ -569,7 +595,7 @@ export const blogPosts: BlogPost[] = [
     slug: "minimalist-note-taking",
     title: "Minimalist Note-Taking – How to Keep Your Notes Simple and Still Find Them Later",
     excerpt: "A minimalist note-taking approach that keeps notes simple and still easy to find later.",
-    date: "2026-11-16",
+    date: "2026-07-20",
     tags: ["productivity", "note-taking"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-minimal/1200/630",
@@ -583,7 +609,7 @@ export const blogPosts: BlogPost[] = [
     slug: "online-notepad-vs-note-taking-apps",
     title: "Online Notepad vs Full Note-Taking Apps – When You Need Which One",
     excerpt: "When to use a lightweight online notepad vs a full note-taking app — strengths, tradeoffs, and workflows.",
-    date: "2026-11-16",
+    date: "2026-07-15",
     tags: ["comparison", "note-taking"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-compare/1200/630",
@@ -597,7 +623,7 @@ export const blogPosts: BlogPost[] = [
     slug: "what-is-an-online-notepad",
     title: "What Is an Online Notepad and Why It's Faster Than Docs or Email",
     excerpt: "Learn what an online notepad is and why it's the fastest way to capture and share quick notes compared to Docs or email.",
-    date: "2026-11-16",
+    date: "2026-07-12",
     tags: ["online-notepad", "comparison", "guide"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-online-notepad/1200/630",
@@ -613,7 +639,7 @@ export const blogPosts: BlogPost[] = [
     slug: "introducing-woff",
     title: "Introducing Woff: Simple Shareable Spaces",
     excerpt: "Meet Woff — a fast, minimal way to create and share collaborative spaces without friction.",
-    date: "2026-11-01",
+    date: "2026-07-10",
     tags: ["announcement", "product"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-intro/1200/630",
@@ -627,7 +653,7 @@ export const blogPosts: BlogPost[] = [
     slug: "tips-for-faster-sharing",
     title: "5 Tips for Faster Sharing with Woff",
     excerpt: "Speed up your workflow with these quick tips for links, photos, and notes.",
-    date: "2026-11-05",
+    date: "2026-07-05",
     tags: ["tips", "productivity"],
     author: { name: "Rizvi", avatarUrl: "/rizvi.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-tips/1200/630",
@@ -643,7 +669,7 @@ export const blogPosts: BlogPost[] = [
     slug: "behind-the-scenes",
     title: "Behind the Scenes: Designing Woff",
     excerpt: "A quick peek at the principles that drive our design decisions.",
-    date: "2026-11-10",
+    date: "2026-06-30",
     tags: ["design", "engineering"],
     author: {
       name: "Woff Design",
@@ -658,9 +684,9 @@ export const blogPosts: BlogPost[] = [
   },
   {
     slug: "introducing-woff-simple-shareable-spaces",
-    title: "Introducing Woff: Simple, Shareable Spaces",
-    date: "2026-11-10",
-    excerpt: "Meet Woff — the fastest way to create a minimal space you can share instantly for notes, photos, files and quick ideas.",
+    title: "Why Woff Uses Temporary Shareable Spaces",
+    date: "2026-06-25",
+    excerpt: "See why short-lived, link-based rooms are a better fit for quick notes, annotated images, and file handoffs.",
     tags: ["Product", "Launch"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "https://picsum.photos/seed/woff-launch/1200/630",
@@ -673,7 +699,7 @@ export const blogPosts: BlogPost[] = [
   {
     slug: "quick-tips-speed-up-your-workflows",
     title: "Quick Tips: Speed Up Your Woff Workflows",
-    date: "2026-11-12",
+    date: "2026-06-20",
     excerpt: "Three power-user tips to move faster in Woff: keyboard actions, instant uploads, and clean sharing.",
     tags: ["Tips", "Guides"],
     author: { name: "Rizvi", avatarUrl: "/rizvi.png" },
@@ -686,9 +712,9 @@ export const blogPosts: BlogPost[] = [
   },
   {
     slug: "october-november-updates-better-uploads-and-ui-polish",
-    title: "October–November Updates: Better Uploads and UI Polish",
-    date: "2026-11-14",
-    excerpt: "Improved image handling, file ZIP downloads, and a refined Discord-style chat layout with avatars and time.",
+    title: "Woff Product Updates: Better Uploads and Clearer Rooms",
+    date: "2026-06-15",
+    excerpt: "A closer look at more reliable uploads, richer media review, and clearer realtime room activity in Woff.",
     tags: ["Updates", "Changelog"],
     author: {
       name: "Woff Engineering",
@@ -702,6 +728,245 @@ export const blogPosts: BlogPost[] = [
     ],
   },
 ];
+
+const contentEnhancements: Record<string, string[]> = {
+  "best-free-online-notepad-tools-2026": [
+    "## Start with the job, not the feature list",
+    "The best free notepad is the one that removes the most steps from the task in front of you. A private scratchpad, a collaborative document, a code paste, and a temporary handoff all need different levels of structure.",
+    "Before choosing a tool, decide whether the note must be searchable next month, editable by several people, formatted like a document, or simply opened from a link today.",
+    "## Four useful categories of free notepads",
+    "1. Browser scratchpads for quick personal capture",
+    "2. Link-based spaces for sending text and files without account setup",
+    "3. Collaborative documents for formal editing, comments, and permissions",
+    "4. Knowledge-base apps for long-term organization and retrieval",
+    "## A practical evaluation checklist",
+    "Check how quickly you can start, whether recipients need an account, what kinds of content are supported, how sharing permissions work, and what happens to old content. Also test the mobile experience instead of relying only on a desktop demo.",
+    "## When Woff is the right fit",
+    "Choose Woff when the job is a fast handoff: open a space, add text, notes, images, drawings, or files, and send one short code or link. Choose a full document platform when you need permanent records, advanced permissions, or a long editorial workflow.",
+    "**CTA:** Create a Woff space and test the complete handoff from your phone to another device.",
+  ],
+  "share-class-notes-online": [
+    "## Build the note around the next class",
+    "Start with the lesson date, topic, learning objective, and the one action students should take next. Put deadlines and required materials near the top so they are not buried beneath the explanation.",
+    "## A classroom-ready structure",
+    "1. Lesson summary in three to five sentences",
+    "2. Key terms and definitions",
+    "3. Worked examples or reference images",
+    "4. Homework, due date, and submission instructions",
+    "5. One place for corrections or follow-up notes",
+    "## Make access predictable",
+    "Share the same link through the channel students already check, such as the class portal or group message. Use a descriptive label instead of posting a bare URL, and test the link in a private window before sending it.",
+    "## Protect student information",
+    "Keep grades, contact details, accommodation notes, and other personal records in the school’s approved system. A quick shared space is best for lesson material that the whole class is allowed to see.",
+    "**CTA:** Prepare a clean class-note handoff in Woff before your next lesson.",
+  ],
+  "share-notes-online-for-students": [
+    "## Turn the group chat into an index",
+    "Use the chat to announce updates, but keep the actual study material in one shared space. That stops useful explanations from disappearing between reactions, memes, and unrelated messages.",
+    "## Organize for revision",
+    "1. Put the exam date and syllabus scope first",
+    "2. Split material by topic rather than by contributor",
+    "3. Mark uncertain points with a question instead of presenting them as facts",
+    "4. Add source links or page numbers for anything the group should verify",
+    "## Divide the work without creating duplicates",
+    "Assign one topic to each person, agree on a small template, and have one person do a final pass for repeated points. A consistent note is faster to revise than five different writing styles pasted together.",
+    "## Keep academic boundaries clear",
+    "Share explanations and revision material, not answers to active assessments. Remove student IDs, private feedback, and paid course material that you do not have permission to redistribute.",
+    "**CTA:** Start one Woff space for the next exam topic and send the link to your study group.",
+  ],
+  "share-meeting-notes-online": [
+    "## Capture decisions, not a transcript",
+    "A useful meeting note records what changed: the decision, its owner, its deadline, and any unresolved question. A word-for-word transcript is harder to scan and often hides the work that must happen next.",
+    "## Use a five-part meeting note",
+    "1. Purpose and date",
+    "2. Attendees who own follow-up work",
+    "3. Decisions made",
+    "4. Action items with owners and dates",
+    "5. Open questions for the next meeting",
+    "## Share while context is fresh",
+    "Send the note soon after the call and ask owners to correct names, dates, or decisions. When an action becomes long-running work, move it into the team’s project system and keep the quick note as the handoff record.",
+    "## Avoid sensitive meeting data",
+    "Do not use a lightweight shared space for legal advice, personnel discussions, credentials, or confidential customer information. Match the tool to the sensitivity of the meeting.",
+    "**CTA:** Use Woff for the decision-and-action summary after your next call.",
+  ],
+  "share-lists-online-with-family": [
+    "## Give the list one clear owner",
+    "A shared list works best when everyone can contribute but one person decides how items are grouped and cleaned up. Without that small convention, duplicates and vague entries appear quickly.",
+    "## Write items that are easy to act on",
+    "Use a quantity, item, and useful detail: “2 cartons oat milk” is better than “milk.” For chores, include the room or deadline. For travel, separate must-have documents from optional items.",
+    "## Useful list sections",
+    "1. Buy today",
+    "2. Can wait",
+    "3. Household chores",
+    "4. Questions for the family",
+    "## Reset the list regularly",
+    "Archive or replace completed lists instead of letting one page grow forever. A short current list is easier to trust, especially when someone is checking it from a phone in a store.",
+    "**CTA:** Make one focused Woff list for this week’s groceries or household tasks.",
+  ],
+  "minimalist-note-taking": [
+    "## Minimal does not mean unstructured",
+    "A minimalist system keeps only the structure that helps retrieval. A short title, a date, one context label, and a clear next action are often enough. Removing those anchors makes a note shorter but harder to use.",
+    "## Use the capture, clarify, move rule",
+    "1. Capture the thought before it disappears",
+    "2. Clarify what it means and whether it requires action",
+    "3. Move durable information into the long-term system where you will search for it",
+    "## Separate temporary notes from durable knowledge",
+    "Use a quick online space for handoffs, rough thinking, and information that will expire. Use your archive for research, policies, reference material, and anything you expect to revisit months later.",
+    "## Review less, but on purpose",
+    "Instead of constantly reorganizing, schedule a short weekly pass. Delete what no longer matters, promote the few durable notes, and leave the rest alone.",
+    "**CTA:** Capture one temporary note in Woff, then decide whether it deserves a permanent home.",
+  ],
+  "online-notepad-vs-note-taking-apps": [
+    "## The real difference is commitment",
+    "An online notepad minimizes the commitment needed to begin and share. A full note-taking app asks for more setup in exchange for organization, search, permissions, integrations, and long-term continuity.",
+    "## Choose an online notepad when",
+    "- The information is temporary or time-sensitive",
+    "- The recipient should open it without onboarding",
+    "- You need to combine a short explanation with an image or file",
+    "- A link is more convenient than an attachment",
+    "## Choose a full note-taking app when",
+    "- The note belongs to a long-running project",
+    "- Several people need formal editing roles or comments",
+    "- Search, history, templates, and integrations are essential",
+    "- Retention and administrative controls matter",
+    "## A two-tool workflow is often better",
+    "Capture and hand off quickly in the lightweight tool, then promote the small percentage of durable information into the team’s system of record. This preserves speed without sacrificing organization.",
+    "**CTA:** Try Woff for the fast handoff step and keep your archive focused on durable work.",
+  ],
+  "what-is-an-online-notepad": [
+    "## What makes it different from a document editor?",
+    "A document editor is designed for deliberate formatting and longer-lived work. An online notepad favors immediate capture and low-friction sharing. Both run in a browser, but they optimize different moments.",
+    "## Common online notepad workflows",
+    "1. Move a block of text from phone to computer",
+    "2. Send troubleshooting steps during a support conversation",
+    "3. Share a temporary checklist or meeting summary",
+    "4. Pair a code snippet with a screenshot or log file",
+    "## What to look for",
+    "A useful online notepad should load quickly, work well on mobile, make sharing obvious, and explain its privacy and retention model. Extra formatting is valuable only when it does not slow down the main job.",
+    "## When not to use one",
+    "Choose a system with stronger access controls and retention guarantees for confidential business records, regulated data, passwords, or documents that require formal approval history.",
+    "**CTA:** Open Woff and test how quickly you can move one useful note to another device.",
+  ],
+  "introducing-woff": [
+    "## The problem Woff is designed to remove",
+    "Most sharing tools begin by asking where a file should live, who owns the workspace, and which permissions apply. Those are important questions for permanent work, but they are unnecessary for many everyday handoffs.",
+    "## One space, several kinds of context",
+    "A Woff space can hold plain messages, rich notes, images, drawings, videos, and files in one chronological view. That makes it useful when a screenshot needs an explanation or a file needs a quick instruction.",
+    "## Built for short-lived collaboration",
+    "Woff prioritizes a fast start and an easy handoff. Treat it as a temporary communication surface, and move durable or sensitive work into the appropriate long-term system.",
+    "**CTA:** Create a space, add one piece of context, and share the four-digit code.",
+  ],
+  "introducing-woff-simple-shareable-spaces": [
+    "## Temporary by design",
+    "A quick handoff should not create a permanent workspace that someone must later organize. Woff rooms are designed for active exchanges, with expiration kept visible so participants understand the boundary.",
+    "## A room keeps the explanation beside the file",
+    "A bare attachment often creates a second conversation about what to inspect. In a Woff room, the instruction, source image, annotation, and revised file stay together in time order.",
+    "## When a permanent workspace is the better choice",
+    "Use a managed document system when information requires long-term retention, formal access roles, audit history, or regulatory controls. Woff is strongest at fast, low-friction collaboration—not as an archive for sensitive records.",
+    "**CTA:** Use a temporary Woff room for your next quick handoff, then move any durable outcome into its proper home.",
+  ],
+  "tips-for-faster-sharing": [
+    "## 1. Lead with the purpose",
+    "Put the reason for the share in the first message so a recipient knows what to review or do before opening every attachment.",
+    "## 2. Group related files",
+    "Upload related images or files together. A single batch keeps context intact and makes the activity browser easier to scan.",
+    "## 3. Mark screenshots instead of writing coordinates",
+    "Use image markup to circle the exact control, error, or visual detail. The edited copy is sent as a new entry, so the original remains available.",
+    "## 4. Use a rich note for structured instructions",
+    "When a message needs headings, task lists, links, or several sections, create a note instead of sending a long chat bubble.",
+    "## 5. End with the next action",
+    "Close the handoff with one explicit request, owner, or deadline. Clear context is faster than more context.",
+    "**CTA:** Apply one of these five patterns in your next Woff space.",
+  ],
+  "behind-the-scenes": [
+    "## The interface follows the object being shared",
+    "Text should read like a message, images should open without losing context, and files should keep recognizable names and sizes. Woff avoids forcing every kind of content into the same card.",
+    "## Speed is an interaction choice",
+    "Performance is not only a loading metric. It also means fewer decisions, visible upload progress, optimistic entries, and controls that appear where the user is already looking.",
+    "## Temporary spaces need clear boundaries",
+    "The product communicates expiration, ownership, and recovery in the room itself. Those constraints are part of the design, not legal text hidden elsewhere.",
+    "## Feedback becomes small, testable changes",
+    "We favor focused improvements such as better image markup, clearer unread states, or more reliable uploads over adding large feature areas without a strong sharing use case.",
+  ],
+  "quick-tips-speed-up-your-workflows": [
+    "## Paste is a first-class input",
+    "Copy text or an image, focus the space, and paste. Removing the save-download-upload loop is one of the quickest ways to shorten a handoff.",
+    "## Keep the room chronological",
+    "Add corrections as new context or edit your own message when it is only a typo. A clear timeline helps everyone understand what changed and when.",
+    "## Use the activity browser for retrieval",
+    "When a room contains many entries, filter the activity browser instead of scrolling through every message. This is especially useful for image-heavy or file-heavy spaces.",
+    "## Share the link and the purpose together",
+    "A short sentence such as “Review the circled header spacing” is more useful than a bare room link and usually prevents a follow-up question.",
+  ],
+  "october-november-updates-better-uploads-and-ui-polish": [
+    "## Uploads now behave like one transaction",
+    "A multi-file batch is published only after every object finishes uploading. Other room members do not see a half-complete collection, and failed batches can be retried without leaving misleading entries.",
+    "## Media review is more direct",
+    "Image collections open in a full-screen viewer, videos use a dedicated player, and images can be marked up and sent back into the conversation while preserving the source.",
+    "## Rooms are easier to follow",
+    "Realtime status, participant presence, message ownership, and unread markers now provide a clearer sense of what is happening without turning the interface into a heavy collaboration suite.",
+  ],
+};
+
+export const blogPosts: BlogPost[] = baseBlogPosts
+  .map((post, index) => ({
+    ...post,
+    // Product screenshots are faster, stable, and relevant to the article;
+    // random remote stock photos made the archive slower and less trustworthy.
+    coverImageUrl: post.featured
+      ? "/og-image.png"
+      : index % 2 === 0
+        ? "/screenshot_woff_light.jpeg"
+        : "/screenshot_woff_dark.jpeg",
+    coverAlt:
+      post.coverAlt || `Woff Space interface for ${post.title.toLowerCase()}`,
+    content: [...post.content, ...(contentEnhancements[post.slug] || [])],
+  }))
+  .sort((a, b) => b.date.localeCompare(a.date));
+
+export function getPublishedBlogPosts(now = new Date()): BlogPost[] {
+  const today = now.toISOString().slice(0, 10);
+  return blogPosts.filter((post) => post.date <= today);
+}
+
+export function getReadingTime(post: BlogPost): number {
+  const words = [post.title, post.excerpt, ...post.content]
+    .join(" ")
+    .trim()
+    .split(/\s+/).length;
+  return Math.max(1, Math.ceil(words / 220));
+}
+
+export function getPostHeadings(post: BlogPost) {
+  return post.content
+    .filter((block) => block.startsWith("## "))
+    .map((block) => {
+      const title = block.slice(3);
+      return {
+        title,
+        id: title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, ""),
+      };
+    });
+}
+
+export function getRelatedPosts(post: BlogPost, limit = 3): BlogPost[] {
+  const tags = new Set(post.tags.map((tag) => tag.toLowerCase()));
+  return blogPosts
+    .filter((candidate) => candidate.slug !== post.slug)
+    .map((candidate) => ({
+      candidate,
+      score: candidate.tags.reduce(
+        (total, tag) => total + (tags.has(tag.toLowerCase()) ? 1 : 0),
+        0,
+      ),
+    }))
+    .sort((a, b) => b.score - a.score || b.candidate.date.localeCompare(a.candidate.date))
+    .slice(0, limit)
+    .map(({ candidate }) => candidate);
+}
 
 export function getPostBySlug(slug: string): BlogPost | undefined {
   return blogPosts.find((p) => p.slug === slug);

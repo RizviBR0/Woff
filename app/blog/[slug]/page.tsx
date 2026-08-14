@@ -1,233 +1,297 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { ArrowLeft, ArrowUpRight, Clock3 } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
-import { getPostBySlug } from "@/lib/blog";
+import { BlogArticleContent } from "@/components/blog-article-content";
+import {
+  getPostBySlug,
+  getPostHeadings,
+  getPublishedBlogPosts,
+  getReadingTime,
+  getRelatedPosts,
+} from "@/lib/blog";
 
-export async function generateMetadata({ params }: { params: any }) {
-  const p = await Promise.resolve(params);
-  const post = getPostBySlug(p.slug);
-  if (!post) return { title: "Blog • Woff" };
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://woff.space";
+
+interface BlogPostPageProps {
+  params: Promise<{ slug: string }>;
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00Z`));
+}
+
+function jsonLd(value: unknown) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+export function generateStaticParams() {
+  return getPublishedBlogPosts().map((post) => ({ slug: post.slug }));
+}
+
+export async function generateMetadata({
+  params,
+}: BlogPostPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const post = getPostBySlug(slug);
+  if (!post) return { title: "Article not found", robots: { index: false } };
+
+  const title = post.seoTitle || post.title;
+  const description = post.seoDescription || post.excerpt;
+  const image = post.coverImageUrl || `${siteUrl}/og-image.png`;
+
   return {
-    title: `${post.title} • Woff`,
-    description: post.excerpt,
+    title,
+    description,
+    keywords: post.tags,
+    authors: [{ name: post.author.name }],
     alternates: { canonical: `/blog/${post.slug}` },
     openGraph: {
-      title: `${post.title} • Woff`,
-      description: post.excerpt,
+      title,
+      description,
       type: "article",
-      siteName: "Woff",
+      url: `/blog/${post.slug}`,
+      siteName: "Woff Space",
+      publishedTime: post.date,
+      modifiedTime: post.updatedDate || post.date,
+      authors: [post.author.name],
+      tags: post.tags,
+      images: [{ url: image, width: 1200, height: 630, alt: post.coverAlt || post.title }],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${post.title} • Woff`,
-      description: post.excerpt,
+      title,
+      description,
+      images: [image],
     },
   };
 }
 
-export default async function BlogPostPage({ params }: { params: any }) {
-  const p = await Promise.resolve(params);
-  const post = getPostBySlug(p.slug);
-  if (!post) return notFound();
+export default async function BlogPostPage({ params }: BlogPostPageProps) {
+  const { slug } = await params;
+  const post = getPostBySlug(slug);
+  if (!post || post.date > new Date().toISOString().slice(0, 10)) notFound();
+
+  const headings = getPostHeadings(post);
+  const relatedPosts = getRelatedPosts(post);
+  const readingTime = getReadingTime(post);
+  const articleUrl = `${siteUrl}/blog/${post.slug}`;
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.seoDescription || post.excerpt,
+    url: articleUrl,
+    mainEntityOfPage: { "@type": "WebPage", "@id": articleUrl },
+    image: post.coverImageUrl || `${siteUrl}/og-image.png`,
+    datePublished: post.date,
+    dateModified: post.updatedDate || post.date,
+    author: { "@type": "Organization", name: post.author.name, url: siteUrl },
+    publisher: {
+      "@type": "Organization",
+      name: "Woff Space",
+      url: siteUrl,
+      logo: { "@type": "ImageObject", url: `${siteUrl}/android-chrome-512x512.png` },
+    },
+    keywords: post.tags.join(", "),
+    wordCount: post.content.join(" ").split(/\s+/).length,
+    timeRequired: `PT${readingTime}M`,
+  };
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
+      { "@type": "ListItem", position: 2, name: "Blog", item: `${siteUrl}/blog` },
+      { "@type": "ListItem", position: 3, name: post.title, item: articleUrl },
+    ],
+  };
+  const faqSchema = post.faq?.length
+    ? {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: post.faq.map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: { "@type": "Answer", text: item.answer },
+        })),
+      }
+    : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+    <div className="min-h-screen bg-background">
       <Navbar />
+      <main>
+        <article>
+          <header className="border-b pt-24 sm:pt-28">
+            <div className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
+              <nav aria-label="Breadcrumb" className="mb-10">
+                <Link
+                  href="/blog"
+                  className="inline-flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground transition hover:text-orange-600"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  All field notes
+                </Link>
+              </nav>
 
-      <article className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20">
-        <div className="mt-8 mb-6">
-          <Link
-            href="/blog"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            ← Back to Blog
-          </Link>
-        </div>
-        <header className="mb-6">
-          <h1 className="text-3xl sm:text-4xl font-bold mb-3">{post.title}</h1>
-          <div className="text-sm text-muted-foreground">
-            {post.tags.join(" · ")}
-          </div>
-          {post.coverImageUrl && (
-            <div className="mt-5">
-              <Image
-                src={post.coverImageUrl}
-                alt={post.title}
-                width={1200}
-                height={630}
-                className="w-full h-64 sm:h-80 object-cover rounded-xl"
-                priority
-              />
-            </div>
-          )}
-          <div className="mt-4 flex items-center gap-3">
-            {post.author?.avatarUrl ? (
-              <Image
-                src={post.author.avatarUrl}
-                alt={post.author.name}
-                width={32}
-                height={32}
-                className="rounded-full"
-              />
-            ) : (
-              <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
-                {post.author?.name?.charAt(0) ?? "W"}
-              </div>
-            )}
-            <div className="text-sm text-muted-foreground">
-              By{" "}
-              <span className="text-foreground font-medium">
-                {post.author?.name ?? "Woff"}
-              </span>
-            </div>
-          </div>
-        </header>
-        <div className="prose prose-neutral dark:prose-invert max-w-none space-y-4 text-zinc-600 dark:text-zinc-300">
-          {post.content.map((para, idx) => {
-            // H2 headings
-            if (para.startsWith("## ")) {
-              return (
-                <h2 key={idx} className="text-2xl font-bold mt-8 mb-4 text-foreground border-b border-zinc-200 dark:border-zinc-800 pb-2">
-                  {para.replace("## ", "")}
-                </h2>
-              );
-            }
-            // H3 headings
-            if (para.startsWith("### ")) {
-              return (
-                <h3 key={idx} className="text-xl font-bold mt-6 mb-3 text-foreground">
-                  {para.replace("### ", "")}
-                </h3>
-              );
-            }
-            // Lists (- or *)
-            if (para.startsWith("- ") || para.startsWith("* ")) {
-              return (
-                <ul key={idx} className="list-disc pl-6 space-y-1 my-2 text-zinc-600 dark:text-zinc-300">
-                  <li>{para.replace(/^[-*]\s+/, "")}</li>
-                </ul>
-              );
-            }
-            // Numbered lists (1., 2. etc.)
-            if (para.match(/^\d+\.\s/)) {
-              const num = para.match(/^\d+/)?.[0];
-              const text = para.replace(/^\d+\.\s+/, "");
-              return (
-                <ol key={idx} className="list-decimal pl-6 space-y-1 my-2 text-zinc-600 dark:text-zinc-300">
-                  <li value={num ? parseInt(num) : undefined}>{text}</li>
-                </ol>
-              );
-            }
-            // Code block checking
-            if (para.startsWith("```")) {
-              const lines = para.split("\n");
-              const code = lines.slice(1, -1).join("\n");
-              return (
-                <pre key={idx} className="bg-zinc-100 dark:bg-zinc-900/50 p-4 rounded-xl overflow-x-auto my-4 text-sm font-mono border border-zinc-200 dark:border-zinc-800/80">
-                  <code>{code}</code>
-                </pre>
-              );
-            }
-            // Table checking
-            if (para.startsWith("|")) {
-              const lines = para.trim().split("\n");
-              const rows = lines.map(line => line.split("|").map(cell => cell.trim()).filter((_, i, a) => i > 0 && i < a.length - 1));
-              const headerRow = rows[0];
-              const bodyRows = rows.slice(2); // Skip separator row
-              return (
-                <div key={idx} className="overflow-x-auto my-6 border border-zinc-200 dark:border-zinc-800 rounded-xl">
-                  <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
-                    <thead className="bg-zinc-50 dark:bg-zinc-900/40">
-                      <tr>
-                        {headerRow.map((cell, cIdx) => (
-                          <th key={cIdx} className="px-6 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">
-                            {cell}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 bg-transparent">
-                      {bodyRows.map((row, rIdx) => (
-                        <tr key={rIdx} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20">
-                          {row.map((cell, cIdx) => (
-                            <td key={cIdx} className="px-6 py-4 text-sm text-muted-foreground whitespace-pre-wrap">
-                              {cell}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            }
-            // CTA banner/button
-            if (para.startsWith("**CTA:**") || para.startsWith("CTA:")) {
-              const ctaText = para.replace(/^\*\*CTA:\*\*\s*|^CTA:\s*/, "");
-              return (
-                <div key={idx} className="my-10 p-8 rounded-3xl border border-[#ff5a00]/30 bg-gradient-to-r from-[#ff5a00]/10 via-[#ff5a00]/5 to-transparent dark:from-[#ff5a00]/20 dark:via-[#ff5a00]/10 dark:to-transparent backdrop-blur-xl relative overflow-hidden shadow-xl dark:shadow-[0_0_50px_rgba(255,90,0,0.06)]">
-                  {/* Subtle decorative glow */}
-                  <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-[#ff5a00]/20 blur-2xl pointer-events-none" />
-                  <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="space-y-1 text-center md:text-left">
-                      <h4 className="font-bold text-lg text-foreground">Ready to try it?</h4>
-                      <p className="text-sm text-muted-foreground">{ctaText}</p>
-                    </div>
-                    <Link
-                      href="/"
-                      className="cta-button-glow inline-flex items-center gap-2 px-6 py-3.5 bg-zinc-950 dark:bg-white text-white dark:text-black font-semibold text-sm rounded-xl hover:scale-[1.02] transition-transform duration-200"
-                    >
-                      Go to Homepage
-                      <svg
-                        className="h-4 w-4"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+              <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-end">
+                <div className="max-w-4xl">
+                  <div className="mb-5 flex flex-wrap items-center gap-2">
+                    {post.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full border border-orange-500/25 bg-orange-500/[0.06] px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-400"
                       >
-                        <path d="M5 12h14M13 6l6 6-6 6" />
-                      </svg>
-                    </Link>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <h1 className="text-balance text-4xl font-extrabold leading-[1.04] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
+                    {post.title}
+                  </h1>
+                  <p className="mt-6 max-w-3xl text-lg leading-8 text-muted-foreground sm:text-xl">
+                    {post.excerpt}
+                  </p>
+                </div>
+
+                <div className="border-l-2 border-orange-500 pl-5 font-mono text-[11px] leading-6 text-muted-foreground">
+                  <p className="font-bold uppercase tracking-[0.14em] text-foreground">
+                    Woff field note
+                  </p>
+                  <p className="mt-2">
+                    Published <time dateTime={post.date}>{formatDate(post.date)}</time>
+                  </p>
+                  {post.updatedDate ? (
+                    <p>Updated <time dateTime={post.updatedDate}>{formatDate(post.updatedDate)}</time></p>
+                  ) : null}
+                  <p className="inline-flex items-center gap-1.5">
+                    <Clock3 className="h-3.5 w-3.5" /> {readingTime} min read
+                  </p>
+                  <div className="mt-3 flex items-center gap-2 border-t pt-3">
+                    {post.author.avatarUrl ? (
+                      <Image
+                        src={post.author.avatarUrl}
+                        alt=""
+                        width={28}
+                        height={28}
+                        className="rounded-full"
+                      />
+                    ) : null}
+                    <span>Written by {post.author.name}</span>
                   </div>
                 </div>
-              );
-            }
-            // Standard paragraph
-            return (
-              <p key={idx} className="leading-relaxed">
-                {para}
-              </p>
-            );
-          })}
-        </div>
+              </div>
+            </div>
+          </header>
 
-        {/* JSON-LD structured data for SEO */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "BlogPosting",
-              headline: post.title,
-              description: post.excerpt,
-              url: `/blog/${post.slug}`,
-              image: post.coverImageUrl,
-              author: post.author?.name
-                ? { "@type": "Person", name: post.author.name }
-                : undefined,
-              mainEntityOfPage: {
-                "@type": "WebPage",
-                "@id": `/blog/${post.slug}`,
-              },
-            }),
-          }}
-        />
-      </article>
+          {post.coverImageUrl ? (
+            <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+              <div className="relative aspect-[16/8] overflow-hidden rounded-[1.5rem] bg-muted sm:rounded-[2rem]">
+                <Image
+                  src={post.coverImageUrl}
+                  alt={post.coverAlt || post.title}
+                  fill
+                  sizes="(max-width: 1280px) 100vw, 1280px"
+                  className="object-cover"
+                  priority
+                />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/35 to-transparent" />
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 lg:grid-cols-[220px_minmax(0,760px)_1fr] lg:px-8 lg:py-20">
+            <aside className="hidden lg:block">
+              <div className="sticky top-24 border-l pl-5">
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                  In this note
+                </p>
+                <nav aria-label="Article outline" className="mt-4 space-y-3">
+                  {headings.map((heading) => (
+                    <a
+                      key={heading.id}
+                      href={`#${heading.id}`}
+                      className="block text-xs leading-5 text-muted-foreground transition hover:text-orange-600"
+                    >
+                      {heading.title}
+                    </a>
+                  ))}
+                </nav>
+              </div>
+            </aside>
+
+            <div className="min-w-0">
+              <BlogArticleContent post={post} />
+            </div>
+
+            <aside className="hidden xl:block">
+              <div className="sticky top-24 rounded-2xl border bg-muted/25 p-5">
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-orange-600 dark:text-orange-400">
+                  The Woff rule
+                </p>
+                <p className="mt-3 text-sm font-semibold leading-6">
+                  Use the lightest tool that keeps the context clear.
+                </p>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Quick handoffs belong in a quick space. Durable records belong in a durable system.
+                </p>
+              </div>
+            </aside>
+          </div>
+        </article>
+
+        <section className="border-y bg-zinc-950 py-14 text-white dark:bg-zinc-900" aria-labelledby="related-heading">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex items-end justify-between gap-6">
+              <div>
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-orange-400">
+                  Continue reading
+                </p>
+                <h2 id="related-heading" className="mt-2 text-3xl font-extrabold tracking-tight">
+                  Related field notes
+                </h2>
+              </div>
+              <Link href="/blog" className="hidden text-sm font-bold text-orange-400 sm:inline">
+                Browse all
+              </Link>
+            </div>
+            <div className="mt-8 grid gap-px overflow-hidden rounded-2xl bg-white/15 md:grid-cols-3">
+              {relatedPosts.map((related) => (
+                <Link
+                  key={related.slug}
+                  href={`/blog/${related.slug}`}
+                  className="group bg-zinc-950 p-6 transition hover:bg-zinc-900"
+                >
+                  <p className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+                    {formatDate(related.date)} · {getReadingTime(related)} min
+                  </p>
+                  <h3 className="mt-4 text-lg font-bold leading-6 group-hover:text-orange-400">
+                    {related.title}
+                  </h3>
+                  <span className="mt-6 inline-flex items-center gap-1 text-xs font-bold text-orange-400">
+                    Read note <ArrowUpRight className="h-3.5 w-3.5" />
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      </main>
       <Footer />
+
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(articleSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbSchema) }} />
+      {faqSchema ? (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(faqSchema) }} />
+      ) : null}
     </div>
   );
 }
