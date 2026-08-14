@@ -78,6 +78,7 @@ interface SpaceContainerProps {
 // Sidebar widths as constants
 const SIDEBAR_COLLAPSED_W = 60;
 const SIDEBAR_EXPANDED_W = 240;
+const UNSEEN_READING_DWELL_MS = 4_000;
 
 type AudioWindow = Window &
   typeof globalThis & {
@@ -337,7 +338,7 @@ export function SpaceContainer({
         seenTimer = window.setTimeout(() => {
           setFirstUnseenEntryId(null);
           setUnseenMessageCount(0);
-        }, 700);
+        }, UNSEEN_READING_DWELL_MS);
       } else if (!isSeen && seenTimer) {
         window.clearTimeout(seenTimer);
         seenTimer = null;
@@ -356,7 +357,7 @@ export function SpaceContainer({
       window.removeEventListener("focus", checkIfSeen);
       document.removeEventListener("visibilitychange", checkIfSeen);
     };
-  }, [firstUnseenEntryId]);
+  }, [firstUnseenEntryId, unseenMessageCount]);
 
   // Track whether new content can be revealed without interrupting reading.
   useEffect(() => {
