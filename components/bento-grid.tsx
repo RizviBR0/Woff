@@ -100,25 +100,43 @@ function ChartVisual() {
         <em>+90%</em>
       </div>
 
-      <svg viewBox="0 0 520 210" preserveAspectRatio="none" aria-hidden="true">
+      <svg viewBox="0 0 680 170" aria-hidden="true">
         <defs>
           <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" stopColor="#ff5a00" stopOpacity="0.4" />
             <stop offset="100%" stopColor="#ff5a00" stopOpacity="0" />
           </linearGradient>
+          <linearGradient
+            id="chartEdgeFade"
+            x1="0"
+            y1="0"
+            x2="680"
+            y2="0"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop offset="0%" stopColor="white" stopOpacity="0" />
+            <stop offset="12%" stopColor="white" stopOpacity="1" />
+            <stop offset="88%" stopColor="white" stopOpacity="1" />
+            <stop offset="100%" stopColor="white" stopOpacity="0" />
+          </linearGradient>
+          <mask id="chartEdgeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="680" height="170">
+            <rect width="680" height="170" fill="url(#chartEdgeFade)" />
+          </mask>
         </defs>
-        <path className={styles.gridLine} d="M30 45H500M30 95H500M30 145H500" />
-        <path
-          className={styles.chartArea}
-          d="M30 165L100 138L155 128L190 70L255 36L325 68L375 44L430 92L465 26L500 15V195H30Z"
-        />
-        <path
-          className={styles.chartLine}
-          d="M30 165L100 138L155 128L190 70L255 36L325 68L375 44L430 92L465 26L500 15"
-        />
-        <circle cx="375" cy="44" r="8" />
-        <line x1="375" y1="44" x2="375" y2="178" />
-        <text x="350" y="22">Live</text>
+        <path className={styles.gridLine} d="M20 42H660M20 86H660M20 130H660" />
+        <g mask="url(#chartEdgeMask)">
+          <path
+            className={styles.chartArea}
+            d="M20 148L112 125L187 116L235 65L325 35L420 63L489 42L564 83L612 25L660 15V160H20Z"
+          />
+          <path
+            className={styles.chartLine}
+            d="M20 148L112 125L187 116L235 65L325 35L420 63L489 42L564 83L612 25L660 15"
+          />
+        </g>
+        <circle cx="489" cy="42" r="7" />
+        <line x1="489" y1="42" x2="489" y2="150" />
+        <text x="463" y="22">Live</text>
       </svg>
     </div>
   );
