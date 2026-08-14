@@ -31,6 +31,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import { Space, deleteSpace, recoverSpace } from "@/lib/actions";
 import { getHoursUntilExpiry } from "@/lib/utils";
@@ -141,6 +142,7 @@ export function SpaceContainer({
     new Set(initialEntries.map((entry) => entry.id)),
   );
   const audioContextRef = useRef<AudioContext | null>(null);
+  const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
 
   const normalDocumentTitle = useMemo(
@@ -1387,21 +1389,39 @@ export function SpaceContainer({
                 <div className="mx-auto max-w-2xl space-y-6 py-8">
                   {entries.map((entry) => (
                     <Fragment key={entry.id}>
-                      {entry.id === firstUnseenEntryId && (
-                        <div
-                          className="flex items-center gap-3 px-3 py-1"
-                          role="separator"
-                          aria-label={`${unseenMessageCount} new ${
-                            unseenMessageCount === 1 ? "message" : "messages"
-                          }`}
-                        >
-                          <span className="h-px flex-1 bg-orange-500/35" />
-                          <span className="rounded-full bg-orange-500 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white shadow-sm">
-                            New {unseenMessageCount > 1 ? `· ${unseenMessageCount}` : ""}
-                          </span>
-                          <span className="h-px flex-1 bg-orange-500/35" />
-                        </div>
-                      )}
+                      <AnimatePresence initial={false}>
+                        {entry.id === firstUnseenEntryId && (
+                          <motion.div
+                            key={`unseen-divider-${entry.id}`}
+                            initial={
+                              prefersReducedMotion
+                                ? { opacity: 0 }
+                                : { opacity: 0, height: 0, y: 8, scale: 0.98 }
+                            }
+                            animate={{ opacity: 1, height: "auto", y: 0, scale: 1 }}
+                            exit={
+                              prefersReducedMotion
+                                ? { opacity: 0 }
+                                : { opacity: 0, height: 0, y: -6, scale: 0.98 }
+                            }
+                            transition={{
+                              duration: prefersReducedMotion ? 0.12 : 0.34,
+                              ease: [0.22, 1, 0.36, 1],
+                            }}
+                            className="flex origin-center items-center gap-3 overflow-hidden px-3 py-1"
+                            role="separator"
+                            aria-label={`${unseenMessageCount} new ${
+                              unseenMessageCount === 1 ? "message" : "messages"
+                            }`}
+                          >
+                            <span className="h-px flex-1 bg-orange-500/35" />
+                            <span className="rounded-full bg-orange-500 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white shadow-sm">
+                              New {unseenMessageCount > 1 ? `· ${unseenMessageCount}` : ""}
+                            </span>
+                            <span className="h-px flex-1 bg-orange-500/35" />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                       <EntryCard
                         entry={entry}
                         currentDeviceId={currentDeviceId || null}

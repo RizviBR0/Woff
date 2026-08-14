@@ -256,9 +256,9 @@
 }
 
 .chart svg {
+  display: block;
   width: 100%;
-  height: auto;
-  max-height: 140px;
+  height: clamp(124px, 11vw, 150px);
   margin-top: 14px;
   overflow: visible;
 }
@@ -540,6 +540,10 @@
 
   .chartTop strong {
     font-size: 34px;
+  }
+
+  .chart svg {
+    height: 118px;
   }
 
   .shieldWrap,

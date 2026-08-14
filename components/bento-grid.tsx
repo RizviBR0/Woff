@@ -100,7 +100,7 @@ function ChartVisual() {
         <em>+90%</em>
       </div>
 
-      <svg viewBox="0 0 520 210">
+      <svg viewBox="0 0 520 210" preserveAspectRatio="none" aria-hidden="true">
         <defs>
           <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" stopColor="#ff5a00" stopOpacity="0.4" />
