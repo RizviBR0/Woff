@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
-import { createSpace } from "@/lib/actions";
-import { rememberSpaceOwnership } from "@/lib/space-recovery";
+import { useCreateSpace } from "@/lib/hooks/use-create-space";
 import {
   Zap,
   Shield,
@@ -25,22 +23,8 @@ import {
 } from "lucide-react";
 
 export function OnlineNotepadClient() {
-  const [isCreating, setIsCreating] = useState(false);
+  const { isCreating, createAndNavigate: handleCreateSpace } = useCreateSpace();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const router = useRouter();
-
-  const handleCreateSpace = async () => {
-    if (isCreating) return;
-    setIsCreating(true);
-    try {
-      const space = await createSpace();
-      rememberSpaceOwnership(space);
-      router.push(`/${space.slug}`);
-    } catch (err) {
-      console.error("Failed to create space:", err);
-      setIsCreating(false);
-    }
-  };
 
   const toggleFaq = (index: number) => {
     setOpenFaq(openFaq === index ? null : index);

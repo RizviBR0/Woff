@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Maximize, X } from "lucide-react";
+import { Loader2, Maximize, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface GlobalVideoViewerProps {
@@ -19,6 +19,7 @@ export function GlobalVideoViewer({
   onClose,
 }: GlobalVideoViewerProps) {
   const [mounted, setMounted] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(true);
   const playerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setMounted(true), []);
@@ -82,12 +83,24 @@ export function GlobalVideoViewer({
             <X className="h-5 w-5" />
           </Button>
         </div>
+        {videoLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-md overflow-hidden z-10 pointer-events-none animate-in fade-in">
+            <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+            <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center mb-3 shadow-inner border border-white/15">
+              <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
+            </div>
+            <span className="text-xs font-medium text-white/80 tracking-tight">Loading video…</span>
+          </div>
+        )}
         <video
           src={src}
           controls
           autoPlay
           playsInline
-          className="max-h-full max-w-full"
+          onLoadedData={() => setVideoLoading(false)}
+          className={`max-h-full max-w-full transition-opacity duration-300 ${
+            videoLoading ? "opacity-0" : "opacity-100"
+          }`}
           aria-label={title}
         >
           Your browser does not support video playback.

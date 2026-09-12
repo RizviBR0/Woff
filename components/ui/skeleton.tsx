@@ -17,6 +17,24 @@ export const Skeleton = memo(function Skeleton({
   );
 });
 
+export const ShimmerSkeleton = memo(function ShimmerSkeleton({
+  className = "",
+  children,
+}: {
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-xl bg-muted/40 backdrop-blur-sm ${className}`}
+      aria-hidden="true"
+    >
+      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 dark:via-white/10 to-transparent" />
+      {children}
+    </div>
+  );
+});
+
 // Entry card skeleton for loading states
 export const EntryCardSkeleton = memo(function EntryCardSkeleton() {
   return (

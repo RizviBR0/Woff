@@ -24,6 +24,7 @@ import {
   createUploadIntents,
 } from "@/lib/actions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
+import { formatBytes } from "@/lib/utils";
 import type { Entry } from "./entry-card";
 
 const DrawingCanvas = dynamic(
@@ -55,12 +56,6 @@ type BatchState = {
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_BATCH_FILES = 20;
 const CONCURRENT_UPLOADS = 3;
-
-function formatBytes(value: number) {
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function localFileUrl(path: string) {
   return `/api/files/${path.split("/").map(encodeURIComponent).join("/")}`;
@@ -95,11 +90,15 @@ export function Composer({
   const [isDragging, setIsDragging] = useState(false);
   const [drawingOpen, setDrawingOpen] = useState(false);
   const [batch, setBatch] = useState<BatchState | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const activeUploadsRef = useRef<Set<tus.Upload>>(new Set());
   const cancelledRef = useRef(false);
   const previewUrlsRef = useRef<string[]>([]);
+  const isPostingRef = useRef(false);
+  const isSavingDrawingRef = useRef(false);
+  const isCreatingNoteRef = useRef(false);
 
   const clearPreviews = useCallback(() => {
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -404,21 +403,46 @@ export function Composer({
 
   const sendText = async () => {
     const message = text.trim();
-    if (!message || isPosting) return;
+    if (!message || isPosting || isPostingRef.current) return;
+    isPostingRef.current = true;
     setIsPosting(true);
+
+    // Instantly clear input and collapse auto-height
+    setText("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const optimisticEntry: Entry = {
+      id: tempId,
+      space_id: spaceId,
+      kind: "text",
+      text: message,
+      meta: null,
+      created_by_device_id: currentDeviceId || null,
+      created_at: new Date().toISOString(),
+      isLoading: true,
+    };
+
+    // Show immediately in timeline
+    onNewEntry(optimisticEntry);
+
     try {
       const entry = await createEntry(spaceId, "text", message);
-      onNewEntry(entry as Entry);
-      setText("");
+      onReplaceEntry(tempId, entry as Entry);
     } catch (error) {
+      onUpdateEntry(tempId, { isError: true, isLoading: false });
       toast.error(error instanceof Error ? error.message : "Unable to send message");
     } finally {
+      isPostingRef.current = false;
       setIsPosting(false);
     }
   };
 
   const createNote = async () => {
-    if (isPosting || noteCreationStage) return;
+    if (isPosting || noteCreationStage || isCreatingNoteRef.current) return;
+    isCreatingNoteRef.current = true;
     setNoteCreationStage("creating");
     try {
       const result = await createNoteEntry(spaceId);
@@ -442,6 +466,8 @@ export function Composer({
     } catch (error) {
       setNoteCreationStage(null);
       toast.error(error instanceof Error ? error.message : "Unable to create note");
+    } finally {
+      isCreatingNoteRef.current = false;
     }
   };
 
@@ -460,18 +486,23 @@ export function Composer({
 
   const saveDrawing = useCallback(
     async (blob: Blob) => {
-      if (batch?.status === "uploading") {
+      if (isSavingDrawingRef.current || batch?.status === "uploading") {
         throw new Error("Wait for the current upload or cancel it");
       }
-      const file = new File([blob], `drawing-${Date.now()}.png`, { type: "image/png" });
-      const upload = runUpload([file], "drawing");
-      void upload.catch((error) => {
-        toast.error(error instanceof Error ? error.message : "Unable to send drawing");
-      });
-      // runUpload creates the visible timeline placeholder synchronously before
-      // its first network wait. Yield once so the canvas closes only after that
-      // handoff is visible to the user.
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      isSavingDrawingRef.current = true;
+      try {
+        const file = new File([blob], `drawing-${Date.now()}.png`, { type: "image/png" });
+        const upload = runUpload([file], "drawing");
+        void upload.catch((error) => {
+          toast.error(error instanceof Error ? error.message : "Unable to send drawing");
+        });
+        // runUpload creates the visible timeline placeholder synchronously before
+        // its first network wait. Yield once so the canvas closes only after that
+        // handoff is visible to the user.
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      } finally {
+        isSavingDrawingRef.current = false;
+      }
     },
     [batch?.status, runUpload],
   );
@@ -484,8 +515,31 @@ export function Composer({
     }
   }, [receiveFiles]);
 
+  const isModalOrOverlayActive = useCallback(() => {
+    if (drawingOpen) return true;
+    if (typeof document === "undefined") return false;
+    return Boolean(
+      document.querySelector(
+        '[role="dialog"], [data-woff-canvas="true"], [data-woff-modal="true"], [data-radix-portal]',
+      ),
+    );
+  }, [drawingOpen]);
+
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
+      if (isModalOrOverlayActive()) return;
+
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        activeEl !== textareaRef.current &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          (activeEl as HTMLElement).isContentEditable)
+      ) {
+        return;
+      }
+
       const itemFiles = Array.from(event.clipboardData?.items || [])
         .filter((item) => item.kind === "file")
         .map((item) => item.getAsFile())
@@ -500,7 +554,7 @@ export function Composer({
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [receiveFiles]);
+  }, [isModalOrOverlayActive, receiveFiles]);
 
   useEffect(() => {
     let dragDepth = 0;
@@ -508,12 +562,17 @@ export function Composer({
       Array.from(event.dataTransfer?.types || []).includes("Files");
 
     const onDragEnter = (event: DragEvent) => {
+      if (isModalOrOverlayActive()) return;
       if (!containsFiles(event)) return;
       event.preventDefault();
       dragDepth += 1;
       setIsDragging(true);
     };
     const onDragOver = (event: DragEvent) => {
+      if (isModalOrOverlayActive()) {
+        setIsDragging(false);
+        return;
+      }
       if (!containsFiles(event)) return;
       event.preventDefault();
       if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
@@ -526,6 +585,10 @@ export function Composer({
       if (dragDepth === 0) setIsDragging(false);
     };
     const onDrop = (event: DragEvent) => {
+      if (isModalOrOverlayActive()) {
+        setIsDragging(false);
+        return;
+      }
       if (!containsFiles(event)) return;
       event.preventDefault();
       dragDepth = 0;
@@ -544,7 +607,7 @@ export function Composer({
       window.removeEventListener("dragleave", onDragLeave);
       window.removeEventListener("drop", onDrop);
     };
-  }, [receiveFiles]);
+  }, [isModalOrOverlayActive, receiveFiles]);
 
   return (
     <>
@@ -690,12 +753,18 @@ export function Composer({
         )}
 
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
-            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-              event.preventDefault();
-              void sendText();
+            if (event.key === "Enter") {
+              if (event.metaKey || event.ctrlKey) {
+                event.preventDefault();
+                void sendText();
+              } else if (!centered && !event.shiftKey && typeof window !== "undefined" && window.innerWidth >= 640) {
+                event.preventDefault();
+                void sendText();
+              }
             }
           }}
           rows={centered ? 4 : 2}

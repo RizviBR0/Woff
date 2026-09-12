@@ -2,10 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import { Upload, Loader2 } from "lucide-react";
-import { createSpace } from "@/lib/actions";
-import { rememberSpaceOwnership } from "@/lib/space-recovery";
+import { useCreateSpace } from "@/lib/hooks/use-create-space";
 
 /**
  * Client-only shell for the homepage that handles:
@@ -18,9 +16,8 @@ import { rememberSpaceOwnership } from "@/lib/space-recovery";
 export function HomeClientShell() {
   const [mounted, setMounted] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [isCreatingSpace, setIsCreatingSpace] = useState(false);
+  const { isCreating: isCreatingSpace, createAndNavigate } = useCreateSpace();
   const dragCounterRef = useRef(0);
-  const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
@@ -58,24 +55,12 @@ export function HomeClientShell() {
 
       const files = e.dataTransfer?.files;
       if (files && files.length > 0) {
-        setIsCreatingSpace(true);
-        try {
-          // Save files globally for the newly created space to pick up
-          (window as any).__pending_dragged_files = Array.from(files);
-
-          // Create new space automatically
-          const space = await createSpace();
-          rememberSpaceOwnership(space);
-
-          // Navigate to the space
-          router.push(`/${space.slug}`);
-        } catch (err) {
-          console.error("Failed to auto-create space on drop:", err);
-          setIsCreatingSpace(false);
-        }
+        // Save files globally for the newly created space to pick up
+        (window as any).__pending_dragged_files = Array.from(files);
+        await createAndNavigate();
       }
     },
-    [router]
+    [createAndNavigate]
   );
 
   useEffect(() => {

@@ -1,16 +1,6 @@
-"use client";
-
-import dynamic from "next/dynamic";
-import { ArrowRight, Mail, Heart, Calendar } from "lucide-react";
+import BentoGrid from "@/components/bento-grid";
+import TimelineDemo from "@/components/timeline-demo";
 import { Footer } from "@/components/footer";
-
-const BentoGrid = dynamic(() => import("@/components/bento-grid"), {
-  ssr: true,
-});
-
-const TimelineDemo = dynamic(() => import("@/components/timeline-demo"), {
-  ssr: false,
-});
 
 export function HomepageSections() {
   return (

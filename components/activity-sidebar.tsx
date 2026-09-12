@@ -20,7 +20,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { format, isToday, isYesterday } from "date-fns";
 import NextImage from "next/image";
 
 async function createZip() {
@@ -47,9 +46,43 @@ type FilterType = "all" | "images" | "files" | "notes";
 function formatDateGroup(dateString: string): string {
   try {
     const d = new Date(dateString);
-    if (isToday(d)) return "Today";
-    if (isYesterday(d)) return "Yesterday";
-    return format(d, "d MMM");
+    if (isNaN(d.getTime())) return "";
+    const now = new Date();
+    const isToday =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+    if (isToday) return "Today";
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday =
+      d.getDate() === yesterday.getDate() &&
+      d.getMonth() === yesterday.getMonth() &&
+      d.getFullYear() === yesterday.getFullYear();
+    if (isYesterday) return "Yesterday";
+
+    return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(d);
+  } catch {
+    return "";
+  }
+}
+
+function formatNoteDate(date: Date): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }).format(date);
+  } catch {
+    return "";
+  }
+}
+
+function formatDateIso(date: Date): string {
+  try {
+    return date.toISOString().split("T")[0];
   } catch {
     return "";
   }
@@ -588,9 +621,8 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
         pdf.setFontSize(10);
         pdf.setFont("helvetica", "normal");
         pdf.setTextColor(128, 128, 128);
-        const dateStr = format(
-          new Date(note.updated_at || note.created_at),
-          "MMMM d, yyyy"
+        const dateStr = formatNoteDate(
+          new Date(note.updated_at || note.created_at)
         );
         pdf.text(dateStr, margin, yPos);
         yPos += 15;
@@ -732,9 +764,8 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
               pdf.setFontSize(10);
               pdf.setFont("helvetica", "normal");
               pdf.setTextColor(128, 128, 128);
-              const dateStr = format(
-                new Date(note.updated_at || note.created_at),
-                "MMMM d, yyyy"
+              const dateStr = formatNoteDate(
+                new Date(note.updated_at || note.created_at)
               );
               pdf.text(dateStr, margin, yPos);
               yPos += 15;
@@ -775,7 +806,7 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
       const url = URL.createObjectURL(content);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `woff-files-${format(new Date(), "yyyy-MM-dd")}.zip`;
+      link.download = `woff-files-${formatDateIso(new Date())}.zip`;
       link.style.display = "none";
       document.body.appendChild(link);
       link.click();

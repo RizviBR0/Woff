@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   ScanLine,
   Clipboard,
@@ -13,13 +13,14 @@ import {
   Link2,
   Copy,
 } from "lucide-react";
-import { createSpace, validateRoomCode } from "@/lib/actions";
+import { validateRoomCode } from "@/lib/actions";
 import { toast } from "sonner";
-import { rememberSpaceOwnership } from "@/lib/space-recovery";
+import { extractRoomCode } from "@/lib/utils";
+import { useCreateSpace } from "@/lib/hooks/use-create-space";
 
 export default function HeroSection() {
   const [pinDigits, setPinDigits] = useState<string[]>(Array(4).fill(""));
-  const [isCreating, setIsCreating] = useState(false);
+  const { isCreating, createAndNavigate: handleCreateSpace } = useCreateSpace();
   const [isJoining, setIsJoining] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [shareHost, setShareHost] = useState("woff.space");
@@ -28,30 +29,34 @@ export default function HeroSection() {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const qrScannerRef = useRef<any>(null);
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const roomCode = pinDigits.join("");
   const hasFullCode = roomCode.length === 4;
 
-  // Pre-fill PIN from URL query param (e.g., /?room=1234) or localStorage when coming back
+  // Pre-fill PIN from URL query param (e.g., /?room=1234) or localStorage without triggering CSR de-opt
   useEffect(() => {
-    const roomFromUrl = searchParams.get("room");
-    if (roomFromUrl && /^\d{4}$/.test(roomFromUrl)) {
-      const digits = roomFromUrl.split("");
-      setPinDigits(digits);
-      // Focus the last input
-      setTimeout(() => {
-        inputRefs.current[3]?.focus();
-      }, 100);
-    } else {
-      const savedRoom =
-        localStorage.getItem("last_room") ||
-        localStorage.getItem("last_created_space");
-      if (savedRoom && /^\d{4}$/.test(savedRoom)) {
-        setPinDigits(savedRoom.split(""));
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const roomFromUrl = params.get("room");
+      if (roomFromUrl && /^\d{4}$/.test(roomFromUrl)) {
+        const digits = roomFromUrl.split("");
+        setPinDigits(digits);
+        setTimeout(() => {
+          inputRefs.current[3]?.focus();
+        }, 100);
+        return;
       }
+    } catch {
+      // Ignore if window is not ready
     }
-  }, [searchParams]);
+
+    const savedRoom =
+      localStorage.getItem("last_room") ||
+      localStorage.getItem("last_created_space");
+    if (savedRoom && /^\d{4}$/.test(savedRoom)) {
+      setPinDigits(savedRoom.split(""));
+    }
+  }, []);
 
   useEffect(() => {
     setShareHost(window.location.host);
@@ -62,48 +67,6 @@ export default function HeroSection() {
     };
   }, []);
 
-  const handleCreateSpace = async () => {
-    if (isCreating) return;
-    setIsCreating(true);
-    try {
-      const space = await createSpace();
-      rememberSpaceOwnership(space);
-      // Prefetch the room page assets before navigating for faster transition
-      router.prefetch(`/${space.slug}`);
-      router.push(`/${space.slug}`);
-    } catch (err) {
-      console.error("Failed to create space:", err);
-      toast.error("Failed to create space. Please try again.");
-      setIsCreating(false);
-    }
-  };
-
-  const extractRoomCode = (input: string): string => {
-    let value = input.trim();
-    try {
-      const url = new URL(value);
-      const path = url.pathname || "/";
-      if (path.startsWith("/r/")) {
-        const code = path.slice(3).split("/")[0];
-        return /^\d{4}$/.test(code) ? code : "";
-      }
-      const seg = path.split("/").filter(Boolean)[0];
-      return /^\d{4}$/.test(seg || "") ? seg : "";
-    } catch {
-      if (value.includes("/r/")) {
-        const code = value.split("/r/")[1].split("/")[0].split("?")[0];
-        return /^\d{4}$/.test(code) ? code : "";
-      }
-      if (value.includes("/")) {
-        const seg = value.split("/").filter(Boolean)[0];
-        const code = (seg || "").split("?")[0];
-        return /^\d{4}$/.test(code) ? code : "";
-      }
-      const digits = value.replace(/\D/g, "").slice(0, 4);
-      return digits.length === 4 ? digits : "";
-    }
-  };
-
   const handleJoinRoom = async (overrideCode?: string) => {
     const codeToJoin = overrideCode || pinDigits.join("");
     if (codeToJoin.length !== 4) {
@@ -111,6 +74,7 @@ export default function HeroSection() {
       return;
     }
     setIsJoining(true);
+    router.prefetch(`/${codeToJoin}`);
 
     try {
       const isValid = await validateRoomCode(codeToJoin);
@@ -141,6 +105,7 @@ export default function HeroSection() {
     if (digit && index === 3) {
       const fullCode = newDigits.join("");
       if (fullCode.length === 4) {
+        router.prefetch(`/${fullCode}`);
         setTimeout(() => handleJoinRoom(fullCode), 100);
       }
     }
@@ -179,6 +144,7 @@ export default function HeroSection() {
       inputRefs.current[focusIndex]?.focus();
 
       if (digits.length === 4) {
+        router.prefetch(`/${digits}`);
         setTimeout(() => handleJoinRoom(digits), 100);
       }
     }

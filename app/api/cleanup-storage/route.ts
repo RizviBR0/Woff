@@ -30,7 +30,14 @@ export async function GET(request: NextRequest) {
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    // Expire inactive non-Pro rooms first. Their delete trigger queues all
+    // Expire extension uploads first. The database also runs this idempotent
+    // function every five minutes so access stops close to the 48-hour mark;
+    // this invocation catches up before processing the resulting file queue.
+    const { data: expiredEntryCount, error: entryExpiryError } =
+      await supabaseAdmin.rpc("cleanup_expired_entries");
+    if (entryExpiryError) throw entryExpiryError;
+
+    // Expire inactive non-Pro rooms next. Their delete trigger queues all
     // storage cleanup work processed below in the same invocation.
     const { data: expiredSpaceCount, error: expiryError } = await supabaseAdmin
       .rpc("cleanup_expired_spaces");
@@ -169,8 +176,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      message: `Expired ${expiredSpaceCount || 0} inactive spaces; processed ${queueItems?.length || 0} storage queues, ${deletedKeyCount} objects, and ${abandonedUploadCount} abandoned uploads.`,
+      message: `Expired ${expiredEntryCount || 0} extension entries and ${expiredSpaceCount || 0} inactive spaces; processed ${queueItems?.length || 0} storage queues, ${deletedKeyCount} objects, and ${abandonedUploadCount} abandoned uploads.`,
       results,
+      expiredEntryCount: expiredEntryCount || 0,
       expiredSpaceCount: expiredSpaceCount || 0,
       deletedKeyCount,
       abandonedUploadCount,

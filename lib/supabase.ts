@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -41,15 +42,17 @@ export async function createServerSupabaseClient() {
   });
 }
 
-export async function requireAnonymousUser() {
+export const requireAnonymousUser = cache(async () => {
   const supabase = await createServerSupabaseClient();
-  const { data: claimsResult, error: claimsError } = await supabase.auth.getClaims();
+  const { data: claimsResult, error: claimsError } =
+    await supabase.auth.getClaims();
   const subject = claimsResult?.claims.sub;
   let user: { id: string } | null = subject ? { id: subject } : null;
   let error = claimsError;
 
   if (error || !user) {
-    const { data, error: signInError } = await supabase.auth.signInAnonymously();
+    const { data, error: signInError } =
+      await supabase.auth.signInAnonymously();
     user = data.user ? { id: data.user.id } : null;
     error = signInError;
   }
@@ -61,4 +64,4 @@ export async function requireAnonymousUser() {
   }
 
   return { supabase, user };
-}
+});

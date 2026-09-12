@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ext .js,.jsx,.ts,.tsx --ignore-pattern .next"
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx --ignore-pattern .next",
+    "extension:build": "node extension/scripts/build.mjs",
+    "extension:check": "node --check extension/src/background.js && node --check extension/src/panel.js && node --check extension/scripts/build.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -29,15 +31,11 @@
     "@tiptap/pm": "^3.28.0",
     "@tiptap/react": "^3.28.0",
     "@tiptap/starter-kit": "^3.28.0",
-    "@types/jszip": "^3.4.0",
     "@vercel/speed-insights": "^2.0.0",
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "date-fns": "^4.1.0",
-    "dompurify": "^3.4.12",
     "framer-motion": "^12.40.0",
-    "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.552.0",
@@ -48,7 +46,6 @@
     "qrcode": "^1.5.4",
     "react": "^18",
     "react-dom": "^18",
-    "react-icons": "^5.6.0",
     "sanitize-html": "^2.17.6",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
@@ -56,6 +53,7 @@
     "tus-js-client": "^4.3.1"
   },
   "devDependencies": {
+    "@types/jszip": "^3.4.0",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18",

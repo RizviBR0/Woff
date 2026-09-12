@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Logo } from "@/components/logo";
-import { createSpace } from "@/lib/actions";
-import { rememberSpaceOwnership } from "@/lib/space-recovery";
+import { useCreateSpace } from "@/lib/hooks/use-create-space";
 import {
   Menu,
   X,
@@ -22,21 +20,21 @@ import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 const navLinks = [
   {
     name: "About",
-    href: "#about",
+    href: "/about",
     icon: Info,
     description: "Learn more about Woff",
     external: false,
   },
   {
     name: "How it Works",
-    href: "#how-it-works",
+    href: "/#how-it-works",
     icon: HelpCircle,
     description: "Quick guide to get started",
     external: false,
   },
   {
     name: "Contact",
-    href: "#contact",
+    href: "/#contact",
     icon: Mail,
     description: "Get in touch with us",
     external: false,
@@ -52,9 +50,8 @@ const navLinks = [
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
   const [showCta, setShowCta] = useState(false);
-  const router = useRouter();
+  const { isCreating, createAndNavigate: handleCreateSpace } = useCreateSpace();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -68,20 +65,6 @@ export function Navbar() {
       window.removeEventListener("resize", handleScroll);
     };
   }, []);
-
-  const handleCreateSpace = async () => {
-    if (isCreating) return;
-    setIsCreating(true);
-    try {
-      const space = await createSpace();
-      rememberSpaceOwnership(space);
-      router.prefetch(`/${space.slug}`);
-      router.push(`/${space.slug}`);
-    } catch (err) {
-      console.error("Failed to create space:", err);
-      setIsCreating(false);
-    }
-  };
 
   return (
     <>

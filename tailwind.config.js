@@ -86,15 +86,20 @@ module.exports = {
   				'33%': { transform: 'translate(30px, -50px) scale(1.1)' },
   				'66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
   				'100%': { transform: 'translate(0px, 0px) scale(1)' }
+  			},
+  			shimmer: {
+  				'0%': { transform: 'translateX(-100%)' },
+  				'100%': { transform: 'translateX(100%)' }
   			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
-  			blob: 'blob 7s infinite'
+  			blob: 'blob 7s infinite',
+  			shimmer: 'shimmer 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite'
   		},
   		fontFamily: {
-  			sans: ['Almarai', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif']
+  			sans: ['var(--font-inter)', 'var(--font-almarai)', 'Almarai', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif']
   		}
   	}
   },

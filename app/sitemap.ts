@@ -15,6 +15,11 @@ const staticRoutes = [
     priority: 0.8,
   },
   {
+    path: "/blog/tips",
+    changeFrequency: "weekly",
+    priority: 0.75,
+  },
+  {
     path: "/online-notepad",
     changeFrequency: "monthly",
     priority: 0.9,

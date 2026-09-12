@@ -1,16 +1,42 @@
 /** @type {import('next').NextConfig} */
 const isDevelopment = process.env.NODE_ENV !== "production";
 
+const supabaseHost = (() => {
+  try {
+    return process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+      : "goitdofpzjjvwgxoykyy.supabase.co";
+  } catch {
+    return "goitdofpzjjvwgxoykyy.supabase.co";
+  }
+})();
+
+const siteHost = (() => {
+  try {
+    return process.env.NEXT_PUBLIC_SITE_URL
+      ? new URL(process.env.NEXT_PUBLIC_SITE_URL).host
+      : "woff.space";
+  } catch {
+    return "woff.space";
+  }
+})();
+
 const nextConfig = {
   experimental: {
     serverActions: {
-      allowedOrigins: ["localhost:3000", "http://localhost:3000"],
+      allowedOrigins: Array.from(
+        new Set([
+          "localhost:3000",
+          "http://localhost:3000",
+          siteHost,
+          `https://${siteHost}`,
+          `http://${siteHost}`,
+        ]),
+      ),
       bodySizeLimit: "5mb",
     },
     optimizePackageImports: [
       "lucide-react",
-      "date-fns",
-      "react-icons",
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
       "@radix-ui/react-popover",
@@ -27,7 +53,11 @@ const nextConfig = {
       },
       {
         protocol: "https",
-        hostname: "goitdofpzjjvwgxoykyy.supabase.co",
+        hostname: supabaseHost,
+      },
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
       },
     ],
     // Optimize image loading

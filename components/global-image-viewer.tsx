@@ -10,6 +10,7 @@ import {
   ChevronRight,
   DownloadIcon,
   Edit3,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -34,6 +35,8 @@ export function GlobalImageViewer({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isBright, setIsBright] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -41,6 +44,8 @@ export function GlobalImageViewer({
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
+    setImageLoading(true);
+    setImageError(false);
   }, [initialIndex, isOpen]);
 
   // Analyze brightness
@@ -49,11 +54,12 @@ export function GlobalImageViewer({
 
     let isMounted = true;
     const currentUrl = images[currentIndex];
+    setImageLoading(true);
+    setImageError(false);
 
     const analyzeImageBrightness = (dataUrl: string): Promise<boolean> => {
       return new Promise((resolve) => {
         const img = new window.Image();
-        img.crossOrigin = "anonymous";
         img.onload = () => {
           try {
             const canvas = document.createElement("canvas");
@@ -314,17 +320,51 @@ export function GlobalImageViewer({
           </div>
         )}
 
-        {/* Main image */}
-        <div className="relative w-full h-full flex items-center justify-center max-w-[95vw] max-h-[95vh]">
-          <Image
-            src={images[currentIndex]}
-            alt={`Viewing image ${currentIndex + 1}`}
-            fill
-            sizes="100vw"
-            className="object-contain rounded-lg drop-shadow-2xl"
-            unoptimized
-            priority
-          />
+        {/* Main image container */}
+        <div className="relative flex items-center justify-center max-w-[95vw] max-h-[88vh] min-h-[160px] min-w-[160px]">
+          {imageLoading && (
+            <div className="relative flex flex-col items-center justify-center w-[85vw] sm:w-[580px] h-[50vh] sm:h-[480px] max-w-[92vw] max-h-[85vh] rounded-2xl bg-white/5 dark:bg-white/[0.04] backdrop-blur-xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in duration-200">
+              <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/15 dark:via-white/10 to-transparent pointer-events-none" />
+              <div className="flex flex-col items-center gap-3 z-10">
+                <div className="h-12 w-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shadow-lg border border-white/15">
+                  <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
+                </div>
+                <span className="text-xs font-medium text-white/80 drop-shadow tracking-tight">
+                  Loading full image…
+                </span>
+              </div>
+            </div>
+          )}
+
+          {imageError ? (
+            <div className="flex flex-col items-center justify-center gap-3 text-center text-white p-8 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 max-w-sm shadow-2xl">
+              <p className="text-sm font-semibold">Unable to display image</p>
+              <p className="text-xs text-white/70">The file could not be rendered inline.</p>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="mt-1 text-xs"
+                onClick={() => window.open(images[currentIndex], "_blank")}
+              >
+                Open in new tab
+              </Button>
+            </div>
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              key={images[currentIndex]}
+              src={images[currentIndex]}
+              alt={`Viewing image ${currentIndex + 1}`}
+              onLoad={() => setImageLoading(false)}
+              onError={() => {
+                setImageLoading(false);
+                setImageError(true);
+              }}
+              className={`max-h-[88vh] max-w-[92vw] w-auto h-auto object-contain rounded-xl drop-shadow-2xl select-none transition-all duration-300 ${
+                imageLoading ? "opacity-0 scale-95 blur-sm absolute pointer-events-none" : "opacity-100 scale-100 blur-0 relative"
+              }`}
+            />
+          )}
         </div>
       </div>
     </div>,

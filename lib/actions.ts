@@ -41,6 +41,7 @@ export interface Entry {
   meta: Record<string, any> | null;
   created_by_device_id: string | null;
   created_at: string;
+  expires_at?: string | null;
 }
 
 export interface Note {

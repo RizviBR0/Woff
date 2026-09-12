@@ -5,23 +5,18 @@ import {
   useState,
   useEffect,
   useCallback,
-  useRef,
   useMemo,
 } from "react";
-
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   Copy,
   Check,
   Share,
   Settings,
   X,
-  QrCode,
-  Trash2,
-  AlertTriangle,
   Loader2,
-  Search,
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
@@ -29,40 +24,33 @@ import {
   WifiOff,
   ArrowDown,
   KeyRound,
+  Trash2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
-import { Space, deleteSpace, recoverSpace } from "@/lib/actions";
+import { type Space, recoverSpace } from "@/lib/actions";
 import { getHoursUntilExpiry } from "@/lib/utils";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
 import { ProgressiveBlur } from "@/components/ui/progressive-blur";
 import { Logo } from "./logo";
-import { createClientSupabaseClient } from "@/lib/supabase-browser";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useRouter } from "next/navigation";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
+import { useSpaceSound } from "@/lib/hooks/use-space-sound";
+import { useSpaceRealtime } from "@/lib/hooks/use-space-realtime";
+import { SpaceModals } from "@/components/space/space-modals";
 
 const ActivitySidebar = dynamic(
   () => import("./activity-sidebar").then((module) => module.ActivitySidebar),
@@ -76,33 +64,8 @@ interface SpaceContainerProps {
   currentDisplayName: string;
 }
 
-// Sidebar widths as constants
 const SIDEBAR_COLLAPSED_W = 60;
 const SIDEBAR_EXPANDED_W = 240;
-const UNSEEN_READING_DWELL_MS = 4_000;
-
-type AudioWindow = Window &
-  typeof globalThis & {
-    webkitAudioContext?: typeof AudioContext;
-  };
-
-function playMessageChime(context: AudioContext) {
-  const now = context.currentTime;
-  const gain = context.createGain();
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.12, now + 0.015);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
-  gain.connect(context.destination);
-
-  [660, 880].forEach((frequency, index) => {
-    const oscillator = context.createOscillator();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, now + index * 0.08);
-    oscillator.connect(gain);
-    oscillator.start(now + index * 0.08);
-    oscillator.stop(now + 0.24 + index * 0.08);
-  });
-}
 
 export function SpaceContainer({
   space,
@@ -110,7 +73,30 @@ export function SpaceContainer({
   currentDeviceId,
   currentDisplayName,
 }: SpaceContainerProps) {
-  const [entries, setEntries] = useState<Entry[]>(initialEntries);
+  const router = useRouter();
+  const prefersReducedMotion = useReducedMotion();
+  const { playMessageChime } = useSpaceSound();
+
+  const {
+    entries,
+    setEntries,
+    handleNewEntry,
+    handleReplaceEntry,
+    handleUpdateEntry,
+    handleRemoveEntry,
+    connectionStatus,
+    onlineCount,
+    newItemsCount,
+    firstUnseenEntryId,
+    unseenMessageCount,
+    scrollToBottom,
+  } = useSpaceRealtime({
+    space,
+    initialEntries,
+    currentDeviceId,
+    onIncomingMessage: playMessageChime,
+  });
+
   const hasPosted = entries.length > 0;
   const [keepInitialComposerDuringUpload, setKeepInitialComposerDuringUpload] =
     useState(false);
@@ -120,38 +106,10 @@ export function SpaceContainer({
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
-  const [isDeleting, setIsDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recoveryDialogOpen, setRecoveryDialogOpen] = useState(false);
-  const [recoveryKey, setRecoveryKey] = useState("");
   const [ownerRecoveryKey, setOwnerRecoveryKey] = useState("");
-  const [isRecovering, setIsRecovering] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<
-    "connecting" | "connected" | "disconnected"
-  >("connecting");
-  const [newItemsCount, setNewItemsCount] = useState(0);
-  const [firstUnseenEntryId, setFirstUnseenEntryId] = useState<string | null>(
-    null,
-  );
-  const [unseenMessageCount, setUnseenMessageCount] = useState(0);
-  const [tabUnreadCount, setTabUnreadCount] = useState(0);
   const [shareHost, setShareHost] = useState("woff.space");
-  const [onlineCount, setOnlineCount] = useState(1);
-  const isNearBottomRef = useRef(true);
-  const knownEntryIdsRef = useRef(
-    new Set(initialEntries.map((entry) => entry.id)),
-  );
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const prefersReducedMotion = useReducedMotion();
-  const router = useRouter();
-
-  const normalDocumentTitle = useMemo(
-    () =>
-      space.title?.trim()
-        ? `${space.title.trim()} – Woff`
-        : `Space ${space.slug} – Woff`,
-    [space.slug, space.title],
-  );
 
   // Sidebar state
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
@@ -163,6 +121,7 @@ export function SpaceContainer({
 
   // Track if we're on desktop for sidebar offset
   const [isDesktop, setIsDesktop] = useState(false);
+
   useEffect(() => {
     setShareHost(window.location.host);
     const mq = window.matchMedia("(min-width: 768px)");
@@ -172,9 +131,10 @@ export function SpaceContainer({
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // Check if current user is the creator
-  const isCreator =
-    currentDeviceId && space.creator_device_id === currentDeviceId;
+  const isCreator = Boolean(
+    currentDeviceId && space.creator_device_id === currentDeviceId,
+  );
+  const isPro = space.is_pro || false;
 
   const dismissGuide = useCallback(() => {
     setShowGuide(false);
@@ -207,15 +167,10 @@ export function SpaceContainer({
         else localStorage.removeItem(`woff_recovery_${space.slug}`);
       })
       .catch(() => {
-        // Keep the saved key for a future retry if the network is unavailable.
+        // Keep saved key for retry if network unavailable
       });
   }, [isCreator, router, space.slug]);
 
-  // Use space prop for pro status
-  const isPro = space.is_pro || false;
-
-  // Calculate remaining inactivity window. Server timestamps are authoritative;
-  // the 48-hour fallback only supports legacy rows.
   const hoursUntilExpiry = useMemo(() => {
     if (space.expires_at || space.last_activity_at) {
       return getHoursUntilExpiry(
@@ -225,306 +180,12 @@ export function SpaceContainer({
     }
     return 48;
   }, [space.expires_at, space.last_activity_at]);
-  const expiryLabel =
-    hoursUntilExpiry <= 0
-      ? "Expired"
-      : `${hoursUntilExpiry}h`;
 
-  // User avatar letter (first letter of slug)
-  const avatarLetter = (space.slug?.[0] || "W").toUpperCase();
-
-  // Current sidebar width for layout calculations
-  const sidebarWidth = sidebarExpanded
-    ? SIDEBAR_EXPANDED_W
-    : SIDEBAR_COLLAPSED_W;
-
-  // Function to scroll to bottom smoothly
-  const scrollToBottom = useCallback(() => {
-    window.scrollTo({
-      top: document.documentElement.scrollHeight,
-      behavior: "smooth",
-    });
-    setNewItemsCount(0);
-  }, []);
-
-  // Helper function to safely add entry without duplicates. The Set makes the
-  // decision synchronous, so reconnects cannot produce duplicate sounds.
-  const addEntryIfNotExists = useCallback((newEntry: Entry) => {
-    if (knownEntryIdsRef.current.has(newEntry.id)) return false;
-    knownEntryIdsRef.current.add(newEntry.id);
-    setEntries((prev) => {
-      return [...prev, newEntry];
-    });
-    return true;
-  }, []);
-
-  const playIncomingMessageSound = useCallback(() => {
-    const context = audioContextRef.current;
-    if (!context) return;
-    const play = () => playMessageChime(context);
-    if (context.state === "suspended") {
-      void context.resume().then(play).catch(() => undefined);
-    } else {
-      play();
-    }
-  }, []);
-
-  useEffect(() => {
-    const unlockAudio = () => {
-      if (!audioContextRef.current) {
-        const AudioContextConstructor =
-          window.AudioContext || (window as AudioWindow).webkitAudioContext;
-        if (!AudioContextConstructor) return;
-        audioContextRef.current = new AudioContextConstructor();
-      }
-      if (audioContextRef.current.state === "suspended") {
-        void audioContextRef.current.resume().catch(() => undefined);
-      }
-      window.removeEventListener("pointerdown", unlockAudio, true);
-      window.removeEventListener("keydown", unlockAudio, true);
-    };
-    window.addEventListener("pointerdown", unlockAudio, true);
-    window.addEventListener("keydown", unlockAudio, true);
-    return () => {
-      window.removeEventListener("pointerdown", unlockAudio, true);
-      window.removeEventListener("keydown", unlockAudio, true);
-      const context = audioContextRef.current;
-      audioContextRef.current = null;
-      if (context && context.state !== "closed") {
-        void context.close().catch(() => undefined);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    document.title = tabUnreadCount
-      ? `${normalDocumentTitle} | ${tabUnreadCount} new ${
-          tabUnreadCount === 1 ? "message" : "messages"
-        }`
-      : normalDocumentTitle;
-    return () => {
-      document.title = normalDocumentTitle;
-    };
-  }, [normalDocumentTitle, tabUnreadCount]);
-
-  useEffect(() => {
-    const clearTabCounter = () => {
-      if (document.visibilityState === "visible" && document.hasFocus()) {
-        setTabUnreadCount(0);
-      }
-    };
-    window.addEventListener("focus", clearTabCounter);
-    document.addEventListener("visibilitychange", clearTabCounter);
-    return () => {
-      window.removeEventListener("focus", clearTabCounter);
-      document.removeEventListener("visibilitychange", clearTabCounter);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!firstUnseenEntryId) return;
-    let seenTimer: number | null = null;
-    const checkIfSeen = () => {
-      if (document.visibilityState !== "visible" || !document.hasFocus()) {
-        if (seenTimer) window.clearTimeout(seenTimer);
-        seenTimer = null;
-        return;
-      }
-      const target = document.getElementById(`entry-${firstUnseenEntryId}`);
-      if (!target) return;
-      const rect = target.getBoundingClientRect();
-      const visibleHeight =
-        Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
-      const isSeen = visibleHeight >= Math.min(rect.height * 0.5, 120);
-      if (isSeen && !seenTimer) {
-        seenTimer = window.setTimeout(() => {
-          setFirstUnseenEntryId(null);
-          setUnseenMessageCount(0);
-        }, UNSEEN_READING_DWELL_MS);
-      } else if (!isSeen && seenTimer) {
-        window.clearTimeout(seenTimer);
-        seenTimer = null;
-      }
-    };
-    const frame = requestAnimationFrame(checkIfSeen);
-    window.addEventListener("scroll", checkIfSeen, { passive: true });
-    window.addEventListener("resize", checkIfSeen, { passive: true });
-    window.addEventListener("focus", checkIfSeen);
-    document.addEventListener("visibilitychange", checkIfSeen);
-    return () => {
-      cancelAnimationFrame(frame);
-      if (seenTimer) window.clearTimeout(seenTimer);
-      window.removeEventListener("scroll", checkIfSeen);
-      window.removeEventListener("resize", checkIfSeen);
-      window.removeEventListener("focus", checkIfSeen);
-      document.removeEventListener("visibilitychange", checkIfSeen);
-    };
-  }, [firstUnseenEntryId, unseenMessageCount]);
-
-  // Track whether new content can be revealed without interrupting reading.
-  useEffect(() => {
-    const handleScroll = () => {
-      const remaining =
-        document.documentElement.scrollHeight -
-        window.innerHeight -
-        window.scrollY;
-      isNearBottomRef.current = remaining < 180;
-      if (isNearBottomRef.current) setNewItemsCount(0);
-    };
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  // Real-time subscription for new entries
-  useEffect(() => {
-    const supabase = createClientSupabaseClient();
-
-    const channel = supabase
-      .channel(`space:${space.id}`, {
-        config: { presence: { key: currentDeviceId || crypto.randomUUID() } },
-      })
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState();
-        setOnlineCount(Math.max(1, Object.keys(state).length));
-      })
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "entries",
-          filter: `space_id=eq.${space.id}`,
-        },
-        (payload) => {
-          const newEntry = payload.new as Entry;
-          const added = addEntryIfNotExists(newEntry);
-          if (!added) return;
-          const isIncoming =
-            newEntry.created_by_device_id !== currentDeviceId;
-          if (isIncoming) {
-            playIncomingMessageSound();
-            setFirstUnseenEntryId((current) => current || newEntry.id);
-            setUnseenMessageCount((count) => count + 1);
-            if (document.hidden || !document.hasFocus()) {
-              setTabUnreadCount((count) => count + 1);
-            }
-          }
-          if (isNearBottomRef.current) {
-            requestAnimationFrame(scrollToBottom);
-          } else {
-            setNewItemsCount((count) => count + 1);
-          }
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "entries",
-          filter: `space_id=eq.${space.id}`,
-        },
-        (payload) => {
-          const updatedEntry = payload.new as Entry;
-          setEntries((prev) =>
-            prev.map((entry) =>
-              entry.id === updatedEntry.id ? updatedEntry : entry,
-            ),
-          );
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "entries",
-          filter: `space_id=eq.${space.id}`,
-        },
-        (payload) => {
-          const oldEntry = payload.old as { id: string };
-          if (oldEntry && oldEntry.id) {
-            setEntries((prev) =>
-              prev.filter((entry) => entry.id !== oldEntry.id),
-            );
-          }
-        },
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          setConnectionStatus("connected");
-          void channel.track({ name: currentDisplayName, onlineAt: new Date().toISOString() });
-        }
-        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          setConnectionStatus("disconnected");
-        } else {
-          setConnectionStatus("connecting");
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [
-    space.id,
-    currentDeviceId,
-    currentDisplayName,
-    addEntryIfNotExists,
-    playIncomingMessageSound,
-    scrollToBottom,
-  ]);
-
-  const handleNewEntry = useCallback(
-    (entry: Entry) => {
-      addEntryIfNotExists(entry);
-
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
-    },
-    [scrollToBottom, addEntryIfNotExists],
-  );
-
-  const handleUpdateEntry = useCallback(
-    (entryId: string, updates: Partial<Entry>) => {
-      setEntries((prev) =>
-        prev.map((entry) =>
-          entry.id === entryId ? { ...entry, ...updates } : entry,
-        ),
-      );
-    },
-    [],
-  );
-
-  const handleReplaceEntry = useCallback(
-    (placeholderId: string, realEntry: Entry) => {
-      knownEntryIdsRef.current.delete(placeholderId);
-      knownEntryIdsRef.current.add(realEntry.id);
-      setEntries((prev) => {
-        // First, remove any duplicate that real-time may have already inserted
-        const withoutRealtimeDup = prev.filter(
-          (entry) => entry.id !== realEntry.id,
-        );
-        // Then replace the placeholder with the real entry
-        return withoutRealtimeDup.map((entry) =>
-          entry.id === placeholderId ? realEntry : entry,
-        );
-      });
-    },
-    [],
-  );
-
-  const handleRemoveEntry = useCallback((entryId: string) => {
-    knownEntryIdsRef.current.delete(entryId);
-    setEntries((prev) => prev.filter((entry) => entry.id !== entryId));
-  }, []);
+  const expiryLabel = hoursUntilExpiry <= 0 ? "Expired" : `${hoursUntilExpiry}h`;
+  const sidebarWidth = sidebarExpanded ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W;
 
   const handleComposerUploadStateChange = useCallback(
     (active: boolean) => {
-      // The first optimistic file entry must not unmount its own centered
-      // composer. Once the timeline exists, uploads must never switch layouts
-      // because unmounting the compact composer aborts its active TUS uploads.
       setKeepInitialComposerDuringUpload((current) =>
         active ? current || !hasPosted : false,
       );
@@ -537,7 +198,7 @@ export function SpaceContainer({
       await navigator.clipboard.writeText(space.slug);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
+    } catch {
       const textArea = document.createElement("textarea");
       textArea.value = space.slug;
       document.body.appendChild(textArea);
@@ -572,7 +233,6 @@ export function SpaceContainer({
       toast.success("Recovery key copied");
       return;
     }
-
     setMobileSidebarOpen(false);
     setRecoveryDialogOpen(true);
   };
@@ -582,27 +242,7 @@ export function SpaceContainer({
     setMobileSettingsOpen(true);
   };
 
-  const handleDeleteSpace = async () => {
-    if (!isCreator) return;
-
-    setIsDeleting(true);
-    try {
-      await deleteSpace(space.id);
-      
-      // Clear last_created_space from localStorage so input stays empty on homepage
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("last_created_space");
-      }
-      
-      router.push("/");
-    } catch (error) {
-      setIsDeleting(false);
-      setDeleteDialogOpen(false);
-      toast.error(error instanceof Error ? error.message : "Unable to delete the space");
-    }
-  };
-
-  const generateQRCode = async (url: string) => {
+  const generateQRCode = useCallback(async (url: string) => {
     try {
       const QRCode = (await import("qrcode")).default;
       const qrUrl = await QRCode.toDataURL(url, {
@@ -617,14 +257,14 @@ export function SpaceContainer({
     } catch (error) {
       console.error("Error generating QR code:", error);
     }
-  };
+  }, []);
 
-  const handleShare = async () => {
+  const handleShare = useCallback(() => {
     const shareUrl = `${window.location.origin}/${space.slug}`;
     setShareModalOpen(true);
     setMobileSidebarOpen(false);
-    generateQRCode(shareUrl);
-  };
+    void generateQRCode(shareUrl);
+  }, [space.slug, generateQRCode]);
 
   const handleSidebarShare = () => {
     if (showGuide && guideStep === 2) {
@@ -632,17 +272,6 @@ export function SpaceContainer({
       return;
     }
     void handleShare();
-  };
-
-  const handleCopyFromModal = async () => {
-    const shareUrl = `${window.location.origin}/${space.slug}`;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      /* ignore */
-    }
   };
 
   const renderSettingsContent = (closeSettings: () => void) => (
@@ -721,7 +350,6 @@ export function SpaceContainer({
     </div>
   );
 
-  // Sidebar icon button helper
   const SidebarButton = ({
     icon: Icon,
     label,
@@ -774,7 +402,6 @@ export function SpaceContainer({
     </TooltipProvider>
   );
 
-  // The sidebar content — reused for both desktop and mobile
   const renderSidebarContent = (isMobile: boolean = false) => {
     const isCurrentlyExpanded = isMobile || sidebarExpanded;
     const isGuideStepOpen = (step: number) =>
@@ -784,9 +411,11 @@ export function SpaceContainer({
 
     return (
       <div className="flex flex-col h-full bg-zinc-50 dark:bg-[#111113]">
-        {/* Top: Logo (expanded only) + Toggle */}
+        {/* Top: Logo + Toggle */}
         <div
-          className={`flex items-center ${isCurrentlyExpanded ? "justify-between px-4" : "justify-center"} h-14 flex-shrink-0`}
+          className={`flex items-center ${
+            isCurrentlyExpanded ? "justify-between px-4" : "justify-center"
+          } h-14 flex-shrink-0`}
         >
           {isCurrentlyExpanded ? (
             <div className="flex items-center gap-2">
@@ -806,9 +435,7 @@ export function SpaceContainer({
           ) : null}
           {!isMobile && (
             <button
-              onClick={() => {
-                setSidebarExpanded((prev) => !prev);
-              }}
+              onClick={() => setSidebarExpanded((prev) => !prev)}
               className="hidden md:flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/5 transition-colors"
             >
               {sidebarExpanded ? (
@@ -820,14 +447,15 @@ export function SpaceContainer({
           )}
         </div>
 
-        {/* Divider */}
         <div className="mx-3 h-px bg-zinc-200 dark:bg-white/[0.06]" />
 
-        {/* Top actions/navigation items: Room Code Copy & Share */}
+        {/* Room Code & Share */}
         <div
-          className={`flex flex-col gap-2 py-3 ${isCurrentlyExpanded ? "px-3" : "px-2"}`}
+          className={`flex flex-col gap-2 py-3 ${
+            isCurrentlyExpanded ? "px-3" : "px-2"
+          }`}
         >
-          {/* Room Code Button with Onboarding Popover */}
+          {/* Room Code Button with Popover */}
           <Popover open={isGuideStepOpen(1)}>
             <PopoverTrigger asChild>
               <div className="w-full">
@@ -901,7 +529,6 @@ export function SpaceContainer({
             >
               <div className="p-4 space-y-3.5 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-orange-500/10 to-transparent blur-xl pointer-events-none" />
-
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[9px] font-black text-[#ff5a00] uppercase tracking-wider bg-orange-500/10 dark:bg-orange-500/20 px-2 py-0.5 rounded-full">
@@ -919,9 +546,7 @@ export function SpaceContainer({
                     Copy & Share Room ID
                   </h4>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                    Clicking this copies the four-digit room code. Share it with
-                    anyone you want to invite; they can enter it on the home
-                    page to join.
+                    Clicking this copies the room code. Share it with anyone you want to invite; they can enter it on the home page to join.
                   </p>
                 </div>
                 <div className="flex justify-between items-center pt-1">
@@ -948,7 +573,7 @@ export function SpaceContainer({
             </PopoverContent>
           </Popover>
 
-          {/* Share Button with Onboarding Popover */}
+          {/* Share Button with Popover */}
           <Popover open={isGuideStepOpen(2)}>
             <PopoverTrigger asChild>
               <div className="w-full">
@@ -986,7 +611,6 @@ export function SpaceContainer({
             >
               <div className="p-4 space-y-3.5 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-orange-500/10 to-transparent blur-xl pointer-events-none" />
-
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[9px] font-black text-[#ff5a00] uppercase tracking-wider bg-orange-500/10 dark:bg-orange-500/20 px-2 py-0.5 rounded-full">
@@ -1005,7 +629,6 @@ export function SpaceContainer({
                   </h4>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
                     Let someone scan this QR code to open the room instantly.
-                    The Share option also gives you the full room link.
                   </p>
                   <div className="flex justify-center rounded-xl border border-orange-500/15 bg-white p-2 dark:bg-white">
                     {qrCodeUrl ? (
@@ -1043,7 +666,7 @@ export function SpaceContainer({
             </PopoverContent>
           </Popover>
 
-          {/* Recovery key / ownership option with onboarding step */}
+          {/* Recovery Key Popover */}
           <Popover open={isGuideStepOpen(3)}>
             <PopoverTrigger asChild>
               <div className="w-full">
@@ -1115,9 +738,7 @@ export function SpaceContainer({
                     Keep your recovery key safe
                   </h4>
                   <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-                    This key restores creator controls if this browser loses its
-                    anonymous session. Anyone with the key can recover ownership,
-                    so keep it private.
+                    This key restores creator controls if this browser loses its anonymous session.
                   </p>
                   {isCreator && ownerRecoveryKey ? (
                     <button
@@ -1129,8 +750,7 @@ export function SpaceContainer({
                     </button>
                   ) : (
                     <p className="rounded-xl border bg-muted/40 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
-                      The creator receives this key. If you already have one,
-                      choose Recover ownership and enter it there.
+                      The creator receives this key. If you already have one, choose Recover ownership and enter it there.
                     </p>
                   )}
                 </div>
@@ -1183,7 +803,7 @@ export function SpaceContainer({
           )}
         </div>
 
-        {/* MIDDLE section: Embedded searchable files browser (renders only if expanded) */}
+        {/* Embedded searchable files browser */}
         {isCurrentlyExpanded ? (
           <div className="flex-1 min-h-0 py-2 flex flex-col border-t border-b border-zinc-200 dark:border-white/[0.06] my-2 overflow-hidden">
             <ActivitySidebar entries={entries} isOpen={true} />
@@ -1192,9 +812,11 @@ export function SpaceContainer({
           <div className="flex-1" />
         )}
 
-        {/* Bottom settings action. Mobile uses a dialog outside the drawer. */}
+        {/* Settings button */}
         <div
-          className={`flex flex-col gap-1 py-3 ${isCurrentlyExpanded ? "px-3" : "px-2"}`}
+          className={`flex flex-col gap-1 py-3 ${
+            isCurrentlyExpanded ? "px-3" : "px-2"
+          }`}
         >
           {isMobile ? (
             <button
@@ -1266,14 +888,11 @@ export function SpaceContainer({
       {/* Mobile sidebar overlay */}
       {mobileSidebarOpen && (
         <div className="md:hidden fixed inset-0 z-50">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setMobileSidebarOpen(false)}
           />
-          {/* Sidebar drawer */}
           <aside className="absolute left-0 top-0 bottom-0 w-60 bg-zinc-50 dark:bg-[#111113] border-r border-zinc-200 dark:border-white/[0.06] animate-in slide-in-from-left duration-200 flex flex-col">
-            {/* Close button */}
             <div className="absolute top-3 right-3 z-10">
               <button
                 onClick={() => setMobileSidebarOpen(false)}
@@ -1282,25 +901,12 @@ export function SpaceContainer({
                 <X className="h-4 w-4" />
               </button>
             </div>
-
             {renderSidebarContent(true)}
           </aside>
         </div>
       )}
 
-      <Dialog open={mobileSettingsOpen} onOpenChange={setMobileSettingsOpen}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-sm overflow-hidden p-0 sm:max-w-sm">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Settings</DialogTitle>
-            <DialogDescription>
-              Change the theme or manage this space.
-            </DialogDescription>
-          </DialogHeader>
-          {renderSettingsContent(() => setMobileSettingsOpen(false))}
-        </DialogContent>
-      </Dialog>
-
-      {/* Main content area — offset by sidebar on desktop */}
+      {/* Main content area */}
       <div className="flex-1 min-h-screen transition-all duration-300">
         <main
           className="transition-all duration-300"
@@ -1327,7 +933,9 @@ export function SpaceContainer({
                     )}
                   </button>
                   {isPro && (
-                    <span className="rounded-full bg-purple-600 px-1.5 py-0.5 text-[9px] font-black text-white">PRO</span>
+                    <span className="rounded-full bg-purple-600 px-1.5 py-0.5 text-[9px] font-black text-white">
+                      PRO
+                    </span>
                   )}
                 </div>
                 <p className="truncate text-[11px] text-muted-foreground">
@@ -1363,9 +971,9 @@ export function SpaceContainer({
               </div>
             </div>
           </header>
+
           <div className="container mx-auto px-4">
             {!hasPosted || keepInitialComposerDuringUpload ? (
-              // Centered composer for first post
               <div className="flex min-h-screen items-center justify-center">
                 <div className="w-full max-w-4xl">
                   <Composer
@@ -1384,7 +992,6 @@ export function SpaceContainer({
                 </div>
               </div>
             ) : (
-              // Timeline view with entries, and bottom composer
               <div className="pb-40">
                 <div className="mx-auto max-w-2xl space-y-6 py-8">
                   {entries.map((entry) => (
@@ -1433,7 +1040,7 @@ export function SpaceContainer({
                   ))}
                 </div>
 
-                {/* Bottom composer — offset left for sidebar on desktop */}
+                {/* Bottom composer */}
                 <div
                   className="fixed bottom-0 right-0 pb-safe transition-all animate-in slide-in-from-bottom-5 duration-200 z-30 bg-gradient-to-t from-white/30 via-white/10 to-transparent dark:from-[#030303]/30 dark:via-[#030303]/10 dark:to-transparent"
                   style={{ left: isDesktop ? sidebarWidth : 0 }}
@@ -1474,199 +1081,24 @@ export function SpaceContainer({
         </button>
       )}
 
-      {/* Share Modal */}
-      <Dialog
-        open={shareModalOpen}
-        onOpenChange={(open) => {
-          setShareModalOpen(open);
-          if (!open) {
-            setQrCodeUrl("");
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md border border-orange-500/20 bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-xl shadow-[0_20px_50px_rgba(255,90,0,0.15)] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2.5 text-xl font-bold">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500 dark:bg-orange-500/20 dark:text-orange-400">
-                <Share className="h-5 w-5" />
-              </div>
-              Share Space
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            {/* QR Code Container with Glowing Orange Border and radial ambient glow */}
-            <div className="flex justify-center py-4">
-              <div className="relative group p-1.5 rounded-[24px] bg-gradient-to-br from-orange-500/30 via-orange-500/10 to-transparent dark:from-orange-500/40 dark:via-orange-500/15 dark:to-transparent">
-                {/* Glow Orb behind QR card */}
-                <div className="absolute inset-0 rounded-[24px] bg-gradient-to-r from-orange-500 to-amber-500 blur-2xl opacity-20 dark:opacity-30 group-hover:opacity-40 transition-opacity duration-500" />
-
-                {/* Main QR Card */}
-                <div className="relative p-4 bg-white dark:bg-[#151518] rounded-[18px] border border-orange-500/35 dark:border-orange-500/45 shadow-[0_4px_30px_rgba(255,90,0,0.12)] flex flex-col items-center">
-                  {qrCodeUrl ? (
-                    <Image
-                      src={qrCodeUrl}
-                      alt="QR Code for space"
-                      width={192}
-                      height={192}
-                      className="w-48 h-48 block rounded-lg select-none pointer-events-none"
-                      unoptimized
-                    />
-                  ) : (
-                    <div className="w-48 h-48 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 rounded-lg">
-                      <Loader2 className="h-8 w-8 text-orange-500 animate-spin" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Share URL */}
-            <div className="space-y-3">
-              <label className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-                Share link
-              </label>
-              <div className="flex gap-2.5">
-                <div className="flex-1 px-4 py-3 bg-zinc-50 dark:bg-[#18181b]/50 rounded-xl text-sm font-mono text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-white/[0.06] select-all truncate flex items-center">
-                  {shareHost}/{space.slug}
-                </div>
-                <Button
-                  onClick={handleCopyFromModal}
-                  className={`px-5 rounded-xl font-medium transition-all duration-300 shrink-0 flex items-center gap-1.5 ${
-                    copied
-                      ? "bg-green-600 hover:bg-green-700 text-white shadow-[0_2px_10px_rgba(22,163,74,0.2)]"
-                      : "bg-[#ff5a00] hover:bg-[#ff5a00]/95 text-white shadow-[0_4px_12px_rgba(255,90,0,0.2)] hover:scale-[1.02] active:scale-[0.98]"
-                  }`}
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-4 w-4" />
-                      <span>Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      <span>Copy</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center">
-                Anyone with this link can view and contribute to this space
-              </p>
-            </div>
-
-            {/* Premium footer */}
-            <div className="text-center pt-4 border-t border-zinc-200 dark:border-white/[0.06] flex items-center justify-center gap-2">
-              <span className="relative flex h-2 w-2">
-                {connectionStatus === "connected" && (
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                )}
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                  connectionStatus === "connected" ? "bg-emerald-500" : "bg-amber-500"
-                }`}></span>
-              </span>
-              <span className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 tracking-wide uppercase">
-                {connectionStatus === "connected" ? "Live sharing connected" : "Reconnecting…"}
-              </span>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={recoveryDialogOpen} onOpenChange={setRecoveryDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Recover space ownership</DialogTitle>
-            <DialogDescription>
-              Enter the recovery key saved when this space was created.
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            value={recoveryKey}
-            onChange={(event) =>
-              setRecoveryKey(
-                event.target.value.toUpperCase().replace(/[^A-F0-9]/g, "").slice(0, 20),
-              )
-            }
-            placeholder="20-character recovery key"
-            className="font-mono uppercase tracking-wider"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRecoveryDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={recoveryKey.length !== 20 || isRecovering}
-              onClick={async () => {
-                setIsRecovering(true);
-                try {
-                  const recovered = await recoverSpace(space.slug, recoveryKey);
-                  if (!recovered) {
-                    toast.error("That recovery key is not valid");
-                    return;
-                  }
-                  localStorage.setItem(`woff_recovery_${space.slug}`, recoveryKey);
-                  toast.success("Ownership recovered");
-                  setRecoveryDialogOpen(false);
-                  router.refresh();
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Recovery failed");
-                } finally {
-                  setIsRecovering(false);
-                }
-              }}
-            >
-              {isRecovering && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Recover
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Delete Space
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this space? This action cannot be
-              undone and all content will be permanently lost.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogFooter className="gap-2 sm:gap-0 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
-              disabled={isDeleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteSpace}
-              disabled={isDeleting}
-              className="gap-2"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4" />
-                  Delete Space
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Reusable Modals & Dialogs */}
+      <SpaceModals
+        space={space}
+        isCreator={isCreator}
+        shareModalOpen={shareModalOpen}
+        setShareModalOpen={setShareModalOpen}
+        qrCodeUrl={qrCodeUrl}
+        shareHost={shareHost}
+        connectionStatus={connectionStatus}
+        deleteDialogOpen={deleteDialogOpen}
+        setDeleteDialogOpen={setDeleteDialogOpen}
+        recoveryDialogOpen={recoveryDialogOpen}
+        setRecoveryDialogOpen={setRecoveryDialogOpen}
+        mobileSettingsOpen={mobileSettingsOpen}
+        setMobileSettingsOpen={setMobileSettingsOpen}
+        ownerRecoveryKey={ownerRecoveryKey}
+        isPro={isPro}
+      />
     </div>
   );
 }

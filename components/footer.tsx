@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { Heart, Info, Shield, FileText, Mail, FileSignature } from "lucide-react";
 import { Logo } from "@/components/logo";

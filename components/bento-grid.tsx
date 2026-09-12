@@ -1,7 +1,4 @@
-"use client";
-
 import styles from "./BentoGrid.module.css";
-import { FaShieldAlt } from "react-icons/fa";
 
 const cards = [
   {
@@ -207,13 +204,6 @@ function OrbitVisual() {
   );
 }
 
-function SparkIcon() {
-  return (
-    <svg viewBox="0 0 24 24">
-      <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z" />
-    </svg>
-  );
-}
 
 function QrIcon() {
   return <svg viewBox="0 0 24 24"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm11 1h2v2h-2v-2zm4 0h1v5h-5v-1h4v-4z" /></svg>;

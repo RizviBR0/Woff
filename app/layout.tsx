@@ -2,8 +2,14 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/toaster";
-import { Almarai } from "next/font/google";
+import { Almarai, Inter } from "next/font/google";
 import { PrivacySafeAnalytics } from "@/components/privacy-safe-analytics";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 const almarai = Almarai({
   subsets: ["arabic"],
@@ -138,11 +144,23 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth" className={almarai.variable}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      data-scroll-behavior="smooth"
+      className={`${inter.variable} ${almarai.variable}`}
+    >
       <head>
         {/* Preconnect to Supabase project (DNS + TCP + TLS early) */}
         {process.env.NEXT_PUBLIC_SUPABASE_URL && (
-          <link rel="preconnect" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
+          <>
+            <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
+            <link
+              rel="preconnect"
+              href={process.env.NEXT_PUBLIC_SUPABASE_URL}
+              crossOrigin="anonymous"
+            />
+          </>
         )}
         {/* JSON-LD Structured Data */}
         <script
