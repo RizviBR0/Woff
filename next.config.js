@@ -37,6 +37,8 @@ const nextConfig = {
     },
     optimizePackageImports: [
       "lucide-react",
+      "framer-motion",
+      "sonner",
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
       "@radix-ui/react-popover",
@@ -47,10 +49,6 @@ const nextConfig = {
   },
   images: {
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "i.pravatar.cc",
-      },
       {
         protocol: "https",
         hostname: supabaseHost,

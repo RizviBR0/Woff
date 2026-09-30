@@ -8,10 +8,14 @@ import { Button } from "@/components/ui/button";
 import { createSpace } from "@/lib/actions";
 import { rememberSpaceOwnership } from "@/lib/space-recovery";
 
-export function NewRoomClient() {
+interface NewRoomClientProps {
+  initialError?: string | null;
+}
+
+export function NewRoomClient({ initialError = null }: NewRoomClientProps) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [isCreating, setIsCreating] = useState(true);
+  const [error, setError] = useState<string | null>(initialError);
+  const [isCreating, setIsCreating] = useState(!initialError);
   const hasTriggeredRef = useRef(false);
 
   const startCreation = useCallback(async () => {
@@ -33,10 +37,11 @@ export function NewRoomClient() {
   }, [router]);
 
   useEffect(() => {
+    if (initialError) return;
     if (hasTriggeredRef.current) return;
     hasTriggeredRef.current = true;
     void startCreation();
-  }, [startCreation]);
+  }, [initialError, startCreation]);
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-background px-4 text-foreground selection:bg-primary/30">

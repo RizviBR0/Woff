@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/utils";
+import { downloadFileFromUrl, triggerBlobDownload } from "@/lib/download";
 import type { Entry, UploadedFileItem } from "./entry-types";
 
 interface FileEntryCardProps {
@@ -53,32 +54,31 @@ function getFileIcon(type: string, name: string) {
 
 export function FileEntryCard({ entry }: FileEntryCardProps) {
   const [isZipping, setIsZipping] = useState(false);
+  const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
 
   const items: UploadedFileItem[] = (() => {
     if (Array.isArray(entry.meta?.items)) return entry.meta.items;
     return [];
   })();
 
-  const downloadFile = async (url: string, name: string) => {
+  const downloadFile = async (url: string, name: string, index: number) => {
+    if (downloadingIndex !== null) return;
+    setDownloadingIndex(index);
+    const toastId = toast.loading(`Preparing "${name}" for download...`);
     try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      await downloadFileFromUrl(url, name);
+      toast.success(`Download started for "${name}"`, { id: toastId });
     } catch {
-      window.open(url, "_blank");
+      toast.error(`Failed to download "${name}"`, { id: toastId });
+    } finally {
+      setDownloadingIndex(null);
     }
   };
 
   const downloadAllAsZip = async () => {
     if (!items.length || isZipping) return;
     setIsZipping(true);
+    const toastId = toast.loading(`Preparing ZIP archive for ${items.length} files...`);
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
@@ -93,17 +93,10 @@ export function FileEntryCard({ entry }: FileEntryCardProps) {
       );
 
       const zipBlob = await zip.generateAsync({ type: "blob" });
-      const blobUrl = URL.createObjectURL(zipBlob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `woff-files-${Date.now()}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-      toast.success("Download started");
+      triggerBlobDownload(zipBlob, `woff-files-${Date.now()}.zip`);
+      toast.success("ZIP download started", { id: toastId });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to generate ZIP archive");
+      toast.error(err instanceof Error ? err.message : "Failed to generate ZIP archive", { id: toastId });
     } finally {
       setIsZipping(false);
     }
@@ -166,10 +159,16 @@ export function FileEntryCard({ entry }: FileEntryCardProps) {
               size="icon"
               variant="ghost"
               className="h-8 w-8 shrink-0 hover:bg-muted"
-              onClick={() => void downloadFile(file.url, file.name)}
+              onClick={() => void downloadFile(file.url, file.name, idx)}
+              disabled={downloadingIndex === idx}
               aria-label={`Download ${file.name}`}
+              title={downloadingIndex === idx ? "Downloading…" : `Download ${file.name}`}
             >
-              <Download className="h-4 w-4 text-muted-foreground" />
+              {downloadingIndex === idx ? (
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              ) : (
+                <Download className="h-4 w-4 text-muted-foreground" />
+              )}
             </Button>
           </div>
         ))}

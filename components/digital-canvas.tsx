@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useCanvasDrawing, type ToolMode } from "@/lib/hooks/use-canvas-drawing";
+import { triggerBlobDownload } from "@/lib/download";
 
 interface DrawingCanvasProps {
   isOpen: boolean;
@@ -66,6 +67,7 @@ export function DrawingCanvas({
 
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const isSendingRef = useRef(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
@@ -346,15 +348,19 @@ export function DrawingCanvas({
 
   // Download local PNG file
   const download = async () => {
-    const blob = await exportBlob(undefined, undefined, "image/png");
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `canvas-${Date.now()}.png`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    toast.success("PNG exported");
+    if (isExporting) return;
+    setIsExporting(true);
+    const toastId = toast.loading("Preparing PNG export...");
+    try {
+      const blob = await exportBlob(undefined, undefined, "image/png");
+      if (!blob) throw new Error("Could not export canvas image");
+      triggerBlobDownload(blob, `canvas-${Date.now()}.png`);
+      toast.success("PNG download started", { id: toastId });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to export PNG", { id: toastId });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -394,12 +400,19 @@ export function DrawingCanvas({
           <Button
             variant="outline"
             size="sm"
+            disabled={isExporting}
             className="h-8 gap-1.5 text-xs font-medium"
             onClick={download}
-            title="Download PNG to device"
+            title={isExporting ? "Exporting PNG…" : "Download PNG to device"}
           >
-            <Download className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Export PNG</span>
+            {isExporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            <span className="hidden sm:inline">
+              {isExporting ? "Exporting…" : "Export PNG"}
+            </span>
           </Button>
 
           <Button

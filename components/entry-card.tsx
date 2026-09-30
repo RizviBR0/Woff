@@ -18,9 +18,11 @@ export type { Entry } from "./entries/entry-types";
 
 interface EntryCardProps {
   entry: Entry;
+  spaceSlug?: string;
   currentDeviceId?: string | null;
   onDelete?: (entryId: string) => void;
   onUpdate?: (entryId: string, updates: Partial<Entry>) => void;
+  onReplace?: (placeholderId: string, realEntry: Entry) => void;
   onNewEntry?: (entry: Entry) => void;
 }
 
@@ -40,9 +42,11 @@ function formatTime(dateString: string) {
 
 export const EntryCard = memo(function EntryCard({
   entry,
+  spaceSlug,
   currentDeviceId = null,
   onDelete,
   onUpdate,
+  onReplace,
   onNewEntry,
 }: EntryCardProps) {
   const isMine =
@@ -138,7 +142,11 @@ export const EntryCard = memo(function EntryCard({
         {/* Dynamic Entry Content Subcomponent */}
         <div className="pt-0.5">
           {category === "note" && (
-            <NoteEntryCard entry={entry} currentDeviceId={currentDeviceId} />
+            <NoteEntryCard
+              entry={entry}
+              currentDeviceId={currentDeviceId}
+              spaceSlug={spaceSlug}
+            />
           )}
           {category === "media" && (
             <MediaEntryCard entry={entry} onNewEntry={onNewEntry} />
@@ -149,6 +157,7 @@ export const EntryCard = memo(function EntryCard({
               entry={entry}
               isMine={isMine}
               onUpdate={onUpdate}
+              onReplace={onReplace}
             />
           )}
         </div>

@@ -18,7 +18,13 @@ async function getSpaceAndEntries(slug: string) {
   const cookieStore = await cookies();
   const legacyDeviceId = cookieStore.get("device_id")?.value;
 
-  if (legacyDeviceId) {
+  const isLegacyNonUuid =
+    legacyDeviceId &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      legacyDeviceId,
+    );
+
+  if (isLegacyNonUuid) {
     await supabase.rpc("claim_legacy_space", {
       p_slug: slug,
       p_legacy_device_id: legacyDeviceId,

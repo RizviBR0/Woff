@@ -42,26 +42,43 @@ export async function createServerSupabaseClient() {
   });
 }
 
+function parseJwtPayload(token: string): { sub?: string; exp?: number } | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const json = Buffer.from(base64, "base64").toString("utf8");
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
 export const requireAnonymousUser = cache(async () => {
   const supabase = await createServerSupabaseClient();
-  const { data: claimsResult, error: claimsError } =
-    await supabase.auth.getClaims();
-  const subject = claimsResult?.claims.sub;
-  let user: { id: string } | null = subject ? { id: subject } : null;
-  let error = claimsError;
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (error || !user) {
+  let userId: string | null = null;
+  if (session?.access_token) {
+    const payload = parseJwtPayload(session.access_token);
+    if (payload?.sub && (!payload.exp || payload.exp * 1000 > Date.now() + 30000)) {
+      userId = payload.sub;
+    }
+  }
+
+  if (!userId) {
     const { data, error: signInError } =
       await supabase.auth.signInAnonymously();
-    user = data.user ? { id: data.user.id } : null;
-    error = signInError;
+    if (signInError || !data.user) {
+      throw new Error(
+        "Unable to create an anonymous session. Refresh and try again.",
+      );
+    }
+    userId = data.user.id;
   }
 
-  if (error || !user) {
-    throw new Error(
-      "Unable to create an anonymous session. Refresh and try again.",
-    );
-  }
-
-  return { supabase, user };
+  return { supabase, user: { id: userId } };
 });

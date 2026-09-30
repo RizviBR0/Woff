@@ -879,6 +879,15 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
+          {note.space_slug && (
+            <Link
+              href={`/${note.space_slug}`}
+              className="hidden items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-mono font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors sm:inline-flex"
+              title={`Room ${note.space_slug}`}
+            >
+              <span>Room {note.space_slug}</span>
+            </Link>
+          )}
           <input
             value={title}
             onChange={(event) => updateTitle(event.target.value)}

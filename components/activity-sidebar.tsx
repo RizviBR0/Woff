@@ -13,6 +13,7 @@ import {
   StickyNote,
   Check,
   Pen,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +22,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import NextImage from "next/image";
+import { toast } from "sonner";
+import { downloadFileFromUrl, triggerBlobDownload } from "@/lib/download";
 
 async function createZip() {
   const JSZip = (await import("jszip")).default;
@@ -39,6 +42,7 @@ async function createPdf(options: {
 interface ActivitySidebarProps {
   entries: Entry[];
   isOpen: boolean;
+  spaceSlug?: string;
 }
 
 type FilterType = "all" | "images" | "files" | "notes";
@@ -89,7 +93,14 @@ function formatDateIso(date: Date): string {
 }
 
 function getItemType(entry: Entry): "image" | "file" | "note" | "unknown" {
-  if (entry.kind === "file" && entry.meta?.type === "files") return "file";
+  if (entry.kind === "file") {
+    const presentation = entry.meta?.presentation;
+    if (presentation === "photos" || presentation === "drawing") return "image";
+    return "file";
+  }
+  if (entry.kind === "image") return "image";
+  if (entry.kind === "pdf") return "file";
+  if (entry.meta?.type === "note") return "note";
   if (entry.kind === "text" && entry.text) {
     if (
       entry.text.startsWith("DRAWING:") ||
@@ -104,11 +115,12 @@ function getItemType(entry: Entry): "image" | "file" | "note" | "unknown" {
 
 interface SidebarItemProps {
   entry: Entry;
+  spaceSlug?: string;
   onDownload: (entry: Entry) => void;
   isDownloading?: boolean;
 }
 
-function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
+function SidebarItem({ entry, spaceSlug, onDownload, isDownloading }: SidebarItemProps) {
   const [hovering, setHovering] = useState(false);
 
   // Helper function for smooth scrolling
@@ -120,15 +132,88 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
     }
   };
 
-  // File entries
-  if (entry.kind === "file" && entry.meta?.type === "files") {
+  // Modern File & Media entries
+  if (entry.kind === "file" || entry.kind === "pdf") {
     const items: Array<{
       name: string;
       size: number;
       type: string;
       url: string;
-    }> = entry.meta.items || [];
+    }> = entry.meta?.items || [];
     const count = items.length;
+    const first = items[0];
+    const isPhotos = entry.meta?.presentation === "photos";
+    const isDrawing = entry.meta?.presentation === "drawing";
+
+    // Photos / Drawing presentation: show real image thumbnail
+    if (isPhotos || isDrawing) {
+      return (
+        <a
+          href={`#entry-${entry.id}`}
+          onClick={scrollToEntry}
+          className="group flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors"
+          onMouseEnter={() => setHovering(true)}
+          onMouseLeave={() => setHovering(false)}
+        >
+          <div className="relative h-10 w-10 flex-shrink-0">
+            {count > 1 && (
+              <>
+                <div className="absolute top-0.5 left-0.5 h-9 w-9 rounded-lg bg-muted border border-border/30" />
+                <div className="absolute top-1 left-1 h-9 w-9 rounded-lg bg-muted border border-border/30" />
+              </>
+            )}
+            <div className="relative h-10 w-10 rounded-lg overflow-hidden bg-muted border border-border/50 z-10">
+              {first?.url && (
+                <NextImage
+                  src={first.url}
+                  alt={first.name || (isDrawing ? "Drawing" : "Photo")}
+                  fill
+                  unoptimized
+                  sizes="40px"
+                  className="object-cover"
+                />
+              )}
+            </div>
+            {count > 1 && (
+              <div className="absolute -bottom-1 -right-1 z-20 bg-primary text-primary-foreground text-[9px] font-semibold px-1.5 py-0.5 rounded-full leading-none border-2 border-background">
+                {count}
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate text-foreground">
+              {isDrawing ? "Drawing" : count > 1 ? `${count} photos` : first?.name || "Photo"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {isDrawing ? "drawing" : count > 1 ? "images" : "image"}
+            </div>
+          </div>
+          {(hovering || isDownloading) && (
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                disabled={isDownloading}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDownload(entry);
+                }}
+                title={isDownloading ? "Downloading…" : "Download"}
+              >
+                {isDownloading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          )}
+        </a>
+      );
+    }
+
     const firstName = items[0]?.name || "file";
     const displayName = count > 1 ? "Multiple files" : firstName;
     const subtitle = count > 1 ? `${count} files` : "file";
@@ -163,19 +248,25 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
         </div>
 
         {/* Hover actions */}
-        {hovering && (
+        {(hovering || isDownloading) && (
           <div className="flex items-center gap-1">
             <Button
               size="icon"
               variant="ghost"
               className="h-7 w-7"
+              disabled={isDownloading}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 onDownload(entry);
               }}
+              title={isDownloading ? "Downloading…" : "Download"}
             >
-              <Download className="h-3.5 w-3.5" />
+              {isDownloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
             </Button>
           </div>
         )}
@@ -211,19 +302,25 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
             </div>
             <div className="text-xs text-muted-foreground">image</div>
           </div>
-          {hovering && (
+          {(hovering || isDownloading) && (
             <div className="flex items-center gap-1">
               <Button
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7"
+                disabled={isDownloading}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   onDownload(entry);
                 }}
+                title={isDownloading ? "Downloading…" : "Download"}
               >
-                <Download className="h-3.5 w-3.5" />
+                {isDownloading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
               </Button>
             </div>
           )}
@@ -257,19 +354,25 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
             </div>
             <div className="text-xs text-muted-foreground">image</div>
           </div>
-          {hovering && (
+          {(hovering || isDownloading) && (
             <div className="flex items-center gap-1">
               <Button
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7"
+                disabled={isDownloading}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   onDownload(entry);
                 }}
+                title={isDownloading ? "Downloading…" : "Download"}
               >
-                <Download className="h-3.5 w-3.5" />
+                {isDownloading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
               </Button>
             </div>
           )}
@@ -346,19 +449,25 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
               {count === 1 ? "image" : "images"}
             </div>
           </div>
-          {hovering && (
+          {(hovering || isDownloading) && (
             <div className="flex items-center gap-1">
               <Button
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7"
+                disabled={isDownloading}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   onDownload(entry);
                 }}
+                title={isDownloading ? "Downloading…" : "Download"}
               >
-                <Download className="h-3.5 w-3.5" />
+                {isDownloading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
               </Button>
             </div>
           )}
@@ -366,10 +475,17 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
       );
     }
 
-    if (entry.text.startsWith("NOTE:")) {
-      const noteData = entry.text.replace("NOTE:", "").split(":");
+    if (entry.meta?.type === "note" || entry.text.startsWith("NOTE:")) {
+      const noteData = entry.text?.startsWith("NOTE:")
+        ? entry.text.replace("NOTE:", "").split(":")
+        : [];
       const noteSlug = entry.meta?.note_slug || noteData[0];
       const noteTitle = entry.meta?.title || noteData[2] || "Untitled note";
+      const noteUrl = spaceSlug
+        ? `/${spaceSlug}/${noteSlug}`
+        : entry.meta?.space_slug
+          ? `/${entry.meta.space_slug}/${noteSlug}`
+          : `/n/${noteSlug}`;
 
       return (
         <a
@@ -388,7 +504,7 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
             </div>
             <div className="text-xs text-muted-foreground">note</div>
           </div>
-          {hovering && (
+          {(hovering || isDownloading) && (
             <div className="flex items-center gap-1">
               <Button
                 size="icon"
@@ -397,7 +513,7 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  window.open(`/n/${noteSlug}`, "_blank");
+                  window.open(noteUrl, "_blank");
                 }}
                 title="Preview"
               >
@@ -407,14 +523,19 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7"
+                disabled={isDownloading}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   onDownload(entry);
                 }}
-                title="Download"
+                title={isDownloading ? "Generating PDF…" : "Download PDF"}
               >
-                <Download className="h-3.5 w-3.5" />
+                {isDownloading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
               </Button>
             </div>
           )}
@@ -426,7 +547,7 @@ function SidebarItem({ entry, onDownload, isDownloading }: SidebarItemProps) {
   return null;
 }
 
-export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
+export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -449,8 +570,11 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
           if (e.kind === "file" && e.meta?.items?.[0]?.name) {
             return e.meta.items[0].name.toLowerCase().includes(q);
           }
-          if (e.text?.startsWith("NOTE:")) {
-            const noteTitle = e.text.split(":")[3] || "note";
+          if (e.meta?.type === "note" || e.text?.startsWith("NOTE:")) {
+            const noteData = e.text?.startsWith("NOTE:")
+              ? e.text.replace("NOTE:", "").split(":")
+              : [];
+            const noteTitle = e.meta?.title || noteData[2] || "note";
             return noteTitle.toLowerCase().includes(q);
           }
           // For images, just include them if searching (no specific name)
@@ -473,17 +597,23 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
     return groups;
   }, [items]);
 
+  const [downloadingEntryId, setDownloadingEntryId] = useState<string | null>(null);
+  const [downloadingDateGroup, setDownloadingDateGroup] = useState<string | null>(null);
+
   const handleDownload = async (entry: Entry) => {
-    if (entry.kind === "file" && entry.meta?.type === "files") {
-      const items = entry.meta.items || [];
-      if (items.length === 1) {
-        const link = document.createElement("a");
-        link.href = items[0].url;
-        link.download = items[0].name;
-        link.click();
-      } else if (items.length > 1) {
-        // Download all files as zip
-        try {
+    if (downloadingEntryId) return;
+    setDownloadingEntryId(entry.id);
+    let toastId: string | number | undefined;
+
+    try {
+      if (entry.kind === "file" && entry.meta?.type === "files") {
+        const items = entry.meta.items || [];
+        if (items.length === 1) {
+          toastId = toast.loading(`Preparing "${items[0].name}" for download...`);
+          await downloadFileFromUrl(items[0].url, items[0].name);
+          toast.success(`Download started for "${items[0].name}"`, { id: toastId });
+        } else if (items.length > 1) {
+          toastId = toast.loading(`Preparing ZIP for ${items.length} files...`);
           const zip = await createZip();
           for (const item of items) {
             const res = await fetch(item.url);
@@ -491,64 +621,49 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
             zip.file(item.name || "file", blob);
           }
           const zipBlob = await zip.generateAsync({ type: "blob" });
-          const url = URL.createObjectURL(zipBlob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `files-${entry.id}.zip`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        } catch (e) {
-          /* console.error("ZIP download failed", e); */
+          triggerBlobDownload(zipBlob, `files-${entry.id}.zip`);
+          toast.success("ZIP download started", { id: toastId });
         }
-      }
-    } else if (entry.text?.startsWith("DRAWING:")) {
-      const dataUrl = entry.text.replace("DRAWING:", "");
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = `drawing-${entry.id}.png`;
-      link.click();
-    } else if (entry.text?.startsWith("PHOTO:")) {
-      const dataUrl = entry.text.replace("PHOTO:", "");
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = `photo-${entry.id}.jpg`;
-      link.click();
-    } else if (entry.text?.startsWith("PHOTOS:")) {
-      // Download all photos as zip
-      const raw = entry.text.replace("PHOTOS:", "");
-      let photos: string[] = [];
-      try {
-        if (raw.trim().startsWith("[")) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            photos = parsed.filter(
-              (v) => typeof v === "string" && v.startsWith("data:image")
-            );
+      } else if (entry.text?.startsWith("DRAWING:")) {
+        toastId = toast.loading("Preparing drawing download...");
+        const dataUrl = entry.text.replace("DRAWING:", "");
+        await downloadFileFromUrl(dataUrl, `drawing-${entry.id}.png`);
+        toast.success("Download started", { id: toastId });
+      } else if (entry.text?.startsWith("PHOTO:")) {
+        toastId = toast.loading("Preparing photo download...");
+        const dataUrl = entry.text.replace("PHOTO:", "");
+        await downloadFileFromUrl(dataUrl, `photo-${entry.id}.jpg`);
+        toast.success("Download started", { id: toastId });
+      } else if (entry.text?.startsWith("PHOTOS:")) {
+        const raw = entry.text.replace("PHOTOS:", "");
+        let photos: string[] = [];
+        try {
+          if (raw.trim().startsWith("[")) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              photos = parsed.filter(
+                (v) => typeof v === "string" && v.startsWith("data:image")
+              );
+            }
+          } else {
+            photos = raw
+              .split(",")
+              .map((u) => u.trim())
+              .filter((u) => u.startsWith("data:image"));
           }
-        } else {
+        } catch {
           photos = raw
             .split(",")
             .map((u) => u.trim())
             .filter((u) => u.startsWith("data:image"));
         }
-      } catch {
-        photos = raw
-          .split(",")
-          .map((u) => u.trim())
-          .filter((u) => u.startsWith("data:image"));
-      }
 
-      if (photos.length === 1) {
-        // Single photo - direct download
-        const link = document.createElement("a");
-        link.href = photos[0];
-        link.download = `photo-${entry.id}.jpg`;
-        link.click();
-      } else if (photos.length > 1) {
-        // Multiple photos - zip download
-        try {
+        if (photos.length === 1) {
+          toastId = toast.loading("Preparing photo download...");
+          await downloadFileFromUrl(photos[0], `photo-${entry.id}.jpg`);
+          toast.success("Download started", { id: toastId });
+        } else if (photos.length > 1) {
+          toastId = toast.loading(`Preparing ZIP for ${photos.length} photos...`);
           const zip = await createZip();
           photos.forEach((dataUrl, index) => {
             if (dataUrl.startsWith("data:image/")) {
@@ -569,32 +684,21 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
           });
 
           const content = await zip.generateAsync({ type: "blob" });
-          const url = URL.createObjectURL(content);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = `photos-${entry.id}.zip`;
-          link.style.display = "none";
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        } catch (error) {
-          /* console.error("Failed to create zip:", error); */
+          triggerBlobDownload(content, `photos-${entry.id}.zip`);
+          toast.success("ZIP download started", { id: toastId });
         }
-      }
-    } else if (entry.text?.startsWith("NOTE:")) {
-      // Download note as PDF
-      const noteData = entry.text.replace("NOTE:", "").split(":");
-      const noteSlug = entry.meta?.note_slug || noteData[0];
-      const noteTitle = entry.meta?.title || noteData[2] || "Untitled Note";
+      } else if (entry.meta?.type === "note" || entry.text?.startsWith("NOTE:")) {
+        const noteData = entry.text?.startsWith("NOTE:")
+          ? entry.text.replace("NOTE:", "").split(":")
+          : [];
+        const noteSlug = entry.meta?.note_slug || noteData[0];
+        const noteTitle = entry.meta?.title || noteData[2] || "Untitled Note";
 
-      try {
-        // Fetch note content from API
+        toastId = toast.loading(`Generating PDF for "${noteTitle}"...`);
         const res = await fetch(`/api/notes/${noteSlug}`);
         if (!res.ok) throw new Error("Failed to fetch note");
         const note = await res.json();
 
-        // Create PDF
         const pdf = await createPdf({
           orientation: "portrait",
           unit: "mm",
@@ -607,7 +711,6 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
         const contentWidth = pageWidth - margin * 2;
         let yPos = margin;
 
-        // Title
         pdf.setFontSize(24);
         pdf.setFont("helvetica", "bold");
         const titleLines = pdf.splitTextToSize(
@@ -617,7 +720,6 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
         pdf.text(titleLines, margin, yPos);
         yPos += titleLines.length * 10 + 10;
 
-        // Date
         pdf.setFontSize(10);
         pdf.setFont("helvetica", "normal");
         pdf.setTextColor(128, 128, 128);
@@ -627,12 +729,10 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
         pdf.text(dateStr, margin, yPos);
         yPos += 15;
 
-        // Content - parse HTML and convert to text
         pdf.setFontSize(12);
         pdf.setFont("helvetica", "normal");
         pdf.setTextColor(0, 0, 0);
 
-        // Simple HTML to text conversion
         const tempDiv = document.createElement("div");
         tempDiv.innerHTML = note.content || "";
         const textContent = tempDiv.textContent || tempDiv.innerText || "";
@@ -647,17 +747,27 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
           yPos += 6;
         }
 
-        pdf.save(
-          `${(note.title || noteTitle).replace(/[^a-zA-Z0-9]/g, "_")}.pdf`
-        );
-      } catch (error) {
-        /* console.error("Failed to download note as PDF:", error); */
+        const safeFilename = `${(note.title || noteTitle).replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+        const pdfBlob = pdf.output("blob");
+        triggerBlobDownload(pdfBlob, safeFilename);
+        toast.success(`PDF downloaded: ${note.title || noteTitle}`, { id: toastId });
       }
+    } catch {
+      if (toastId) {
+        toast.error("Download failed. Please try again.", { id: toastId });
+      } else {
+        toast.error("Download failed. Please try again.");
+      }
+    } finally {
+      setDownloadingEntryId(null);
     }
   };
 
   // Download all items in a date group as zip
-  const handleDownloadAll = async (groupEntries: Entry[]) => {
+  const handleDownloadAll = async (dateGroup: string, groupEntries: Entry[]) => {
+    if (downloadingDateGroup) return;
+    setDownloadingDateGroup(dateGroup);
+    const toastId = toast.loading(`Preparing ZIP archive for ${groupEntries.length} items...`);
     try {
       const zip = await createZip();
 
@@ -730,8 +840,10 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
           });
         }
         // Notes as PDF
-        else if (entry.text?.startsWith("NOTE:")) {
-          const noteData = entry.text.replace("NOTE:", "").split(":");
+        else if (entry.meta?.type === "note" || entry.text?.startsWith("NOTE:")) {
+          const noteData = entry.text?.startsWith("NOTE:")
+            ? entry.text.replace("NOTE:", "").split(":")
+            : [];
           const noteSlug = entry.meta?.note_slug || noteData[0];
           const noteTitle = entry.meta?.title || noteData[2] || "Untitled Note";
 
@@ -796,24 +908,19 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
               );
               zip.file(`notes/${safeName}.pdf`, pdfBlob);
             }
-          } catch (e) {
-            /* console.error("Failed to add note to zip:", e); */
+          } catch {
+            /* ignore single note failure in zip */
           }
         }
       }
 
       const content = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(content);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `woff-files-${formatDateIso(new Date())}.zip`;
-      link.style.display = "none";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      /* console.error("Failed to create download zip:", error); */
+      triggerBlobDownload(content, `woff-files-${formatDateIso(new Date())}.zip`);
+      toast.success("ZIP download started", { id: toastId });
+    } catch {
+      toast.error("Failed to generate ZIP archive", { id: toastId });
+    } finally {
+      setDownloadingDateGroup(null);
     }
   };
 
@@ -917,10 +1024,18 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
                 </span>
                 {groupEntries.length > 1 && (
                   <button
-                    onClick={() => handleDownloadAll(groupEntries)}
-                    className="text-[10px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+                    onClick={() => handleDownloadAll(dateGroup, groupEntries)}
+                    disabled={downloadingDateGroup === dateGroup}
+                    className="inline-flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Download all
+                    {downloadingDateGroup === dateGroup ? (
+                      <>
+                        <Loader2 className="h-2.5 w-2.5 animate-spin text-primary" />
+                        <span className="text-primary font-medium">Zipping…</span>
+                      </>
+                    ) : (
+                      "Download all"
+                    )}
                   </button>
                 )}
               </div>
@@ -930,7 +1045,9 @@ export function ActivitySidebar({ entries, isOpen }: ActivitySidebarProps) {
                   <SidebarItem
                     key={entry.id}
                     entry={entry}
+                    spaceSlug={spaceSlug}
                     onDownload={handleDownload}
+                    isDownloading={downloadingEntryId === entry.id}
                   />
                 ))}
               </div>

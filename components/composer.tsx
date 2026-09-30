@@ -34,6 +34,7 @@ const DrawingCanvas = dynamic(
 
 interface ComposerProps {
   spaceId: string;
+  spaceSlug?: string;
   onNewEntry: (entry: Entry) => void;
   onUpdateEntry: (entryId: string, updates: Partial<Entry>) => void;
   onReplaceEntry: (placeholderId: string, realEntry: Entry) => void;
@@ -75,6 +76,7 @@ async function getImageDimensions(file: File) {
 
 export function Composer({
   spaceId,
+  spaceSlug,
   onNewEntry,
   onUpdateEntry,
   onReplaceEntry,
@@ -446,6 +448,9 @@ export function Composer({
     setNoteCreationStage("creating");
     try {
       const result = await createNoteEntry(spaceId);
+      const noteHref = spaceSlug
+        ? `/${spaceSlug}/${result.noteSlug}`
+        : `/n/${result.noteSlug}`;
       onNewEntry({
         id: result.entryId,
         space_id: spaceId,
@@ -456,13 +461,14 @@ export function Composer({
           note_slug: result.noteSlug,
           public_code: result.publicCode,
           title: "Untitled Note",
+          space_slug: spaceSlug,
         },
         created_by_device_id: currentDeviceId || null,
         created_at: new Date().toISOString(),
       });
       setNoteCreationStage("opening");
-      router.prefetch(`/n/${result.noteSlug}`);
-      router.push(`/n/${result.noteSlug}`);
+      router.prefetch(noteHref);
+      router.push(noteHref);
     } catch (error) {
       setNoteCreationStage(null);
       toast.error(error instanceof Error ? error.message : "Unable to create note");

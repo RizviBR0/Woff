@@ -12,7 +12,7 @@ import {
 
 const noteId = customAlphabet(
   "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz",
-  12,
+  6,
 );
 const MAX_TEXT_LENGTH = 50_000;
 const MAX_META_BYTES = 250_000;
@@ -602,7 +602,12 @@ export async function getNote(noteSlug: string): Promise<Note | null> {
   });
   const cookieStore = await cookies();
   const legacyDeviceId = cookieStore.get("device_id")?.value;
-  if (joinedSpaceSlug && legacyDeviceId) {
+  const isLegacyNonUuid =
+    legacyDeviceId &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      legacyDeviceId,
+    );
+  if (joinedSpaceSlug && isLegacyNonUuid) {
     await supabase.rpc("claim_legacy_space", {
       p_slug: joinedSpaceSlug,
       p_legacy_device_id: legacyDeviceId,
@@ -758,11 +763,6 @@ export async function validateRoomCode(roomCode: string): Promise<boolean> {
     return false;
   }
 }
-
-// Activity is extended by the database trigger only when participants create or
-// edit content. Merely viewing/enumerating a room no longer keeps it alive.
-export async function updateSpaceActivity(_spaceId: string): Promise<void> {}
-export async function updateSpaceActivityBySlug(_slug: string): Promise<void> {}
 
 export async function ensureDeviceId(): Promise<string> {
   const { user } = await requireAnonymousUser();

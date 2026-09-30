@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Check, Copy, Edit, Loader2, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { updateTextEntry } from "@/lib/actions";
+import { createEntry, updateTextEntry } from "@/lib/actions";
 import { parseMessageSegments } from "./code-detector";
 import { CodeBlock } from "./code-block";
 import type { Entry } from "./entry-types";
@@ -13,9 +13,10 @@ interface TextEntryProps {
   entry: Entry;
   isMine: boolean;
   onUpdate?: (entryId: string, updates: Partial<Entry>) => void;
+  onReplace?: (placeholderId: string, realEntry: Entry) => void;
 }
 
-export function TextEntry({ entry, isMine, onUpdate }: TextEntryProps) {
+export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(entry.text || "");
   const [isSaving, setIsSaving] = useState(false);
@@ -185,9 +186,12 @@ export function TextEntry({ entry, isMine, onUpdate }: TextEntryProps) {
               if (!entry.text || isRetrying) return;
               setIsRetrying(true);
               try {
-                const { createEntry } = await import("@/lib/actions");
                 const res = await createEntry(entry.space_id, "text", entry.text);
-                onUpdate?.(entry.id, { ...res, isLoading: false, isError: false } as Entry);
+                if (onReplace) {
+                  onReplace(entry.id, res as Entry);
+                } else {
+                  onUpdate?.(entry.id, { ...res, isLoading: false, isError: false } as Entry);
+                }
                 toast.success("Message sent");
               } catch (err) {
                 toast.error(err instanceof Error ? err.message : "Retry failed");

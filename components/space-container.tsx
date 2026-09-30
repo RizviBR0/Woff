@@ -155,9 +155,30 @@ export function SpaceContainer({
   }, [space.slug]);
 
   useEffect(() => {
-    setOwnerRecoveryKey(
-      localStorage.getItem(`woff_recovery_${space.slug}`) || "",
-    );
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const rk = searchParams.get("rk");
+      if (rk) {
+        localStorage.setItem(`woff_recovery_${space.slug}`, rk);
+        localStorage.setItem("last_created_space", space.slug);
+        localStorage.setItem("last_room", space.slug);
+        setOwnerRecoveryKey(rk);
+        searchParams.delete("rk");
+        searchParams.delete("created");
+        const clean = searchParams.toString();
+        const newUrl = window.location.pathname + (clean ? `?${clean}` : "");
+        window.history.replaceState({}, "", newUrl);
+      } else {
+        setOwnerRecoveryKey(
+          localStorage.getItem(`woff_recovery_${space.slug}`) || "",
+        );
+      }
+    } catch {
+      setOwnerRecoveryKey(
+        localStorage.getItem(`woff_recovery_${space.slug}`) || "",
+      );
+    }
+
     if (isCreator) return;
     const savedKey = localStorage.getItem(`woff_recovery_${space.slug}`);
     if (!savedKey) return;
@@ -806,7 +827,7 @@ export function SpaceContainer({
         {/* Embedded searchable files browser */}
         {isCurrentlyExpanded ? (
           <div className="flex-1 min-h-0 py-2 flex flex-col border-t border-b border-zinc-200 dark:border-white/[0.06] my-2 overflow-hidden">
-            <ActivitySidebar entries={entries} isOpen={true} />
+            <ActivitySidebar entries={entries} isOpen={true} spaceSlug={space.slug} />
           </div>
         ) : (
           <div className="flex-1" />
@@ -978,6 +999,7 @@ export function SpaceContainer({
                 <div className="w-full max-w-4xl">
                   <Composer
                     spaceId={space.id}
+                    spaceSlug={space.slug}
                     onNewEntry={handleNewEntry}
                     onUpdateEntry={handleUpdateEntry}
                     onReplaceEntry={handleReplaceEntry}
@@ -1031,9 +1053,11 @@ export function SpaceContainer({
                       </AnimatePresence>
                       <EntryCard
                         entry={entry}
+                        spaceSlug={space.slug}
                         currentDeviceId={currentDeviceId || null}
                         onDelete={handleRemoveEntry}
                         onUpdate={handleUpdateEntry}
+                        onReplace={handleReplaceEntry}
                         onNewEntry={handleNewEntry}
                       />
                     </Fragment>
@@ -1054,6 +1078,7 @@ export function SpaceContainer({
                     <div className="mx-auto max-w-2xl">
                       <Composer
                         spaceId={space.id}
+                        spaceSlug={space.slug}
                         onNewEntry={handleNewEntry}
                         onUpdateEntry={handleUpdateEntry}
                         onReplaceEntry={handleReplaceEntry}

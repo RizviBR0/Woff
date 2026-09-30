@@ -17,9 +17,10 @@ import type { Entry } from "./entry-types";
 interface NoteEntryCardProps {
   entry: Entry;
   currentDeviceId?: string | null;
+  spaceSlug?: string;
 }
 
-export function NoteEntryCard({ entry, currentDeviceId }: NoteEntryCardProps) {
+export function NoteEntryCard({ entry, currentDeviceId, spaceSlug }: NoteEntryCardProps) {
   const [lockedModalOpen, setLockedModalOpen] = useState(false);
 
   const isMine =
@@ -64,10 +65,16 @@ export function NoteEntryCard({ entry, currentDeviceId }: NoteEntryCardProps) {
     );
   }
 
+  const noteUrl = spaceSlug
+    ? `/${spaceSlug}/${noteSlug}`
+    : entry.meta?.space_slug
+      ? `/${entry.meta.space_slug}/${noteSlug}`
+      : `/n/${noteSlug}`;
+
   return (
     <>
       <Link
-        href={`/n/${noteSlug}`}
+        href={noteUrl}
         onClick={handleOpenNote}
         className="group block rounded-2xl border bg-card/80 p-4 transition-all hover:bg-card hover:shadow-md hover:border-primary/40 active:scale-[0.99]"
       >

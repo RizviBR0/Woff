@@ -13,6 +13,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { downloadFileFromUrl, triggerBlobDownload } from "@/lib/download";
 
 interface GlobalImageViewerProps {
   images: string[];
@@ -37,6 +39,8 @@ export function GlobalImageViewer({
   const [mounted, setMounted] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -144,34 +148,30 @@ export function GlobalImageViewer({
   }, [isOpen, onClose, goToPrevious, goToNext]);
 
   const downloadImage = async (dataUrl: string, filename: string) => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+    const toastId = toast.loading("Preparing image for download...");
     try {
-      // Create blob from data URL logic
       if (dataUrl.startsWith("data:")) {
         const fetchRes = await fetch(dataUrl);
         const blob = await fetchRes.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 100);
+        triggerBlobDownload(blob, filename);
       } else {
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        await downloadFileFromUrl(dataUrl, filename);
       }
-    } catch (error) {
-      /* console.error("Failed to download image:", error); */
+      toast.success("Download started", { id: toastId });
+    } catch {
+      toast.error("Failed to download image", { id: toastId });
       window.open(dataUrl, "_blank");
+    } finally {
+      setIsDownloading(false);
     }
   };
 
   const downloadAllAsZip = async () => {
+    if (isZipping) return;
+    setIsZipping(true);
+    const toastId = toast.loading(`Preparing ZIP archive for ${images.length} photos...`);
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
@@ -186,20 +186,24 @@ export function GlobalImageViewer({
             mimeType === "image/png" ? "png" :
             mimeType === "image/gif" ? "gif" : "jpg";
           zip.file(`photo-${i + 1}.${extension}`, base64Data, { base64: true });
+        } else {
+          try {
+            const res = await fetch(dataUrl);
+            const blob = await res.blob();
+            zip.file(`photo-${i + 1}.png`, blob);
+          } catch {
+            // ignore individual image failure in zip
+          }
         }
       }
 
       const zipBlob = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(zipBlob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `photos-${Date.now()}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      /* console.error("Failed to create zip:", error); */
+      triggerBlobDownload(zipBlob, `photos-${Date.now()}.zip`);
+      toast.success("ZIP download started", { id: toastId });
+    } catch {
+      toast.error("Failed to create ZIP archive", { id: toastId });
+    } finally {
+      setIsZipping(false);
     }
   };
 
@@ -266,6 +270,7 @@ export function GlobalImageViewer({
           <Button
             size="icon"
             variant="secondary"
+            disabled={isDownloading}
             className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border backdrop-blur-md transition-all duration-300 hover:scale-105 ${btnClasses}`}
             onClick={(e) => {
               e.stopPropagation();
@@ -274,9 +279,13 @@ export function GlobalImageViewer({
                 : `image-${Date.now()}.png`;
               downloadImage(images[currentIndex], filename);
             }}
-            title="Download image"
+            title={isDownloading ? "Downloading…" : "Download image"}
           >
-            <Download className="h-5 w-5 md:h-6 md:w-6" />
+            {isDownloading ? (
+              <Loader2 className="h-5 w-5 md:h-6 md:w-6 animate-spin" />
+            ) : (
+              <Download className="h-5 w-5 md:h-6 md:w-6" />
+            )}
           </Button>
           <Button
             size="icon"
@@ -297,14 +306,19 @@ export function GlobalImageViewer({
           <div className="absolute top-4 left-4 z-50 flex gap-3">
             <Button
               variant="secondary"
+              disabled={isZipping}
               className={`h-10 md:h-11 rounded-full shadow-2xl border backdrop-blur-md transition-all duration-300 px-4 font-semibold ${btnClasses}`}
               onClick={(e) => {
                 e.stopPropagation();
                 downloadAllAsZip();
               }}
             >
-              <DownloadIcon className="h-4 w-4 mr-2" />
-              Download All ZIP
+              {isZipping ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <DownloadIcon className="h-4 w-4 mr-2" />
+              )}
+              {isZipping ? "Creating ZIP…" : "Download All ZIP"}
             </Button>
           </div>
         )}
