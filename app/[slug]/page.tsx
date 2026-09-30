@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { SpaceContainer } from "@/components/space-container";
@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 interface SpacePageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ join?: string }>;
 }
 
 async function getSpaceAndEntries(slug: string) {
@@ -57,10 +58,13 @@ export async function generateMetadata({
   };
 }
 
-export default async function SpacePage({ params }: SpacePageProps) {
+export default async function SpacePage({ params, searchParams }: SpacePageProps) {
   const { slug } = await params;
   const data = await getSpaceAndEntries(slug);
-  if (!data) notFound();
+  if (!data) {
+    if ((await searchParams).join === "1") redirect(`/?joinError=1&room=${slug}`);
+    notFound();
+  }
 
   return (
     <SpaceContainer

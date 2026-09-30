@@ -1,0 +1,15 @@
+{
+  "samples": 1,
+  "metrics": [
+    {
+      "operation": "cold-room-create",
+      "milliseconds": 4061,
+      "requests": 20
+    },
+    {
+      "operation": "note-create",
+      "milliseconds": 897,
+      "requests": 10
+    }
+  ]
+}

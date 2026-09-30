@@ -1,0 +1,129 @@
+{
+  "samples": 1,
+  "environment": "local production / Edge / emulated mobile / 1 Mbps, 150ms latency, 4x CPU",
+  "metrics": [
+    {
+      "operation": "cold-room-create",
+      "milliseconds": 4590,
+      "requests": 15,
+      "runtime": {
+        "longTasks": 9,
+        "longestTaskMs": 296,
+        "peakJsHeapBytes": 13893893
+      }
+    },
+    {
+      "operation": "note-create",
+      "milliseconds": 2252,
+      "requests": 11,
+      "runtime": {
+        "longTasks": 15,
+        "longestTaskMs": 296,
+        "peakJsHeapBytes": 17089591
+      }
+    },
+    {
+      "operation": "note-save-including-debounce",
+      "milliseconds": 1835,
+      "requests": 2,
+      "runtime": {
+        "longTasks": 17,
+        "longestTaskMs": 296,
+        "peakJsHeapBytes": 18125870
+      }
+    },
+    {
+      "operation": "offline-and-conflict-checks",
+      "passed": true
+    },
+    {
+      "operation": "in-flight-revision-check",
+      "passed": true
+    },
+    {
+      "operation": "note-three-image-upload",
+      "milliseconds": 3388,
+      "requests": 14,
+      "runtime": {
+        "longTasks": 7,
+        "longestTaskMs": 275,
+        "peakJsHeapBytes": 27300796
+      }
+    },
+    {
+      "operation": "upload-cancellation-check",
+      "passed": true
+    },
+    {
+      "operation": "upload-5-files-1024-bytes",
+      "milliseconds": 2241,
+      "requests": 7,
+      "runtime": {
+        "longTasks": 15,
+        "longestTaskMs": 275,
+        "peakJsHeapBytes": 31584375
+      }
+    },
+    {
+      "operation": "publication-retry-without-retransfer",
+      "passed": true
+    },
+    {
+      "operation": "upload-20-files-1024-bytes",
+      "milliseconds": 4769,
+      "requests": 22,
+      "runtime": {
+        "longTasks": 25,
+        "longestTaskMs": 275,
+        "peakJsHeapBytes": 33849828
+      }
+    },
+    {
+      "operation": "twenty-file-zip",
+      "milliseconds": 6423,
+      "requests": 21,
+      "runtime": {
+        "longTasks": 27,
+        "longestTaskMs": 275,
+        "peakJsHeapBytes": 33849828
+      }
+    },
+    {
+      "operation": "native-download-start",
+      "milliseconds": 1085,
+      "requests": 1,
+      "runtime": {
+        "longTasks": 30,
+        "longestTaskMs": 275,
+        "peakJsHeapBytes": 33849828
+      }
+    },
+    {
+      "operation": "download-access-and-expiry-checks",
+      "passed": true
+    },
+    {
+      "operation": "reconnect-missed-message-check",
+      "passed": true
+    },
+    {
+      "operation": "room-join",
+      "milliseconds": 1929,
+      "requests": 12,
+      "runtime": {
+        "longTasks": 9,
+        "longestTaskMs": 227,
+        "peakJsHeapBytes": 22155652
+      }
+    },
+    {
+      "operation": "expired-room-feedback-and-retry-check",
+      "passed": true
+    }
+  ],
+  "runtime": {
+    "longTasks": 17,
+    "longestTaskMs": 165,
+    "peakJsHeapBytes": 29903960
+  }
+}

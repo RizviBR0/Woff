@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { downloadFileFromUrl, triggerBlobDownload } from "@/lib/download";
+import { addArchiveFiles, generateArchive } from "@/lib/archive";
 
 interface GlobalImageViewerProps {
   images: string[];
@@ -171,37 +172,19 @@ export function GlobalImageViewer({
   const downloadAllAsZip = async () => {
     if (isZipping) return;
     setIsZipping(true);
-    const toastId = toast.loading(`Preparing ZIP archive for ${images.length} photos...`);
+    const controller = new AbortController();
+    const toastId = toast.loading(`Preparing ZIP archive for ${images.length} photos...`, { action: { label: "Cancel", onClick: () => controller.abort() } });
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
 
-      for (let i = 0; i < images.length; i++) {
-        const dataUrl = images[i];
-        if (dataUrl.startsWith("data:image/")) {
-          const base64Data = dataUrl.split(",")[1];
-          const mimeType = dataUrl.split(";")[0].split(":")[1];
-          const extension =
-            mimeType === "image/jpeg" ? "jpg" :
-            mimeType === "image/png" ? "png" :
-            mimeType === "image/gif" ? "gif" : "jpg";
-          zip.file(`photo-${i + 1}.${extension}`, base64Data, { base64: true });
-        } else {
-          try {
-            const res = await fetch(dataUrl);
-            const blob = await res.blob();
-            zip.file(`photo-${i + 1}.png`, blob);
-          } catch {
-            // ignore individual image failure in zip
-          }
-        }
-      }
+      await addArchiveFiles(zip, images.map((url, index) => ({ url, name: getDownloadFilename?.(index) || `photo-${index + 1}.${url.startsWith("data:image/jpeg") ? "jpg" : "png"}` })), { signal: controller.signal, onProgress: (done, total) => toast.loading(`Preparing ZIP: ${done}/${total} photos`, { id: toastId }) });
 
-      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const zipBlob = await generateArchive(zip, { signal: controller.signal });
       triggerBlobDownload(zipBlob, `photos-${Date.now()}.zip`);
       toast.success("ZIP download started", { id: toastId });
-    } catch {
-      toast.error("Failed to create ZIP archive", { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create ZIP archive", { id: toastId });
     } finally {
       setIsZipping(false);
     }

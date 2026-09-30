@@ -31,7 +31,6 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import { type Space, recoverSpace } from "@/lib/actions";
 import { getHoursUntilExpiry } from "@/lib/utils";
-import { SharingNotice } from "@/components/sharing-notice";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
 import { ProgressiveBlur } from "@/components/ui/progressive-blur";
@@ -902,6 +901,7 @@ export function SpaceContainer({
       {/* Mobile hamburger button */}
       <button
         onClick={() => setMobileSidebarOpen(true)}
+        aria-label="Open sidebar"
         className="md:hidden fixed top-3 left-3 z-40 h-9 w-9 rounded-xl bg-zinc-50/90 dark:bg-[#1a1a1a]/90 backdrop-blur-md border border-zinc-200 dark:border-white/10 flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-white/5 transition-colors shadow-sm"
       >
         <Menu className="h-4 w-4" />
@@ -918,6 +918,7 @@ export function SpaceContainer({
             <div className="absolute top-3 right-3 z-10">
               <button
                 onClick={() => setMobileSidebarOpen(false)}
+                aria-label="Close sidebar"
                 className="h-7 w-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-950 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/10 transition-colors"
               >
                 <X className="h-4 w-4" />
@@ -995,9 +996,6 @@ export function SpaceContainer({
           </header>
 
           <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl pt-4">
-              <SharingNotice isPro={isPro} />
-            </div>
             {!hasPosted || keepInitialComposerDuringUpload ? (
               <div className="flex min-h-screen items-center justify-center">
                 <div className="w-full max-w-4xl">

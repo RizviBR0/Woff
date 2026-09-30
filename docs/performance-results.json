@@ -1,0 +1,139 @@
+{
+  "samples": 1,
+  "environment": "local production / Edge / desktop / normal network",
+  "metrics": [
+    {
+      "operation": "cold-room-create",
+      "milliseconds": 2613,
+      "requests": 19,
+      "runtime": {
+        "longTasks": 3,
+        "longestTaskMs": 187,
+        "peakJsHeapBytes": 13892177
+      }
+    },
+    {
+      "operation": "note-create",
+      "milliseconds": 897,
+      "requests": 11,
+      "runtime": {
+        "longTasks": 3,
+        "longestTaskMs": 187,
+        "peakJsHeapBytes": 17217800
+      }
+    },
+    {
+      "operation": "note-save-including-debounce",
+      "milliseconds": 1403,
+      "requests": 1,
+      "runtime": {
+        "longTasks": 3,
+        "longestTaskMs": 187,
+        "peakJsHeapBytes": 17255721
+      }
+    },
+    {
+      "operation": "offline-and-conflict-checks",
+      "passed": true
+    },
+    {
+      "operation": "in-flight-revision-check",
+      "passed": true
+    },
+    {
+      "operation": "note-three-image-upload",
+      "milliseconds": 2647,
+      "requests": 14,
+      "runtime": {
+        "longTasks": 0,
+        "longestTaskMs": 0,
+        "peakJsHeapBytes": 27652641
+      }
+    },
+    {
+      "operation": "upload-cancellation-check",
+      "passed": true
+    },
+    {
+      "operation": "upload-5-files-1024-bytes",
+      "milliseconds": 1741,
+      "requests": 7,
+      "runtime": {
+        "longTasks": 0,
+        "longestTaskMs": 0,
+        "peakJsHeapBytes": 30906044
+      }
+    },
+    {
+      "operation": "publication-retry-without-retransfer",
+      "passed": true
+    },
+    {
+      "operation": "upload-20-files-1024-bytes",
+      "milliseconds": 4133,
+      "requests": 22,
+      "runtime": {
+        "longTasks": 0,
+        "longestTaskMs": 0,
+        "peakJsHeapBytes": 31651241
+      }
+    },
+    {
+      "operation": "twenty-file-zip",
+      "milliseconds": 5699,
+      "requests": 21,
+      "runtime": {
+        "longTasks": 0,
+        "longestTaskMs": 0,
+        "peakJsHeapBytes": 31651241
+      }
+    },
+    {
+      "operation": "upload-1-files-52428800-bytes",
+      "milliseconds": 30408,
+      "requests": 11,
+      "runtime": {
+        "longTasks": 0,
+        "longestTaskMs": 0,
+        "peakJsHeapBytes": 31651241
+      }
+    },
+    {
+      "operation": "native-download-start",
+      "milliseconds": 981,
+      "requests": 1,
+      "runtime": {
+        "longTasks": 0,
+        "longestTaskMs": 0,
+        "peakJsHeapBytes": 31651241
+      }
+    },
+    {
+      "operation": "download-access-and-expiry-checks",
+      "passed": true
+    },
+    {
+      "operation": "reconnect-missed-message-check",
+      "passed": true
+    },
+    {
+      "operation": "room-join",
+      "milliseconds": 496,
+      "requests": 16,
+      "runtime": {
+        "longTasks": 0,
+        "longestTaskMs": 0,
+        "peakJsHeapBytes": 29654790
+      }
+    },
+    {
+      "operation": "expired-room-feedback-and-retry-check",
+      "passed": true
+    }
+  ],
+  "runtime": {
+    "longTasks": 0,
+    "longestTaskMs": 0,
+    "peakJsHeapBytes": 26923135
+  }
+}

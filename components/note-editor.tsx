@@ -55,13 +55,12 @@ import { marked } from "marked";
 import { triggerBlobDownload } from "@/lib/download";
 import type { Note } from "@/lib/actions";
 import {
-  createUploadIntent,
+  createUploadIntents,
   registerNoteAsset,
-  updateNote,
+  saveNoteSnapshot,
 } from "@/lib/actions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { Button } from "@/components/ui/button";
-import { SharingNotice } from "@/components/sharing-notice";
 import {
   Dialog,
   DialogContent,
@@ -275,6 +274,8 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [mode, setMode] = useState<"rich" | "raw">("rich");
   const [rawContent, setRawContent] = useState("");
+  const modeRef = useRef<"rich" | "raw">("rich");
+  const rawContentRef = useRef("");
   const [wordWrap, setWordWrap] = useState(true);
   const [copiedRaw, setCopiedRaw] = useState(false);
   const rawTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -288,7 +289,11 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const [stats, setStats] = useState({ words: 0, characters: 0 });
   const imageInputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const saveQueueRef = useRef<Promise<void> | null>(null);
+  const revisionRef = useRef(0);
+  const titleRef = useRef(title);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<{ title: string; html: string; json: Record<string, unknown>; revision: number } | null>(null);
   const versionRef = useRef(note?.version || 1);
   const dirtyRef = useRef(false);
   const mountedRef = useRef(false);
@@ -341,7 +346,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     ],
     // Server-sanitized HTML is the rendering source of truth. JSON remains a
     // versioned storage format but is never trusted directly from the database.
-    content: note?.content || note?.content_json || "",
+    content: note?.content ?? "",
     editorProps: {
       handlePaste(_view, event) {
         if (!canEdit) return false;
@@ -355,40 +360,15 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     onUpdate({ editor: currentEditor }) {
       if (!mountedRef.current || !canEdit) return;
       dirtyRef.current = true;
+      revisionRef.current += 1;
       setSaveState(navigator.onLine ? "unsaved" : "offline");
-      const text = currentEditor.getText();
-      setStats({
-        words: text.trim() ? text.trim().split(/\s+/).length : 0,
-        characters: text.length,
-      });
-      localStorage.setItem(
-        draftKey,
-        JSON.stringify({
-          html: currentEditor.getHTML(),
-          json: currentEditor.getJSON(),
-          title,
-          savedAt: Date.now(),
-        }),
-      );
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = setTimeout(() => serializeDraft(currentEditor), 300);
       scheduleSave();
     },
   });
 
   const rawLines = useMemo(() => (rawContent || " ").split("\n"), [rawContent]);
-
-  useEffect(() => {
-    if (editor && !rawContent) {
-      const html = editor.getHTML();
-      if (html && html !== "<p></p>") {
-        try {
-          const md = turndownService.turndown(html);
-          setRawContent(md);
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }, [editor, rawContent]);
 
   const handleSwitchMode = (targetMode: "rich" | "raw") => {
     if (targetMode === mode) return;
@@ -397,14 +377,18 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       const currentHtml = editor?.getHTML() || "";
       try {
         const md = turndownService.turndown(currentHtml);
+        rawContentRef.current = md;
         setRawContent(md);
       } catch {
+        rawContentRef.current = currentHtml;
         setRawContent(currentHtml);
       }
+      modeRef.current = "raw";
       setMode("raw");
     } else {
       try {
-        const html = marked.parse(rawContent) as string;
+        const html = marked.parse(rawContentRef.current) as string;
+        modeRef.current = "rich";
         editor?.commands.setContent(html);
       } catch {
         // ignore
@@ -414,26 +398,15 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   };
 
   const handleRawContentChange = (newVal: string) => {
-    setRawContent(newVal);
     if (!canEdit) return;
-
+    rawContentRef.current = newVal;
+    setRawContent(newVal);
     dirtyRef.current = true;
+    revisionRef.current += 1;
     setSaveState(navigator.onLine ? "unsaved" : "offline");
-
-    setStats({
-      words: newVal.trim() ? newVal.trim().split(/\s+/).length : 0,
-      characters: newVal.length,
-    });
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const parsedHtml = marked.parse(newVal) as string;
-      void performSave({
-        title,
-        html: parsedHtml,
-        json: {},
-      });
-    }, 1000);
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => serializeDraft(), 300);
+    scheduleSave();
   };
 
   const handleDownloadMarkdown = () => {
@@ -465,53 +438,77 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     }
   };
 
+  const serializeDraft = useCallback((source = editor) => {
+    if (!source || !canEdit || !dirtyRef.current) return;
+    const isRaw = modeRef.current === "raw";
+    const text = isRaw ? rawContentRef.current : source.getText();
+    setStats({ words: text.trim() ? text.trim().split(/\s+/).length : 0, characters: text.length });
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({
+        html: isRaw ? marked.parse(rawContentRef.current) as string : source.getHTML(),
+        json: isRaw ? undefined : source.getJSON(),
+        rawContent: isRaw ? rawContentRef.current : undefined,
+        title: titleRef.current,
+        savedAt: Date.now(),
+      }));
+    } catch {
+      // Saving to the server still works if browser storage is full or blocked.
+    }
+  }, [canEdit, draftKey, editor]);
+
   const performSave = useCallback(
     (snapshot?: { title: string; html: string; json: Record<string, unknown> }) => {
-      if (!canEdit) return Promise.resolve();
-      let current = snapshot;
-      if (!current) {
-        if (mode === "raw") {
-          current = {
-            title,
-            html: marked.parse(rawContent) as string,
-            json: {},
-          };
-        } else {
-          if (!editor) return Promise.resolve();
-          current = {
-            title,
-            html: editor.getHTML(),
-            json: editor.getJSON(),
-          };
-        }
-      }
+      if (!editor || !canEdit) return Promise.resolve();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (!dirtyRef.current) return saveQueueRef.current || Promise.resolve();
+      const current =
+        snapshot ||
+        ({
+          title: titleRef.current,
+          html: modeRef.current === "raw" ? marked.parse(rawContentRef.current) as string : editor.getHTML(),
+          json: modeRef.current === "raw" ? {} : editor.getJSON(),
+        } as const);
 
-      saveQueueRef.current = saveQueueRef.current.then(async () => {
+      serializeDraft();
+      pendingSaveRef.current = { ...current, revision: revisionRef.current };
+      if (saveQueueRef.current) return saveQueueRef.current;
+      saveQueueRef.current = (async () => {
+        while (pendingSaveRef.current) {
+        const saving = pendingSaveRef.current;
+        pendingSaveRef.current = null;
         if (!navigator.onLine) {
           setSaveState("offline");
           return;
         }
         setSaveState("saving");
         try {
-          const updated = await updateNote(noteSlug, {
-            title: current!.title,
-            content: current!.html,
-            content_json: current!.json,
+          const updated = await saveNoteSnapshot(noteSlug, {
+            title: saving.title,
+            content: saving.html,
+            content_json: saving.json,
             version: versionRef.current,
           });
+          if (updated.error) throw new Error(updated.error);
           versionRef.current = updated.version || versionRef.current + 1;
-          dirtyRef.current = false;
-          setSaveState("saved");
-          localStorage.removeItem(draftKey);
+          if (saving.revision === revisionRef.current) {
+            dirtyRef.current = false;
+            setSaveState("saved");
+            try { localStorage.removeItem(draftKey); } catch {}
+          } else {
+            setSaveState("unsaved");
+          }
         } catch (error) {
           dirtyRef.current = true;
           setSaveState("error");
           toast.error(error instanceof Error ? error.message : "Unable to save note");
+          pendingSaveRef.current = null;
+          break;
         }
-      });
+        }
+      })().finally(() => { saveQueueRef.current = null; });
       return saveQueueRef.current;
     },
-    [canEdit, draftKey, editor, mode, noteSlug, rawContent, title],
+    [canEdit, draftKey, editor, noteSlug, serializeDraft],
   );
 
   const scheduleSave = useCallback(() => {
@@ -519,13 +516,9 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       if (!editor) return;
-      void performSave({
-        title,
-        html: editor.getHTML(),
-        json: editor.getJSON(),
-      });
+      void performSave();
     }, 1000);
-  }, [canEdit, editor, performSave, title]);
+  }, [canEdit, editor, performSave]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -552,7 +545,15 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
               label: "Restore",
               onClick: () => {
                 editor.commands.setContent(draft.json || draft.html);
+                if (typeof draft.rawContent === "string") {
+                  rawContentRef.current = draft.rawContent;
+                  setRawContent(draft.rawContent);
+                  modeRef.current = "raw";
+                  setMode("raw");
+                }
                 setTitle(draft.title || note.title);
+                titleRef.current = draft.title || note.title;
+                revisionRef.current += 1;
                 dirtyRef.current = true;
                 setSaveState("unsaved");
               },
@@ -566,14 +567,17 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
 
     return () => {
       mountedRef.current = false;
+      serializeDraft();
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
       if (debounceRef.current) clearTimeout(debounceRef.current);
       pendingImagePreviews.forEach((url) => URL.revokeObjectURL(url));
       pendingImagePreviews.clear();
     };
-  }, [canEdit, draftKey, editor, note.title, note.updated_at]);
+  }, [canEdit, draftKey, editor, note.title, note.updated_at, serializeDraft]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
+      serializeDraft();
       if (
         !dirtyRef.current &&
         pendingImagePreviewsRef.current.size === 0
@@ -590,6 +594,10 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       }
     };
     const offline = () => setSaveState("offline");
+    const flush = () => { serializeDraft(); if (dirtyRef.current && navigator.onLine) void performSave(); };
+    const visibility = () => { if (document.visibilityState === "hidden") flush(); };
+    document.addEventListener("visibilitychange", visibility);
+    window.addEventListener("pagehide", flush);
     window.addEventListener("beforeunload", beforeUnload);
     window.addEventListener("online", online);
     window.addEventListener("offline", offline);
@@ -597,8 +605,10 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       window.removeEventListener("beforeunload", beforeUnload);
       window.removeEventListener("online", online);
       window.removeEventListener("offline", offline);
+      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("pagehide", flush);
     };
-  }, [scheduleSave]);
+  }, [scheduleSave, serializeDraft, performSave]);
 
   useEffect(() => {
     if (!shareOpen) return;
@@ -611,18 +621,14 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   }, [shareOpen]);
 
   const updateTitle = (value: string) => {
+    titleRef.current = value.slice(0, 120);
+    revisionRef.current += 1;
     setTitle(value.slice(0, 120));
     dirtyRef.current = true;
     setSaveState("unsaved");
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      if (!editor) return;
-      void performSave({
-        title: value.trim() || "Untitled Note",
-        html: editor.getHTML(),
-        json: editor.getJSON(),
-      });
-    }, 1000);
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => serializeDraft(), 300);
+    scheduleSave();
   };
 
   const copyShareUrl = async () => {
@@ -645,6 +651,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
 
   const uploadInlineImages = useCallback(async (files: File[]) => {
     if (!editor || !canEdit || !files.length) return;
+    if (files.length > 20) { toast.error("Paste at most 20 images at once"); return; }
     if (imageUploadBusyRef.current) {
       toast.info("Another image is uploading in the background");
       return;
@@ -667,6 +674,8 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       file: File;
       index: number;
       status: "pending" | "uploading" | "failed" | "complete";
+      intent?: { path: string; bucket: string };
+      ready?: { url: string; width?: number; height?: number };
     };
     const placeholders: PendingImage[] = [];
     let processQueue: (startIndex: number) => Promise<void>;
@@ -749,11 +758,12 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       setPlaceholderStatus(placeholder, "uploading");
       let uploadedPath: string | null = null;
       try {
-        const intent = await createUploadIntent(note.space_id, {
-          name: file.name || `pasted-image-${Date.now()}.png`,
-          size: file.size,
-          type: file.type,
-        });
+        const intent = placeholder.intent!;
+        const dimensionsPromise = createImageBitmap(file).then((bitmap) => {
+          const dimensions = { width: bitmap.width, height: bitmap.height };
+          bitmap.close();
+          return dimensions;
+        }).catch(() => ({}));
         const { error } = await supabaseBrowser.storage
           .from(intent.bucket)
           .upload(intent.path, file, {
@@ -762,13 +772,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
           });
         if (error) throw error;
         uploadedPath = intent.path;
-        const dimensions = await createImageBitmap(file)
-          .then((bitmap) => {
-            const result = { width: bitmap.width, height: bitmap.height };
-            bitmap.close();
-            return result;
-          })
-          .catch(() => ({}));
+        const dimensions = await dimensionsPromise;
         await registerNoteAsset(noteSlug, {
           path: intent.path,
           type: file.type,
@@ -779,28 +783,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
           .split("/")
           .map(encodeURIComponent)
           .join("/")}`;
-        // Warm and decode the permanent URL before swapping out the local
-        // preview. The replacement is then visually seamless instead of
-        // showing a second loading phase.
-        const permanentImage = new window.Image();
-        permanentImage.src = url;
-        await permanentImage.decode().catch(() => undefined);
-        const position = removePlaceholder(placeholder);
-        placeholder.status = "complete";
-        // Do not move focus: the user can keep writing while this transaction
-        // replaces the mapped local preview in the background.
-        editor
-          .chain()
-          .insertContentAt(position, {
-            type: "image",
-            attrs: {
-              src: url,
-              alt: file.name || "Pasted image",
-              align: "left",
-              ...dimensions,
-            },
-          })
-          .run();
+        placeholder.ready = { url, ...dimensions };
         return true;
       } catch (error) {
         if (uploadedPath) {
@@ -825,17 +808,33 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       setIsUploadingImage(true);
       let allComplete = true;
       try {
-        // Keep replacements ordered. If one fails, later previews remain in
-        // place and resume automatically after that image is retried.
-        for (let index = startIndex; index < placeholders.length; index += 1) {
-          const placeholder = placeholders[index];
-          if (placeholder.status === "complete") continue;
-          const uploaded = await uploadOne(placeholder);
-          if (!uploaded) {
-            allComplete = false;
-            break;
+        const pending = placeholders.slice(startIndex).filter((item) => item.status !== "complete" && !item.ready);
+        const intents = await createUploadIntents(note.space_id, pending.map(({ file }) => ({ name: file.name || "pasted-image.png", size: file.size, type: file.type })));
+        pending.forEach((item, index) => { item.intent = intents[index]; });
+        let next = 0;
+        const flushReady = () => {
+          if (editor.isDestroyed || placeholders.some((item) => item.status !== "complete" && !item.ready)) return;
+          const pendingInsertion = placeholders.filter((item) => item.status !== "complete");
+          if (!pendingInsertion.length) return;
+          // Block-image insertion can split a paragraph and map later widgets
+          // before the first image. Insert the ordered batch in one transaction.
+          const position = removePlaceholder(pendingInsertion[0]);
+          pendingInsertion.slice(1).forEach(removePlaceholder);
+          editor.chain().insertContentAt(position, pendingInsertion.map((item) => ({ type: "image", attrs: { src: item.ready!.url, alt: item.file.name || "Pasted image", align: "left", width: item.ready!.width, height: item.ready!.height } }))).run();
+          pendingInsertion.forEach((item) => { item.status = "complete"; });
+        };
+        await Promise.all(Array.from({ length: Math.min(3, pending.length) }, async () => {
+          while (next < pending.length && !editor.isDestroyed) {
+            const item = pending[next++];
+            if (!(await uploadOne(item))) allComplete = false;
+            flushReady();
           }
-        }
+        }));
+        flushReady();
+      } catch (error) {
+        allComplete = false;
+        placeholders.filter((item) => item.status !== "complete" && !item.ready).forEach((item) => setPlaceholderStatus(item, "failed"));
+        toast.error(error instanceof Error ? error.message : "Image reservation failed. Select retry.");
       } finally {
         imageUploadBusyRef.current = false;
         setIsUploadingImage(false);
@@ -1016,6 +1015,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
               href={`/${note.space_slug || ""}`}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
               aria-label="Back to room"
+              onClick={() => { serializeDraft(); if (dirtyRef.current) void performSave(); }}
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -1024,6 +1024,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
                 href={`/${note.space_slug}`}
                 className="hidden items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-mono font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors sm:inline-flex"
                 title={`Room ${note.space_slug}`}
+                onClick={() => { serializeDraft(); if (dirtyRef.current) void performSave(); }}
               >
                 <span>Room {note.space_slug}</span>
               </Link>
@@ -1073,6 +1074,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
                 size="sm"
                 className="h-9 gap-1.5"
                 disabled={saveState === "saving"}
+                aria-label="Save note"
                 onClick={() => void performSave()}
               >
                 {saveState === "saving" ? (
@@ -1225,9 +1227,6 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       </div>
 
       <main className="mx-auto w-full max-w-5xl px-2 py-4 sm:px-6 sm:py-8">
-        <div className="mb-4">
-          <SharingNotice />
-        </div>
         <article className="min-h-[calc(100vh-11rem)] overflow-hidden rounded-xl border bg-background shadow-xs sm:rounded-2xl">
           {mode === "rich" ? (
             <EditorContent

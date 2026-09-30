@@ -24,6 +24,7 @@ import {
 import NextImage from "next/image";
 import { toast } from "sonner";
 import { downloadFileFromUrl, triggerBlobDownload } from "@/lib/download";
+import { addArchiveFiles, generateArchive } from "@/lib/archive";
 
 async function createZip() {
   const JSZip = (await import("jszip")).default;
@@ -604,6 +605,7 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
     if (downloadingEntryId) return;
     setDownloadingEntryId(entry.id);
     let toastId: string | number | undefined;
+    const controller = new AbortController();
 
     try {
       if (entry.kind === "file" && entry.meta?.type === "files") {
@@ -613,14 +615,10 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
           await downloadFileFromUrl(items[0].url, items[0].name);
           toast.success(`Download started for "${items[0].name}"`, { id: toastId });
         } else if (items.length > 1) {
-          toastId = toast.loading(`Preparing ZIP for ${items.length} files...`);
+          toastId = toast.loading(`Preparing ZIP for ${items.length} files...`, { action: { label: "Cancel", onClick: () => controller.abort() } });
           const zip = await createZip();
-          for (const item of items) {
-            const res = await fetch(item.url);
-            const blob = await res.blob();
-            zip.file(item.name || "file", blob);
-          }
-          const zipBlob = await zip.generateAsync({ type: "blob" });
+          await addArchiveFiles(zip, items.map((item: { url: string; name: string }) => ({ url: item.url, name: item.name || "file" })), { signal: controller.signal, onProgress: (done, total) => toast.loading(`Preparing ZIP: ${done}/${total} files`, { id: toastId }) });
+          const zipBlob = await generateArchive(zip, { signal: controller.signal });
           triggerBlobDownload(zipBlob, `files-${entry.id}.zip`);
           toast.success("ZIP download started", { id: toastId });
         }
@@ -683,7 +681,7 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
             }
           });
 
-          const content = await zip.generateAsync({ type: "blob" });
+          const content = await generateArchive(zip, { signal: controller.signal });
           triggerBlobDownload(content, `photos-${entry.id}.zip`);
           toast.success("ZIP download started", { id: toastId });
         }
@@ -767,19 +765,19 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
   const handleDownloadAll = async (dateGroup: string, groupEntries: Entry[]) => {
     if (downloadingDateGroup) return;
     setDownloadingDateGroup(dateGroup);
-    const toastId = toast.loading(`Preparing ZIP archive for ${groupEntries.length} items...`);
+    const controller = new AbortController();
+    const toastId = toast.loading(`Preparing ZIP archive for ${groupEntries.length} items...`, { action: { label: "Cancel", onClick: () => controller.abort() } });
     try {
       const zip = await createZip();
 
+      const remoteFiles = groupEntries.flatMap((entry) => entry.kind === "file" && entry.meta?.type === "files" ? (entry.meta.items || []).map((item: { url: string; name: string }) => ({ url: item.url, name: `files/${item.name || `file-${entry.id}`}` })) : []);
+      await addArchiveFiles(zip, remoteFiles, { signal: controller.signal, onProgress: (done, total) => toast.loading(`Preparing ZIP: ${done}/${total} files`, { id: toastId }) });
+
       for (const entry of groupEntries) {
+        controller.signal.throwIfAborted();
         // Files
         if (entry.kind === "file" && entry.meta?.type === "files") {
-          const items = entry.meta.items || [];
-          for (const item of items) {
-            const res = await fetch(item.url);
-            const blob = await res.blob();
-            zip.file(`files/${item.name || `file-${entry.id}`}`, blob);
-          }
+          continue;
         }
         // Drawing
         else if (entry.text?.startsWith("DRAWING:")) {
@@ -906,15 +904,18 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
                 /[^a-zA-Z0-9]/g,
                 "_"
               );
-              zip.file(`notes/${safeName}.pdf`, pdfBlob);
-            }
-          } catch {
-            /* ignore single note failure in zip */
+              let filename = `notes/${safeName}.pdf`;
+              let suffix = 1;
+              while (zip.files[filename]) filename = `notes/${safeName} (${suffix++}).pdf`;
+              zip.file(filename, pdfBlob);
+            } else { throw new Error("A note is unavailable. No partial ZIP was downloaded."); }
+          } catch (error) {
+            throw error;
           }
         }
       }
 
-      const content = await zip.generateAsync({ type: "blob" });
+      const content = await generateArchive(zip, { signal: controller.signal });
       triggerBlobDownload(content, `woff-files-${formatDateIso(new Date())}.zip`);
       toast.success("ZIP download started", { id: toastId });
     } catch {

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import * as tus from "tus-js-client";
+import type { Upload } from "tus-js-client";
 import {
   FileText,
   Image as ImageIcon,
@@ -57,6 +57,9 @@ type BatchState = {
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_BATCH_FILES = 20;
 const CONCURRENT_UPLOADS = 3;
+let uploadLibrary: Promise<typeof import("tus-js-client")> | undefined;
+const loadUploadLibrary = () => (uploadLibrary ||= import("tus-js-client").catch((error) => { uploadLibrary = undefined; throw error; }));
+const warmUploadLibrary = () => { void loadUploadLibrary().catch(() => undefined); };
 
 function localFileUrl(path: string) {
   return `/api/files/${path.split("/").map(encodeURIComponent).join("/")}`;
@@ -95,8 +98,11 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const activeUploadsRef = useRef<Set<tus.Upload>>(new Set());
-  const cancelledRef = useRef(false);
+  const activeUploadsRef = useRef<Set<Upload>>(new Set());
+  const cancelTransfersRef = useRef<Set<() => void>>(new Set());
+  const retainedBatchRef = useRef<{ id: string; intents: { path: string; bucket: string }[]; uploaded: Awaited<ReturnType<typeof uploadOne>>[] } | null>(null);
+  const batchControllerRef = useRef<AbortController | null>(null);
+  const publishingRef = useRef(false);
   const previewUrlsRef = useRef<string[]>([]);
   const isPostingRef = useRef(false);
   const isSavingDrawingRef = useRef(false);
@@ -109,9 +115,13 @@ export function Composer({
 
   useEffect(() => {
     const activeUploads = activeUploadsRef.current;
+    const cancelTransfers = cancelTransfersRef.current;
     return () => {
-      cancelledRef.current = true;
+      batchControllerRef.current?.abort();
       activeUploads.forEach((upload) => void upload.abort(true));
+      cancelTransfers.forEach((cancel) => cancel());
+      const paths = retainedBatchRef.current?.uploaded.filter(Boolean).map((item) => item.path) || [];
+      if (paths.length && !publishingRef.current) void supabaseBrowser.storage.from("files").remove(paths);
       clearPreviews();
     };
   }, [clearPreviews]);
@@ -138,6 +148,8 @@ export function Composer({
       index: number,
       onProgress: () => void,
     ) => {
+      const dimensions = getImageDimensions(file);
+      const tus = await loadUploadLibrary();
       const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       if (!projectUrl || !apiKey) throw new Error("Upload service is not configured");
@@ -158,8 +170,10 @@ export function Composer({
           settled = true;
           clearTimeout(noProgressTimer);
           activeUploadsRef.current.delete(upload);
+          cancelTransfersRef.current.delete(cancel);
           callback();
         };
+        const cancel = () => finish(() => reject(new DOMException("Upload cancelled", "AbortError")));
         const resetNoProgressTimer = () => {
           clearTimeout(noProgressTimer);
           noProgressTimer = setTimeout(() => {
@@ -200,6 +214,7 @@ export function Composer({
           },
         });
         activeUploadsRef.current.add(upload);
+        cancelTransfersRef.current.add(cancel);
         resetNoProgressTimer();
         upload.start();
       });
@@ -210,7 +225,7 @@ export function Composer({
         name: file.name,
         type: file.type || "application/octet-stream",
         size: file.size,
-        ...(await getImageDimensions(file)),
+        ...(await dimensions),
       };
     },
     [],
@@ -219,11 +234,20 @@ export function Composer({
   const runUpload = useCallback(
     async (files: File[], presentation: UploadPresentation, existingId?: string) => {
       validateFiles(files);
-      if (batch?.status === "uploading") {
+      if (batchControllerRef.current || batch?.status === "uploading") {
         throw new Error("Wait for the current upload or cancel it");
       }
 
-      cancelledRef.current = false;
+      const controller = new AbortController();
+      batchControllerRef.current = controller;
+      warmUploadLibrary();
+      if (!existingId && retainedBatchRef.current) {
+        const previous = retainedBatchRef.current;
+        retainedBatchRef.current = null;
+        onRemoveEntry(previous.id);
+        const paths = previous.uploaded.filter(Boolean).map((item) => item.path);
+        if (paths.length) void supabaseBrowser.storage.from("files").remove(paths);
+      }
       onUploadStateChange?.(true);
       const batchId = existingId || `placeholder-${crypto.randomUUID()}`;
       const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
@@ -284,19 +308,33 @@ export function Composer({
 
       setBatch({ id: batchId, files, presentation, progress: 0, status: "uploading" });
 
+      let lastProgress = -1;
       const reportProgress = () => {
         const bytesUploaded = uploadedByIndex.reduce((sum, value) => sum + value, 0);
         const progress = Math.min(99, Math.round((bytesUploaded / totalBytes) * 100));
+        if (lastProgress === progress || controller.signal.aborted) return;
+        lastProgress = progress;
         setBatch((current) => (current ? { ...current, progress } : current));
         onUpdateEntry(batchId, { uploadProgress: progress });
       };
 
-      const uploaded: Awaited<ReturnType<typeof uploadOne>>[] = new Array(files.length);
+      const cached = existingId && retainedBatchRef.current?.id === existingId ? retainedBatchRef.current : null;
+      let uploaded: Awaited<ReturnType<typeof uploadOne>>[] = cached?.uploaded || new Array(files.length);
       let nextIndex = 0;
 
       try {
+        let retainedIntents = cached?.intents;
+        if (retainedIntents) {
+          const { data, error } = await supabaseBrowser.from("upload_intents").select("path").in("path", retainedIntents.map((item) => item.path)).gt("expires_at", new Date(Date.now() + 60_000).toISOString());
+          if (error || data?.length !== retainedIntents.length) {
+            const paths = uploaded.filter(Boolean).map((item) => item.path);
+            if (paths.length) await supabaseBrowser.storage.from("files").remove(paths);
+            uploaded = new Array(files.length);
+            retainedIntents = undefined;
+          }
+        }
         const [intents, authResult] = await Promise.all([
-          createUploadIntents(
+          retainedIntents ? Promise.resolve(retainedIntents) : createUploadIntents(
             spaceId,
             files.map((file) => ({
               name: file.name,
@@ -306,14 +344,18 @@ export function Composer({
           ),
           supabaseBrowser.auth.getSession(),
         ]);
+        retainedBatchRef.current = { id: batchId, intents, uploaded };
+        uploaded.forEach((item, index) => { if (item) uploadedByIndex[index] = files[index].size; });
+        reportProgress();
         const session = authResult.data.session;
         if (!session) throw new Error("Your anonymous session expired. Refresh and retry.");
 
         const workerResults = await Promise.allSettled(
           Array.from({ length: Math.min(CONCURRENT_UPLOADS, files.length) }, async () => {
-            while (!cancelledRef.current) {
+            while (!controller.signal.aborted) {
               const index = nextIndex++;
               if (index >= files.length) return;
+              if (uploaded[index]) continue;
               uploaded[index] = await uploadOne(
                 files[index],
                 intents[index],
@@ -328,7 +370,7 @@ export function Composer({
         const uploadedPaths = uploaded
           .filter(Boolean)
           .map((item) => item.path);
-        if (cancelledRef.current) {
+        if (controller.signal.aborted) {
           if (uploadedPaths.length) {
             await supabaseBrowser.storage.from("files").remove(uploadedPaths);
           }
@@ -338,22 +380,22 @@ export function Composer({
           (result): result is PromiseRejectedResult => result.status === "rejected",
         );
         if (failedWorker) {
-          if (uploadedPaths.length) {
-            await supabaseBrowser.storage.from("files").remove(uploadedPaths);
-          }
           throw failedWorker.reason;
         }
 
         // One database commit after every object succeeds. Remote participants
         // never see a partially completed batch.
-        const entry = await createUploadedEntry(spaceId, uploaded, presentation);
+        publishingRef.current = true;
+        const entry = await createUploadedEntry(spaceId, uploaded, presentation).finally(() => { publishingRef.current = false; });
         onUpdateEntry(batchId, { uploadProgress: 100 });
         onReplaceEntry(batchId, entry as Entry);
+        retainedBatchRef.current = null;
         setBatch(null);
         onUploadStateChange?.(false);
         clearPreviews();
         toast.success(files.length === 1 ? "Upload complete" : `${files.length} files uploaded`);
       } catch (error) {
+        if (controller.signal.aborted) return;
         const message = error instanceof Error ? error.message : "Upload failed";
         setBatch({
           id: batchId,
@@ -369,6 +411,8 @@ export function Composer({
           uploadProgress: 0,
         });
         toast.error(message);
+      } finally {
+        if (batchControllerRef.current === controller) batchControllerRef.current = null;
       }
     },
     [
@@ -377,6 +421,7 @@ export function Composer({
       currentDeviceId,
       onNewEntry,
       onReplaceEntry,
+      onRemoveEntry,
       onUploadStateChange,
       onUpdateEntry,
       spaceId,
@@ -386,11 +431,18 @@ export function Composer({
   );
 
   const cancelUpload = useCallback(async () => {
-    cancelledRef.current = true;
-    await Promise.all(
-      [...activeUploadsRef.current].map((upload) => upload.abort(true).catch(() => undefined)),
-    );
+    if (publishingRef.current) { toast.message("Finishing this upload. Please wait a moment."); return; }
+    batchControllerRef.current?.abort();
+    // Rejecting the transfer promise removes it from the active set. Capture
+    // the transports first so cancellation also stops their requests/retries.
+    const uploads = [...activeUploadsRef.current];
+    const aborts = uploads.map((upload) => upload.abort(true).catch(() => undefined));
+    cancelTransfersRef.current.forEach((cancel) => cancel());
+    await Promise.all(aborts);
     activeUploadsRef.current.clear();
+    const paths = retainedBatchRef.current?.uploaded.filter(Boolean).map((item) => item.path) || [];
+    retainedBatchRef.current = null;
+    if (paths.length) await supabaseBrowser.storage.from("files").remove(paths);
     if (batch) onRemoveEntry(batch.id);
     setBatch(null);
     onUploadStateChange?.(false);
@@ -446,6 +498,7 @@ export function Composer({
     if (isPosting || noteCreationStage || isCreatingNoteRef.current) return;
     isCreatingNoteRef.current = true;
     setNoteCreationStage("creating");
+    void import("./note-editor").catch(() => undefined);
     try {
       const result = await createNoteEntry(spaceId);
       const noteHref = spaceSlug
@@ -568,6 +621,7 @@ export function Composer({
       Array.from(event.dataTransfer?.types || []).includes("Files");
 
     const onDragEnter = (event: DragEvent) => {
+      if (containsFiles(event)) warmUploadLibrary();
       if (isModalOrOverlayActive()) return;
       if (!containsFiles(event)) return;
       event.preventDefault();
@@ -801,7 +855,7 @@ export function Composer({
               <span className="hidden sm:inline">Photos</span>
             </button>
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => { warmUploadLibrary(); fileInputRef.current?.click(); }}
               className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
               aria-label="Upload files"
             >
@@ -866,11 +920,11 @@ export function Composer({
         />
       </div>
 
-      <DrawingCanvas
+      {drawingOpen && <DrawingCanvas
         isOpen={drawingOpen}
         onClose={() => setDrawingOpen(false)}
         onSave={saveDrawing}
-      />
+      />}
     </>
   );
 }

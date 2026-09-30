@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createClientSupabaseClient } from "@/lib/supabase-browser";
 import type { Entry } from "@/components/entry-card";
 import type { Space } from "@/lib/actions";
+import { displayNameForDevice } from "@/lib/display-name";
 
 const UNSEEN_READING_DWELL_MS = 4_000;
 
@@ -192,7 +193,7 @@ export function useSpaceRealtime({
           const pendingIdx = prev.findIndex(
             (e) =>
               e.isLoading &&
-              (e.id.startsWith("temp-") || e.id.startsWith("placeholder-")),
+              e.id.startsWith("temp-") && e.kind === newEntry.kind && e.text === newEntry.text,
           );
           if (pendingIdx !== -1) {
             const pendingEntry = prev[pendingIdx];
@@ -288,6 +289,10 @@ export function useSpaceRealtime({
   useEffect(() => {
     const supabase = createClientSupabaseClient();
     const presenceKey = currentDeviceId || crypto.randomUUID();
+    let disposed = false;
+    let reconciling = false;
+    let connectedOnce = false;
+    const changes = new Map<string, Entry | null>();
 
     const channel = supabase
       .channel(`space:${space.id}`, {
@@ -307,6 +312,7 @@ export function useSpaceRealtime({
         },
         (payload) => {
           const newEntry = payload.new as Entry;
+          if (reconciling) changes.set(newEntry.id, newEntry);
           const added = addEntryIfNotExists(newEntry);
           if (!added) return;
           const isIncoming = newEntry.created_by_device_id !== currentDeviceId;
@@ -335,6 +341,7 @@ export function useSpaceRealtime({
         },
         (payload) => {
           const updatedEntry = payload.new as Entry;
+          if (reconciling) changes.set(updatedEntry.id, updatedEntry);
           setEntries((prev) =>
             prev.map((entry) =>
               entry.id === updatedEntry.id ? updatedEntry : entry,
@@ -353,6 +360,7 @@ export function useSpaceRealtime({
         (payload) => {
           const oldEntry = payload.old as { id: string };
           if (oldEntry && oldEntry.id) {
+            if (reconciling) changes.set(oldEntry.id, null);
             knownEntryIdsRef.current.delete(oldEntry.id);
             setEntries((prev) =>
               prev.filter((entry) => entry.id !== oldEntry.id),
@@ -364,6 +372,28 @@ export function useSpaceRealtime({
         if (status === "SUBSCRIBED") {
           setConnectionStatus("connected");
           void channel.track({ online_at: new Date().toISOString() });
+          // On reconnect, fetch and replay events received during the read
+          // so reconnect recovery cannot overwrite newer realtime changes.
+          if (connectedOnce && !reconciling) {
+            reconciling = true;
+            changes.clear();
+            void supabase.rpc("open_space", { p_slug: space.slug, p_display_name: displayNameForDevice(presenceKey) }).then(({ data, error }) => {
+              if (disposed) return;
+              if (!error && data?.space) {
+                const latest = new Map<string, Entry>((data.entries || []).map((entry: Entry) => [entry.id, entry]));
+                changes.forEach((entry, id) => { if (entry) latest.set(id, entry); else latest.delete(id); });
+                setEntries((current) => {
+                  const pending = current.filter((entry) => entry.isLoading && (entry.id.startsWith("temp-") || entry.id.startsWith("placeholder-")));
+                  const next = [...latest.values(), ...pending].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+                  knownEntryIdsRef.current = new Set(next.map((entry) => entry.id));
+                  return next;
+                });
+              }
+              reconciling = false;
+              changes.clear();
+            });
+          }
+          connectedOnce = true;
         } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
           setConnectionStatus("disconnected");
         } else {
@@ -372,10 +402,12 @@ export function useSpaceRealtime({
       });
 
     return () => {
+      disposed = true;
       void supabase.removeChannel(channel);
     };
   }, [
     space.id,
+    space.slug,
     currentDeviceId,
     addEntryIfNotExists,
     scrollToBottom,

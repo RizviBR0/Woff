@@ -472,6 +472,34 @@ export async function createNoteEntry(
   };
 }
 
+export async function saveNoteSnapshot(
+  noteSlug: string,
+  snapshot: { title: string; content: string; content_json: Record<string, unknown>; version: number },
+): Promise<{ version: number; updated_at: string; error?: never } | { error: string; version?: never; updated_at?: never }> {
+  if (Buffer.byteLength(snapshot.content, "utf8") > 1_000_000 || Buffer.byteLength(JSON.stringify(snapshot.content_json), "utf8") > 2_000_000) {
+    return { error: "Note is too large" };
+  }
+  const { supabase } = await requireAnonymousUser();
+  const { data, error } = await supabase.rpc("save_note_snapshot", {
+    p_slug: noteSlug,
+    p_title: snapshot.title.trim().slice(0, 120) || "Untitled Note",
+    p_content_html: sanitizeNoteHtml(snapshot.content),
+    p_content_json: snapshot.content_json,
+    p_expected_version: snapshot.version,
+  });
+  if (error) {
+    const expected = new Set([
+      "Note is too large", "Note not found", "Note not found or expired",
+      "Only the note creator can edit this note", "Authentication required",
+      "This note changed elsewhere. Reload before saving again.",
+      "Too many requests. Please wait and try again.",
+    ]);
+    return { error: expected.has(error.message) ? error.message : "Unable to save note. Please try again." };
+  }
+  if (!data) return { error: "Unable to save note. Please try again." };
+  return data;
+}
+
 export async function updateNote(
   noteSlug: string,
   updates: Partial<{

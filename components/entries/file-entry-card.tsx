@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/utils";
 import { downloadFileFromUrl, triggerBlobDownload } from "@/lib/download";
 import { openOrCreateNoteForMarkdownFile } from "@/lib/actions";
+import { addArchiveFiles, generateArchive } from "@/lib/archive";
 import type { Entry, UploadedFileItem } from "./entry-types";
 
 interface FileEntryCardProps {
@@ -130,21 +131,15 @@ export function FileEntryCard({ entry, spaceSlug }: FileEntryCardProps) {
   const downloadAllAsZip = async () => {
     if (!items.length || isZipping) return;
     setIsZipping(true);
-    const toastId = toast.loading(`Preparing ZIP archive for ${items.length} files...`);
+    const controller = new AbortController();
+    const toastId = toast.loading(`Preparing ZIP archive for ${items.length} files...`, { action: { label: "Cancel", onClick: () => controller.abort() } });
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
 
-      await Promise.all(
-        items.map(async (file, index) => {
-          const res = await fetch(file.url);
-          const blob = await res.blob();
-          const fileName = file.name || `file-${index + 1}`;
-          zip.file(fileName, blob);
-        }),
-      );
+      await addArchiveFiles(zip, items.map((file, index) => ({ url: file.url, name: file.name || `file-${index + 1}` })), { signal: controller.signal, onProgress: (done, total) => toast.loading(`Preparing ZIP: ${done}/${total} files`, { id: toastId }) });
 
-      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const zipBlob = await generateArchive(zip, { signal: controller.signal });
       triggerBlobDownload(zipBlob, `woff-files-${Date.now()}.zip`);
       toast.success("ZIP download started", { id: toastId });
     } catch (err) {

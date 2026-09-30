@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useState, useRef, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ScanLine,
   Clipboard,
@@ -13,10 +13,22 @@ import {
   Link2,
   Copy,
 } from "lucide-react";
-import { validateRoomCode } from "@/lib/actions";
 import { toast } from "sonner";
 import { extractRoomCode } from "@/lib/utils";
 import { useCreateSpace } from "@/lib/hooks/use-create-space";
+
+function JoinFeedback({ onRejected }: { onRejected: () => void }) {
+  const params = useSearchParams();
+  const error = params.get("joinError");
+  useEffect(() => {
+    if (!error) return;
+    onRejected();
+    const url = new URL(window.location.href);
+    url.searchParams.delete("joinError");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
+  }, [error, onRejected]);
+  return null;
+}
 
 export default function HeroSection() {
   const [pinDigits, setPinDigits] = useState<string[]>(Array(4).fill(""));
@@ -29,6 +41,12 @@ export default function HeroSection() {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const qrScannerRef = useRef<any>(null);
   const router = useRouter();
+  const joiningRef = useRef(false);
+  const rejectJoin = useCallback(() => {
+    joiningRef.current = false;
+    setIsJoining(false);
+    toast.error("Room not found or expired — please check the code");
+  }, []);
 
   const roomCode = pinDigits.join("");
   const hasFullCode = roomCode.length === 4;
@@ -69,26 +87,22 @@ export default function HeroSection() {
 
   const handleJoinRoom = async (overrideCode?: string) => {
     const codeToJoin = overrideCode || pinDigits.join("");
-    if (codeToJoin.length !== 4) {
+    if (!/^\d{4}$/.test(codeToJoin)) {
       toast.error("Please enter a 4-digit room code");
       return;
     }
+    if (joiningRef.current) return;
+    joiningRef.current = true;
     setIsJoining(true);
-    router.prefetch(`/${codeToJoin}`);
 
     try {
-      const isValid = await validateRoomCode(codeToJoin);
-      if (isValid) {
-        localStorage.setItem("last_room", codeToJoin);
-        router.push(`/${codeToJoin}`);
-      } else {
-        toast.error("Room not found - please check the code");
-        setIsJoining(false);
-      }
+      try { localStorage.setItem("last_room", codeToJoin); } catch {}
+      router.push(`/${codeToJoin}?join=1`);
     } catch (err) {
       console.error("Failed to join room:", err);
       toast.error("Failed to join room");
       setIsJoining(false);
+      joiningRef.current = false;
     }
   };
 
@@ -105,8 +119,7 @@ export default function HeroSection() {
     if (digit && index === 3) {
       const fullCode = newDigits.join("");
       if (fullCode.length === 4) {
-        router.prefetch(`/${fullCode}`);
-        setTimeout(() => handleJoinRoom(fullCode), 100);
+        void handleJoinRoom(fullCode);
       }
     }
   };
@@ -144,8 +157,7 @@ export default function HeroSection() {
       inputRefs.current[focusIndex]?.focus();
 
       if (digits.length === 4) {
-        router.prefetch(`/${digits}`);
-        setTimeout(() => handleJoinRoom(digits), 100);
+        void handleJoinRoom(digits);
       }
     }
   };
@@ -158,13 +170,8 @@ export default function HeroSection() {
       if (clipboardText.trim()) {
         const extractedCode = extractRoomCode(clipboardText);
         if (extractedCode && extractedCode.length === 4) {
-          const isValid = await validateRoomCode(extractedCode);
-          if (isValid) {
             setPinDigits(extractedCode.split(""));
-            setTimeout(() => handleJoinRoom(extractedCode), 100);
-          } else {
-            toast.error("Room not found from clipboard code");
-          }
+            void handleJoinRoom(extractedCode);
         } else {
           toast.error("No valid 4-digit room code found");
         }
@@ -284,14 +291,11 @@ export default function HeroSection() {
           const extractedCode = extractRoomCode(result.data);
           if (extractedCode && extractedCode.length === 4) {
             try {
-              const isValid = await validateRoomCode(extractedCode);
-              if (isValid) {
                 setPinDigits(extractedCode.split(""));
                 qrScanner.stop();
                 safeRemoveOverlay(overlay);
                 setIsScanning(false);
-                setTimeout(() => handleJoinRoom(extractedCode), 100);
-              }
+                void handleJoinRoom(extractedCode);
             } catch (err) {
               console.error("Error validating scanned room code:", err);
             }
@@ -341,6 +345,7 @@ export default function HeroSection() {
 
   return (
     <section className="relative min-h-screen overflow-hidden bg-zinc-50 dark:bg-[#030303] px-4 py-6 text-zinc-900 dark:text-white sm:px-6 lg:px-10 transition-colors duration-300">
+      <Suspense fallback={null}><JoinFeedback onRejected={rejectJoin} /></Suspense>
       {/* Background — controlled single glow + subtle grid */}
       <div className="pointer-events-none absolute inset-0">
         {/* Single controlled orange radial glow behind mockup area */}
