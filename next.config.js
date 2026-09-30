@@ -97,7 +97,7 @@ const nextConfig = {
           `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""} https://www.googletagmanager.com https://va.vercel-scripts.com`,
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' data: https://fonts.gstatic.com",
-          "img-src 'self' data: blob: https://*.supabase.co",
+          "img-src 'self' data: blob: https:",
           "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.google.com https://vitals.vercel-insights.com",
           "worker-src 'self' blob:",
           "upgrade-insecure-requests",

@@ -28,6 +28,8 @@ const BADGE_COLORS: Record<string, { bg: string; text: string; dot: string }> = 
   Shell: { bg: "bg-teal-500/10", text: "text-teal-400", dot: "bg-teal-400" },
   Bash: { bg: "bg-teal-500/10", text: "text-teal-400", dot: "bg-teal-400" },
   PHP: { bg: "bg-violet-500/10", text: "text-violet-400", dot: "bg-violet-400" },
+  Markdown: { bg: "bg-sky-500/10", text: "text-sky-400", dot: "bg-sky-400" },
+  md: { bg: "bg-sky-500/10", text: "text-sky-400", dot: "bg-sky-400" },
 };
 
 /**
