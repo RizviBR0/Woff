@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Archive,
   Download,
+  Eye,
   File,
   FileCode,
   FileSpreadsheet,
@@ -18,15 +20,29 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/utils";
 import { downloadFileFromUrl, triggerBlobDownload } from "@/lib/download";
+import { openOrCreateNoteForMarkdownFile } from "@/lib/actions";
 import type { Entry, UploadedFileItem } from "./entry-types";
 
 interface FileEntryCardProps {
   entry: Entry;
+  spaceSlug?: string;
+}
+
+export function isMarkdownFile(name: string, type?: string) {
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  return (
+    ["md", "markdown", "mdown", "mkdn", "mdwn", "mdtxt", "mdtext"].includes(ext) ||
+    type === "text/markdown" ||
+    type === "text/x-markdown"
+  );
 }
 
 function getFileIcon(type: string, name: string) {
   const ext = name.split(".").pop()?.toLowerCase() || "";
 
+  if (["md", "markdown"].includes(ext) || type === "text/markdown" || type === "text/x-markdown") {
+    return <FileText className="h-5 w-5 text-sky-500" />;
+  }
   if (type.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif", "svg"].includes(ext)) {
     return <ImageIcon className="h-5 w-5 text-blue-500" />;
   }
@@ -52,14 +68,50 @@ function getFileIcon(type: string, name: string) {
   return <File className="h-5 w-5 text-muted-foreground" />;
 }
 
-export function FileEntryCard({ entry }: FileEntryCardProps) {
+export function FileEntryCard({ entry, spaceSlug }: FileEntryCardProps) {
+  const router = useRouter();
   const [isZipping, setIsZipping] = useState(false);
   const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
+  const [openingNoteIndex, setOpeningNoteIndex] = useState<number | null>(null);
 
   const items: UploadedFileItem[] = (() => {
     if (Array.isArray(entry.meta?.items)) return entry.meta.items;
     return [];
   })();
+
+  const openInRichNote = async (file: UploadedFileItem, index: number) => {
+    if (openingNoteIndex !== null) return;
+    setOpeningNoteIndex(index);
+    const toastId = toast.loading(`Opening "${file.name}" in Rich Note…`);
+    try {
+      let markdownContent = "";
+      try {
+        const res = await fetch(file.url);
+        if (res.ok) {
+          markdownContent = await res.text();
+        }
+      } catch {
+        // Fallback gracefully if network/cors blocks direct fetch
+      }
+
+      const { noteSlug } = await openOrCreateNoteForMarkdownFile({
+        spaceId: entry.space_id,
+        fileName: file.name,
+        markdownContent,
+      });
+
+      toast.dismiss(toastId);
+      const targetSlug = spaceSlug || entry.meta?.space_slug;
+      const targetUrl = targetSlug ? `/${targetSlug}/${noteSlug}` : `/n/${noteSlug}`;
+      router.push(targetUrl);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to open rich note",
+        { id: toastId },
+      );
+      setOpeningNoteIndex(null);
+    }
+  };
 
   const downloadFile = async (url: string, name: string, index: number) => {
     if (downloadingIndex !== null) return;
@@ -112,67 +164,107 @@ export function FileEntryCard({ entry }: FileEntryCardProps) {
   }
 
   return (
-    <div className="w-full max-w-md space-y-2">
-      {items.length > 1 && (
-        <div className="flex items-center justify-between px-1 pb-1">
-          <span className="text-xs font-medium text-muted-foreground">
-            {items.length} files attached
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1.5 text-xs"
-            onClick={downloadAllAsZip}
-            disabled={isZipping}
-          >
-            {isZipping ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <FolderArchive className="h-3.5 w-3.5" />
-            )}
-            Download all (.zip)
-          </Button>
-        </div>
-      )}
-
-      <div className="space-y-1.5">
-        {items.map((file, idx) => (
-          <div
-            key={idx}
-            className="flex items-center justify-between gap-3 p-2.5 rounded-xl border bg-card hover:bg-muted/50 transition-colors"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                {getFileIcon(file.type, file.name)}
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate text-foreground">
-                  {file.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatBytes(file.size)}
-                </p>
-              </div>
-            </div>
-
+    <>
+      <div className="w-full max-w-md space-y-2">
+        {items.length > 1 && (
+          <div className="flex items-center justify-between px-1 pb-1">
+            <span className="text-xs font-medium text-muted-foreground">
+              {items.length} files attached
+            </span>
             <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 shrink-0 hover:bg-muted"
-              onClick={() => void downloadFile(file.url, file.name, idx)}
-              disabled={downloadingIndex === idx}
-              aria-label={`Download ${file.name}`}
-              title={downloadingIndex === idx ? "Downloading…" : `Download ${file.name}`}
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 text-xs"
+              onClick={downloadAllAsZip}
+              disabled={isZipping}
             >
-              {downloadingIndex === idx ? (
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              {isZipping ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Download className="h-4 w-4 text-muted-foreground" />
+                <FolderArchive className="h-3.5 w-3.5" />
               )}
+              Download all (.zip)
             </Button>
           </div>
-        ))}
+        )}
+
+        <div className="space-y-1.5">
+          {items.map((file, idx) => {
+            const isMd = isMarkdownFile(file.name, file.type);
+
+            return (
+              <div
+                key={idx}
+                className="flex items-center justify-between gap-3 p-2.5 rounded-xl border bg-card hover:bg-muted/50 transition-colors"
+              >
+                <div
+                  className={`flex items-center gap-3 min-w-0 flex-1 ${
+                    isMd ? "cursor-pointer group/mdinfo" : ""
+                  }`}
+                  onClick={() => {
+                    if (isMd) {
+                      void openInRichNote(file, idx);
+                    }
+                  }}
+                  title={isMd ? `Open ${file.name} in Rich Note` : undefined}
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                    {getFileIcon(file.type, file.name)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate text-foreground group-hover/mdinfo:text-sky-600 dark:group-hover/mdinfo:text-sky-400 transition-colors">
+                      {file.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatBytes(file.size)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  {isMd && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0 hover:bg-muted text-muted-foreground hover:text-foreground"
+                      onClick={() => void openInRichNote(file, idx)}
+                      disabled={openingNoteIndex === idx}
+                      aria-label={`Open ${file.name} in Rich Note`}
+                      title={`Open ${file.name} in Rich Note`}
+                    >
+                      {openingNoteIndex === idx ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
+
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 shrink-0 hover:bg-muted"
+                    onClick={() => void downloadFile(file.url, file.name, idx)}
+                    disabled={downloadingIndex === idx}
+                    aria-label={`Download ${file.name}`}
+                    title={
+                      downloadingIndex === idx
+                        ? "Downloading…"
+                        : `Download ${file.name}`
+                    }
+                  >
+                    {downloadingIndex === idx ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    ) : (
+                      <Download className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

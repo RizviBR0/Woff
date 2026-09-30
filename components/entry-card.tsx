@@ -151,7 +151,9 @@ export const EntryCard = memo(function EntryCard({
           {category === "media" && (
             <MediaEntryCard entry={entry} onNewEntry={onNewEntry} />
           )}
-          {category === "file" && <FileEntryCard entry={entry} />}
+          {category === "file" && (
+            <FileEntryCard entry={entry} spaceSlug={spaceSlug} />
+          )}
           {category === "text" && (
             <TextEntry
               entry={entry}

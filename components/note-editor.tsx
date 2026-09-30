@@ -26,6 +26,9 @@ import {
   ChevronDown,
   Code2,
   Copy,
+  Download,
+  Eye,
+  FileText,
   Heading1,
   Heading2,
   ImagePlus,
@@ -44,8 +47,12 @@ import {
   UnderlineIcon,
   Undo2,
   Unlink,
+  WrapText,
 } from "lucide-react";
 import { toast } from "sonner";
+import TurndownService from "turndown";
+import { marked } from "marked";
+import { triggerBlobDownload } from "@/lib/download";
 import type { Note } from "@/lib/actions";
 import {
   createUploadIntent,
@@ -238,12 +245,39 @@ function ToolbarButton({
   );
 }
 
+const turndownService = new TurndownService({
+  headingStyle: "atx",
+  codeBlockStyle: "fenced",
+  bulletListMarker: "-",
+  emDelimiter: "_",
+});
+
+turndownService.addRule("taskListItem", {
+  filter: (node) => {
+    return (
+      node.nodeName === "LI" &&
+      node.getAttribute("data-type") === "taskItem"
+    );
+  },
+  replacement: (content, node) => {
+    const isChecked =
+      (node as HTMLElement).getAttribute("data-checked") === "true" ||
+      node.querySelector('input[type="checkbox"]:checked') !== null;
+    return `${isChecked ? "- [x]" : "- [ ]"} ${content.trim()}\n`;
+  },
+});
+
 export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const router = useRouter();
   const note = initialNote!;
   const canEdit = Boolean(note?.is_owner);
   const [title, setTitle] = useState(note?.title || "Untitled Note");
   const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [mode, setMode] = useState<"rich" | "raw">("rich");
+  const [rawContent, setRawContent] = useState("");
+  const [wordWrap, setWordWrap] = useState(true);
+  const [copiedRaw, setCopiedRaw] = useState(false);
+  const rawTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkValue, setLinkValue] = useState("");
@@ -340,16 +374,117 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     },
   });
 
+  const rawLines = useMemo(() => (rawContent || " ").split("\n"), [rawContent]);
+
+  useEffect(() => {
+    if (editor && !rawContent) {
+      const html = editor.getHTML();
+      if (html && html !== "<p></p>") {
+        try {
+          const md = turndownService.turndown(html);
+          setRawContent(md);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [editor, rawContent]);
+
+  const handleSwitchMode = (targetMode: "rich" | "raw") => {
+    if (targetMode === mode) return;
+
+    if (targetMode === "raw") {
+      const currentHtml = editor?.getHTML() || "";
+      try {
+        const md = turndownService.turndown(currentHtml);
+        setRawContent(md);
+      } catch {
+        setRawContent(currentHtml);
+      }
+      setMode("raw");
+    } else {
+      try {
+        const html = marked.parse(rawContent) as string;
+        editor?.commands.setContent(html);
+      } catch {
+        // ignore
+      }
+      setMode("rich");
+    }
+  };
+
+  const handleRawContentChange = (newVal: string) => {
+    setRawContent(newVal);
+    if (!canEdit) return;
+
+    dirtyRef.current = true;
+    setSaveState(navigator.onLine ? "unsaved" : "offline");
+
+    setStats({
+      words: newVal.trim() ? newVal.trim().split(/\s+/).length : 0,
+      characters: newVal.length,
+    });
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const parsedHtml = marked.parse(newVal) as string;
+      void performSave({
+        title,
+        html: parsedHtml,
+        json: {},
+      });
+    }, 1000);
+  };
+
+  const handleDownloadMarkdown = () => {
+    const mdContent =
+      mode === "raw"
+        ? rawContent
+        : turndownService.turndown(editor?.getHTML() || "");
+    const baseName = title.trim() || "note";
+    const filename = baseName.toLowerCase().endsWith(".md")
+      ? baseName
+      : `${baseName}.md`;
+    const blob = new Blob([mdContent], { type: "text/markdown;charset=utf-8" });
+    triggerBlobDownload(blob, filename);
+    toast.success(`Downloaded ${filename}`);
+  };
+
+  const handleCopyRaw = async () => {
+    const mdContent =
+      mode === "raw"
+        ? rawContent
+        : turndownService.turndown(editor?.getHTML() || "");
+    try {
+      await navigator.clipboard.writeText(mdContent);
+      setCopiedRaw(true);
+      toast.success("Markdown copied to clipboard");
+      setTimeout(() => setCopiedRaw(false), 2000);
+    } catch {
+      toast.error("Failed to copy");
+    }
+  };
+
   const performSave = useCallback(
     (snapshot?: { title: string; html: string; json: Record<string, unknown> }) => {
-      if (!editor || !canEdit) return Promise.resolve();
-      const current =
-        snapshot ||
-        ({
-          title,
-          html: editor.getHTML(),
-          json: editor.getJSON(),
-        } as const);
+      if (!canEdit) return Promise.resolve();
+      let current = snapshot;
+      if (!current) {
+        if (mode === "raw") {
+          current = {
+            title,
+            html: marked.parse(rawContent) as string,
+            json: {},
+          };
+        } else {
+          if (!editor) return Promise.resolve();
+          current = {
+            title,
+            html: editor.getHTML(),
+            json: editor.getJSON(),
+          };
+        }
+      }
 
       saveQueueRef.current = saveQueueRef.current.then(async () => {
         if (!navigator.onLine) {
@@ -359,9 +494,9 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
         setSaveState("saving");
         try {
           const updated = await updateNote(noteSlug, {
-            title: current.title,
-            content: current.html,
-            content_json: current.json,
+            title: current!.title,
+            content: current!.html,
+            content_json: current!.json,
             version: versionRef.current,
           });
           versionRef.current = updated.version || versionRef.current + 1;
@@ -376,7 +511,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       });
       return saveQueueRef.current;
     },
-    [canEdit, draftKey, editor, noteSlug, title],
+    [canEdit, draftKey, editor, mode, noteSlug, rawContent, title],
   );
 
   const scheduleSave = useCallback(() => {
@@ -857,7 +992,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-muted/20">
+    <div className="min-h-screen overflow-x-clip bg-muted/20">
       {isDraggingImage && canEdit && (
         <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-background/90 p-6 backdrop-blur">
           <div className="rounded-3xl border-2 border-dashed border-orange-500 bg-background px-10 py-8 text-center shadow-2xl">
@@ -871,162 +1006,277 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
           </div>
         </div>
       )}
-      <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
-          <Link
-            href={`/${note.space_slug || ""}`}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Back to room"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          {note.space_slug && (
+
+      {/* Unified Sticky Header: Stays pinned at top on scroll */}
+      <div className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur-xl shadow-xs">
+        {/* Top Header Row */}
+        <header className="border-b border-border/40">
+          <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-5">
             <Link
-              href={`/${note.space_slug}`}
-              className="hidden items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-mono font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors sm:inline-flex"
-              title={`Room ${note.space_slug}`}
+              href={`/${note.space_slug || ""}`}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Back to room"
             >
-              <span>Room {note.space_slug}</span>
+              <ArrowLeft className="h-4 w-4" />
             </Link>
-          )}
-          <input
-            value={title}
-            onChange={(event) => updateTitle(event.target.value)}
-            disabled={!canEdit}
-            aria-label="Note title"
-            className="min-w-0 flex-1 truncate bg-transparent px-1 text-sm font-semibold outline-none disabled:opacity-100 sm:text-base"
-          />
-          <span
-            className={`hidden text-[11px] sm:inline ${
-              saveState === "error" ? "text-red-500" : "text-muted-foreground"
-            }`}
-            aria-live="polite"
-            title="Saving keeps edits in this sharing space. Save a copy outside Woff to keep it."
-          >
-            {saveLabel}
-          </span>
-          <AnimatedThemeToggler className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" />
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1.5"
-            onClick={() => setShareOpen(true)}
-          >
-            <Share2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Share</span>
-          </Button>
-          {canEdit && (
+            {note.space_slug && (
+              <Link
+                href={`/${note.space_slug}`}
+                className="hidden items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-mono font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors sm:inline-flex"
+                title={`Room ${note.space_slug}`}
+              >
+                <span>Room {note.space_slug}</span>
+              </Link>
+            )}
+            <input
+              value={title}
+              onChange={(event) => updateTitle(event.target.value)}
+              disabled={!canEdit}
+              aria-label="Note title"
+              className="min-w-0 flex-1 truncate bg-transparent px-1 text-sm font-semibold outline-none disabled:opacity-100 sm:text-base"
+            />
+            <span
+              className={`hidden text-[11px] sm:inline ${
+                saveState === "error" ? "text-red-500" : "text-muted-foreground"
+              }`}
+              aria-live="polite"
+              title="Saving keeps edits in this sharing space. Save a copy outside Woff to keep it."
+            >
+              {saveLabel}
+            </span>
+            <AnimatedThemeToggler className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted" />
+
+            {/* Download Option (.md) */}
             <Button
+              variant="outline"
               size="sm"
               className="h-9 gap-1.5"
-              disabled={saveState === "saving"}
-              onClick={() => void performSave()}
+              onClick={handleDownloadMarkdown}
+              title="Download as Markdown (.md)"
             >
-              {saveState === "saving" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline">Save</span>
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Download</span>
             </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5"
+              onClick={() => setShareOpen(true)}
+            >
+              <Share2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Share</span>
+            </Button>
+
+            {canEdit && (
+              <Button
+                size="sm"
+                className="h-9 gap-1.5"
+                disabled={saveState === "saving"}
+                onClick={() => void performSave()}
+              >
+                {saveState === "saving" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">Save</span>
+              </Button>
+            )}
+          </div>
+        </header>
+
+        {/* Second Row: Mode Switcher + Formatting Toolbar / Raw Controls */}
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-3 py-2 sm:px-5">
+          {/* Mode Switcher Tabs */}
+          <div className="flex items-center gap-1 rounded-lg bg-muted/80 p-0.5 text-xs shrink-0">
+            <button
+              type="button"
+              onClick={() => handleSwitchMode("rich")}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
+                mode === "rich"
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span>Rich Text</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSwitchMode("raw")}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
+                mode === "raw"
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Code2 className="h-3.5 w-3.5" />
+              <span>Raw Markdown</span>
+            </button>
+          </div>
+
+          {/* In Rich Mode: Formatting Toolbar */}
+          {mode === "rich" && canEdit && editor && (
+            <div className="flex-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex min-w-max items-center gap-1">
+                <ToolbarButton label="Undo" disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>
+                  <Undo2 className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Redo" disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>
+                  <Redo2 className="h-4 w-4" />
+                </ToolbarButton>
+                <span className="mx-1 h-5 w-px bg-border" />
+                <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
+                  <Bold className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
+                  <Italic className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+                  <UnderlineIcon className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Strikethrough" active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()}>
+                  <Strikethrough className="h-4 w-4" />
+                </ToolbarButton>
+                <span className="mx-1 h-5 w-px bg-border" />
+                <ToolbarButton label="Heading 1" active={editor.isActive("heading", { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
+                  <Heading1 className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Heading 2" active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+                  <Heading2 className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Bullet list" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+                  <List className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Numbered list" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+                  <ListOrdered className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Task list" active={editor.isActive("taskList")} onClick={() => editor.chain().focus().toggleTaskList().run()}>
+                  <ListChecks className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Quote" active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+                  <Quote className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Code block" active={editor.isActive("codeBlock")} onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
+                  <Code2 className="h-4 w-4" />
+                </ToolbarButton>
+                <span className="mx-1 h-5 w-px bg-border" />
+                {editor.isActive("image") && (
+                  <span className="mr-1 rounded-full bg-orange-500/10 px-2 py-1 text-[10px] font-semibold text-orange-600 dark:text-orange-400">
+                    Image alignment
+                  </span>
+                )}
+                <ToolbarButton label={editor.isActive("image") ? "Align image left" : "Align left"} active={isAlignmentActive("left")} onClick={() => setContentAlignment("left")}>
+                  <AlignLeft className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label={editor.isActive("image") ? "Align image center" : "Align center"} active={isAlignmentActive("center")} onClick={() => setContentAlignment("center")}>
+                  <AlignCenter className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label={editor.isActive("image") ? "Align image right" : "Align right"} active={isAlignmentActive("right")} onClick={() => setContentAlignment("right")}>
+                  <AlignRight className="h-4 w-4" />
+                </ToolbarButton>
+                <ToolbarButton label="Add link" active={editor.isActive("link")} onClick={() => {
+                  setLinkValue(editor.getAttributes("link").href || "");
+                  setLinkOpen(true);
+                }}>
+                  <Link2 className="h-4 w-4" />
+                </ToolbarButton>
+                {editor.isActive("link") && (
+                  <ToolbarButton label="Remove link" onClick={() => editor.chain().focus().unsetLink().run()}>
+                    <Unlink className="h-4 w-4" />
+                  </ToolbarButton>
+                )}
+                <ToolbarButton label="Upload image" disabled={isUploadingImage} onClick={() => imageInputRef.current?.click()}>
+                  {isUploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                </ToolbarButton>
+              </div>
+            </div>
+          )}
+
+          {/* In Raw Mode: Wrap Toggle and Copy Button */}
+          {mode === "raw" && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                type="button"
+                size="sm"
+                variant={wordWrap ? "secondary" : "ghost"}
+                className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setWordWrap(!wordWrap)}
+                title="Toggle line wrapping"
+              >
+                <WrapText className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{wordWrap ? "Wrapped" : "No Wrap"}</span>
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => void handleCopyRaw()}
+                title="Copy markdown content"
+              >
+                {copiedRaw ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">{copiedRaw ? "Copied" : "Copy"}</span>
+              </Button>
+            </div>
           )}
         </div>
-      </header>
-
-      {canEdit && editor && (
-        <div className="sticky top-14 z-30 border-b bg-background/90 backdrop-blur-xl">
-          <div className="mx-auto max-w-6xl overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="flex min-w-max items-center gap-1">
-              <ToolbarButton label="Undo" disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>
-                <Undo2 className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Redo" disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>
-                <Redo2 className="h-4 w-4" />
-              </ToolbarButton>
-              <span className="mx-1 h-5 w-px bg-border" />
-              <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
-                <Bold className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
-                <Italic className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
-                <UnderlineIcon className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Strikethrough" active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()}>
-                <Strikethrough className="h-4 w-4" />
-              </ToolbarButton>
-              <span className="mx-1 h-5 w-px bg-border" />
-              <ToolbarButton label="Heading 1" active={editor.isActive("heading", { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
-                <Heading1 className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Heading 2" active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
-                <Heading2 className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Bullet list" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}>
-                <List className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Numbered list" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
-                <ListOrdered className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Task list" active={editor.isActive("taskList")} onClick={() => editor.chain().focus().toggleTaskList().run()}>
-                <ListChecks className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Quote" active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
-                <Quote className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Code block" active={editor.isActive("codeBlock")} onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
-                <Code2 className="h-4 w-4" />
-              </ToolbarButton>
-              <span className="mx-1 h-5 w-px bg-border" />
-              {editor.isActive("image") && (
-                <span className="mr-1 rounded-full bg-orange-500/10 px-2 py-1 text-[10px] font-semibold text-orange-600 dark:text-orange-400">
-                  Image alignment
-                </span>
-              )}
-              <ToolbarButton label={editor.isActive("image") ? "Align image left" : "Align left"} active={isAlignmentActive("left")} onClick={() => setContentAlignment("left")}>
-                <AlignLeft className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label={editor.isActive("image") ? "Align image center" : "Align center"} active={isAlignmentActive("center")} onClick={() => setContentAlignment("center")}>
-                <AlignCenter className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label={editor.isActive("image") ? "Align image right" : "Align right"} active={isAlignmentActive("right")} onClick={() => setContentAlignment("right")}>
-                <AlignRight className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton label="Add link" active={editor.isActive("link")} onClick={() => {
-                setLinkValue(editor.getAttributes("link").href || "");
-                setLinkOpen(true);
-              }}>
-                <Link2 className="h-4 w-4" />
-              </ToolbarButton>
-              {editor.isActive("link") && (
-                <ToolbarButton label="Remove link" onClick={() => editor.chain().focus().unsetLink().run()}>
-                  <Unlink className="h-4 w-4" />
-                </ToolbarButton>
-              )}
-              <ToolbarButton label="Upload image" disabled={isUploadingImage} onClick={() => imageInputRef.current?.click()}>
-                {isUploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-              </ToolbarButton>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
 
       <main className="mx-auto w-full max-w-5xl px-2 py-4 sm:px-6 sm:py-8">
         <div className="mb-4">
           <SharingNotice />
         </div>
-        <article className="min-h-[calc(100vh-11rem)] overflow-hidden rounded-xl border bg-background shadow-sm sm:rounded-2xl">
-          <EditorContent
-            editor={editor}
-            className={`note-editor-content min-h-[calc(100vh-11rem)] px-4 py-6 sm:px-10 sm:py-10 md:px-16 ${
-              isUploadingImage ? "note-editor-content--uploading" : ""
-            }`}
-          />
+        <article className="min-h-[calc(100vh-11rem)] overflow-hidden rounded-xl border bg-background shadow-xs sm:rounded-2xl">
+          {mode === "rich" ? (
+            <EditorContent
+              editor={editor}
+              className={`note-editor-content min-h-[calc(100vh-11rem)] px-4 py-6 sm:px-10 sm:py-10 md:px-16 ${
+                isUploadingImage ? "note-editor-content--uploading" : ""
+              }`}
+            />
+          ) : (
+            <div className="flex font-mono text-sm leading-6 min-h-[calc(100vh-11rem)] bg-zinc-50/60 dark:bg-zinc-950/80 text-foreground">
+              {/* Line numbers gutter */}
+              <div className="select-none py-6 pl-4 pr-3 text-right text-xs text-muted-foreground/40 border-r border-border/60 shrink-0 font-mono">
+                {rawLines.map((_, i) => (
+                  <div key={i} className="leading-6">
+                    {i + 1}
+                  </div>
+                ))}
+              </div>
+
+              {/* Monospace editor / viewer */}
+              {canEdit ? (
+                <textarea
+                  ref={rawTextareaRef}
+                  value={rawContent}
+                  onChange={(e) => handleRawContentChange(e.target.value)}
+                  placeholder="Start typing in Markdown format…"
+                  spellCheck={false}
+                  className={`w-full flex-1 resize-none bg-transparent p-6 font-mono text-sm leading-6 outline-none text-foreground placeholder:text-muted-foreground/50 ${
+                    wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre overflow-x-auto"
+                  }`}
+                />
+              ) : (
+                <pre
+                  className={`w-full flex-1 p-6 font-mono text-sm leading-6 text-foreground ${
+                    wordWrap ? "whitespace-pre-wrap break-words" : "whitespace-pre overflow-x-auto"
+                  }`}
+                >
+                  <code>{rawContent || "Empty note"}</code>
+                </pre>
+              )}
+            </div>
+          )}
         </article>
         <div className="flex items-center justify-between px-2 py-3 text-[11px] text-muted-foreground">
           <span>{canEdit ? saveLabel : "Read only"}</span>
-          <span>{stats.words} words · {stats.characters} characters</span>
+          <span>
+            {mode === "raw" ? `${rawLines.length} lines · ` : ""}
+            {stats.words} words · {stats.characters} characters
+          </span>
         </div>
       </main>
 

@@ -3,6 +3,7 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import sanitizeHtml from "sanitize-html";
+import { marked } from "marked";
 import { customAlphabet } from "nanoid";
 import { displayNameForDevice } from "@/lib/display-name";
 import {
@@ -564,6 +565,50 @@ export async function updateNote(
     is_owner: true,
     version: updated.version,
   };
+}
+
+export async function openOrCreateNoteForMarkdownFile({
+  spaceId,
+  fileName,
+  markdownContent,
+}: {
+  spaceId: string;
+  fileName: string;
+  markdownContent: string;
+}): Promise<{ noteSlug: string }> {
+  const { supabase } = await requireAnonymousUser();
+  const cleanTitle = fileName.trim().slice(0, 120) || "Markdown Note";
+
+  // Check if a note with this title already exists in this space
+  const { data: existing } = await supabase
+    .from("notes")
+    .select("slug, id, title, entries!inner(space_id)")
+    .eq("entries.space_id", spaceId)
+    .eq("title", cleanTitle)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing?.slug) {
+    return { noteSlug: existing.slug };
+  }
+
+  // Create new note entry in space
+  const { noteSlug } = await createNoteEntry(spaceId, cleanTitle);
+
+  // Convert markdown to sanitized HTML
+  const rawHtml = await marked.parse(markdownContent || "");
+  const sanitizedHtml = sanitizeNoteHtml(typeof rawHtml === "string" ? rawHtml : "");
+
+  // Update note content
+  await supabase
+    .from("notes")
+    .update({
+      content_html: sanitizedHtml,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("slug", noteSlug);
+
+  return { noteSlug };
 }
 
 export async function getNote(noteSlug: string): Promise<Note | null> {
