@@ -3,10 +3,11 @@ import { Footer } from "@/components/footer";
 import { Heart, Shield, Zap, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { EXTENSION_FILE_RETENTION, PRO_SPACE_RETENTION, STANDARD_SPACE_RETENTION } from "@/lib/sharing-copy";
 
 export const metadata: Metadata = {
   title: "About Us - Woff Space",
-  description: "Learn more about Woff Space, our mission, and why we believe sharing text, files, and code snippets should be simple, private, and instant.",
+  description: "Woff Space is for instant, temporary file sharing between devices and people. Learn how sharing works and why you should keep your own copies.",
   alternates: {
     canonical: "/about",
   },
@@ -38,7 +39,7 @@ export default function AboutPage() {
             </span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            We believe sharing shouldn&apos;t require an account, setup, or cookies. It should just work in one click.
+            Woff is for instant file sharing, not cloud storage. Send files between devices or to other people, and keep your own copy of anything you need.
           </p>
         </div>
 
@@ -69,7 +70,7 @@ export default function AboutPage() {
               </div>
               <h3 className="font-bold text-lg">Private By Default</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Your files and text are stored securely. We do not index your shared spaces, keeping them private.
+                Share a room code or link with the people who need your files. Shared spaces are not indexed by search engines.
               </p>
             </div>
             <div className="space-y-3">
@@ -78,7 +79,7 @@ export default function AboutPage() {
               </div>
               <h3 className="font-bold text-lg">Temporary Spaces</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Spaces expire and auto-clean after inactivity, meaning your temporary shares stay truly temporary.
+                Shares are temporary. Download files and save notes outside Woff before they expire.
               </p>
             </div>
           </div>
@@ -89,8 +90,14 @@ export default function AboutPage() {
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-foreground">How We Handle Your Data</h2>
             <p className="text-muted-foreground leading-relaxed">
-              Unlike traditional platforms that build permanent profiles, Woff Space treats your workspaces as transient. When you upload a file or write a note, it resides in highly secure object storage and real-time databases. Once a space is quiet and expires, the storage is cleaned up. We don&apos;t sell your data because we don&apos;t even collect your personal info.
+              Files and notes are held to make sharing possible. {STANDARD_SPACE_RETENTION} Once a space expires, it is no longer available to open and its content is scheduled for permanent deletion.
             </p>
+            <p className="text-muted-foreground leading-relaxed">
+              {EXTENSION_FILE_RETENTION} {PRO_SPACE_RETENTION} Keep your originals or download a copy to your device.
+            </p>
+            <Link href="/#sharing-faq" className="inline-block text-sm font-medium text-orange-600 underline underline-offset-4 dark:text-orange-400">
+              Read the sharing FAQ
+            </Link>
           </div>
         </div>
 

@@ -54,6 +54,7 @@ import {
 } from "@/lib/actions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { Button } from "@/components/ui/button";
+import { SharingNotice } from "@/components/sharing-notice";
 import {
   Dialog,
   DialogContent,
@@ -832,7 +833,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       case "error":
         return "Save failed";
       default:
-        return "Saved";
+        return "Saved in this space";
     }
   }, [saveState]);
 
@@ -900,6 +901,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
               saveState === "error" ? "text-red-500" : "text-muted-foreground"
             }`}
             aria-live="polite"
+            title="Saving keeps edits in this sharing space. Save a copy outside Woff to keep it."
           >
             {saveLabel}
           </span>
@@ -1011,6 +1013,9 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       )}
 
       <main className="mx-auto w-full max-w-5xl px-2 py-4 sm:px-6 sm:py-8">
+        <div className="mb-4">
+          <SharingNotice />
+        </div>
         <article className="min-h-[calc(100vh-11rem)] overflow-hidden rounded-xl border bg-background shadow-sm sm:rounded-2xl">
           <EditorContent
             editor={editor}

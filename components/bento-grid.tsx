@@ -10,13 +10,13 @@ const cards = [
   {
     className: styles.cardNotes,
     title: "Live Rich-text Notes",
-    text: "Write formatted notes with dependable autosave and share them with room members.",
+    text: "Share a quick note alongside your files. Edits autosave within the sharing space.",
     visual: <ChartVisual />,
   },
   {
     className: styles.cardFiles,
     title: "Files & Images",
-    text: "Drop files, images, and drawings into a resumable queue with clear progress.",
+    text: "Send files, images, and drawings with clear upload progress, then download them on another device.",
     visual: <DropVisual />,
   },
   {
@@ -33,19 +33,19 @@ export default function BentoGrid() {
       <div className={styles.header}>
         <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mx-auto">
           <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
-          Everything you need
+          Made for quick transfers
         </div>
 
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight tracking-[-0.04em] text-zinc-900 dark:text-white mt-6 mb-4">
-          A workspace for{" "}
+          Share files and more,{" "}
           <span className="bg-gradient-to-r from-[#ff7d3b] via-[#ff5a00] to-[#ff3600] bg-clip-text text-transparent">
-            every thought
+            instantly
           </span>
         </h2>
 
         <p className="text-zinc-500 dark:text-white/55 text-sm md:text-base max-w-lg mx-auto">
-          Share notes, files, images, and code snippets in an instant. Woff is
-          designed to be the quickest way to move data from A to B.
+          Move photos from your phone to your laptop, or send a document to a
+          teammate. Add a quick note, link, or code snippet when you need to.
         </p>
       </div>
 

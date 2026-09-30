@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Online Notepad With Shareable Link - Woff Space",
   description:
-    "Use Woff Space as a fast online notepad with a shareable link. Write, save, and share notes instantly without signup. Free, secure, and cross-device.",
+    "Write and share quick notes alongside files in a temporary Woff space. No sign-up required. Save a copy outside Woff to keep your notes.",
   alternates: {
     canonical: "/online-notepad",
   },

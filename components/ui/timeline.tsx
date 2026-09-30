@@ -55,7 +55,7 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
             Simple Steps
           </h2>
           <p className="text-zinc-500 dark:text-white/55 text-sm md:text-base max-w-lg mx-auto">
-            No sign-ups, no complexity. Just 3 simple steps to start sharing.
+            Add your files, share access, and download a copy to keep. No sign-up required.
           </p>
         </div>
       </div>

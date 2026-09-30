@@ -3,6 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { Timeline } from "@/components/ui/timeline";
+import { ArrowDownToLine, FileText, Laptop } from "lucide-react";
 
 export default function TimelineDemo() {
   const data = [
@@ -19,10 +20,10 @@ export default function TimelineDemo() {
             </div>
 
             <h3 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-zinc-900 dark:text-white mb-4 tracking-tight">
-              Create Your Space
+              Add your files
             </h3>
             <p className="text-sm md:text-base text-zinc-500 dark:text-white/55 leading-relaxed">
-              One click to generate a unique, temporary workspace instantly. No sign-ups or complex forms.
+              Start a temporary sharing space in one click, then choose or drop the files you want to send. No sign-up required.
             </p>
           </div>
 
@@ -39,8 +40,8 @@ export default function TimelineDemo() {
               {/* Screenshot Wrapper with Browser Frame look */}
               <div className="relative rounded-[14px] overflow-hidden border border-zinc-200/50 dark:border-zinc-800/50 bg-zinc-50 dark:bg-[#09090b]">
                 <Image
-                  src="/process1.png"
-                  alt="Create Your Space - Welcome to Woff workspace creation screen"
+                  src="/process2.png"
+                  alt="Add files to a temporary Woff sharing space"
                   width={600}
                   height={400}
                   className="w-full h-auto object-cover transform hover:scale-[1.02] transition-transform duration-500"
@@ -64,10 +65,10 @@ export default function TimelineDemo() {
             </div>
 
             <h3 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-zinc-900 dark:text-white mb-4 tracking-tight">
-              Add Your Content
+              Share the link or code
             </h3>
             <p className="text-sm md:text-base text-zinc-500 dark:text-white/55 leading-relaxed">
-              Drop files, paste code snippets, or write down quick notes. Everything syncs instantly with your secure space.
+              Send the link or room code to another person or device. They can also scan the QR code to open the sharing space.
             </p>
           </div>
 
@@ -84,8 +85,8 @@ export default function TimelineDemo() {
               {/* Screenshot Wrapper */}
               <div className="relative rounded-[14px] overflow-hidden border border-zinc-200/50 dark:border-zinc-800/50 bg-zinc-50 dark:bg-[#09090b]">
                 <Image
-                  src="/process2.png"
-                  alt="Add Your Content - Woff file manager showing uploaded files"
+                  src="/process3.png"
+                  alt="Share a Woff room using its link, room code, or QR code"
                   width={600}
                   height={400}
                   className="w-full h-auto object-cover transform hover:scale-[1.02] transition-transform duration-500"
@@ -109,10 +110,10 @@ export default function TimelineDemo() {
             </div>
 
             <h3 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-zinc-900 dark:text-white mb-4 tracking-tight">
-              Share the Link
+              Download and keep
             </h3>
             <p className="text-sm md:text-base text-zinc-500 dark:text-white/55 leading-relaxed">
-              Send the URL or scan the QR code to let others join in real-time. Shared links automatically sync items dynamically.
+              The recipient downloads the files to their device. Keep your originals and download anything you need before it expires.
             </p>
           </div>
 
@@ -128,13 +129,24 @@ export default function TimelineDemo() {
               
               {/* Screenshot Wrapper */}
               <div className="relative rounded-[14px] overflow-hidden border border-zinc-200/50 dark:border-zinc-800/50 bg-zinc-50 dark:bg-[#09090b]">
-                <Image
-                  src="/process3.png"
-                  alt="Share the Link - Woff sharing screen with QR code and link"
-                  width={600}
-                  height={400}
-                  className="w-full h-auto object-cover transform hover:scale-[1.02] transition-transform duration-500"
-                />
+                <div role="img" aria-label="A shared document downloaded and kept on your device" className="flex min-h-[260px] flex-col items-center justify-center gap-5 p-6 sm:min-h-[320px] sm:p-10">
+                  <div className="flex w-full max-w-xs items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-white/5">
+                    <FileText aria-hidden="true" className="h-9 w-9 shrink-0 text-orange-500" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-white">Document.pdf</p>
+                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Shared through Woff</p>
+                    </div>
+                    <ArrowDownToLine aria-hidden="true" className="ml-auto h-5 w-5 shrink-0 text-orange-500" />
+                  </div>
+                  <ArrowDownToLine aria-hidden="true" className="h-6 w-6 text-orange-500/70" />
+                  <div className="flex items-center gap-3 rounded-xl border border-orange-500/25 bg-orange-500/10 px-5 py-4">
+                    <Laptop aria-hidden="true" className="h-7 w-7 text-orange-600 dark:text-orange-400" />
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-white">Kept on your device</p>
+                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Your copy stays with you.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

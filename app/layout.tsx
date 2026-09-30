@@ -22,18 +22,18 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://woff.space";
 
 export const metadata: Metadata = {
   title: {
-    default: "Woff Space: Instant Note Sharing Without Sign Up",
+    default: "Woff Space: Instant File Sharing Without Sign Up",
     template: "%s | Woff Space",
   },
   description:
-    "Create a shareable space for notes, files, images, markdown, and code snippets in seconds. No login required.",
+    "Share files instantly between devices or with anyone using a link, room code, or QR code. No sign-up. Temporary sharing, not cloud storage. Keep your own copy.",
   keywords: [
     "file sharing",
     "note sharing",
     "code sharing",
     "image sharing",
     "clipboard",
-    "workspace",
+    "temporary file sharing",
     "collaboration",
     "paste",
     "drop",
@@ -64,15 +64,15 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: siteUrl,
     siteName: "Woff Space",
-    title: "Woff Space: Instant Note Sharing Without Sign Up",
+    title: "Woff Space: Instant File Sharing Without Sign Up",
     description:
-      "Create a shareable space for notes, files, images, markdown, and code snippets in seconds.",
+      "Send files with a link, room code, or QR code. No sign-up required. Woff is for temporary sharing, not cloud storage. Keep your own copy.",
     images: [
       {
         url: `${siteUrl}/og-image.png`,
         width: 1200,
         height: 630,
-        alt: "Woff Space: Instant Note Sharing Without Sign Up",
+        alt: "Woff Space",
       },
     ],
   },
@@ -80,9 +80,9 @@ export const metadata: Metadata = {
   // Twitter Card
   twitter: {
     card: "summary_large_image",
-    title: "Woff Space: Instant Note Sharing Without Sign Up",
+    title: "Woff Space: Instant File Sharing Without Sign Up",
     description:
-      "Create a shareable space for notes, files, images, markdown, and code snippets in seconds.",
+      "Send files with a link, room code, or QR code. No sign-up required. Woff is for temporary sharing, not cloud storage. Keep your own copy.",
     images: [`${siteUrl}/og-image.png`],
     creator: "@woffspace",
   },
@@ -133,7 +133,7 @@ export default function RootLayout({
     name: "Woff",
     url: siteUrl,
     description:
-      "The fastest way to share notes, files, images, and code snippets in instant workspaces.",
+      "Instant, temporary file sharing between devices or with other people. Share through a link, room code, or QR code, and download a copy to keep.",
     applicationCategory: "ProductivityApplication",
     operatingSystem: "Any",
     offers: {

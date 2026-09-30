@@ -371,7 +371,7 @@ export default function HeroSection() {
               style={{ animationDelay: '0ms' }}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
-              No sign-up required
+              Instant file sharing
             </div>
 
             {/* Headline — LCP element: renders immediately, no opacity:0 */}
@@ -379,9 +379,8 @@ export default function HeroSection() {
               className="hero-stagger-item max-w-[500px] text-4xl font-extrabold tracking-[-0.04em] sm:text-5xl md:text-4xl lg:text-[56px] text-zinc-900 dark:text-white"
               style={{ lineHeight: 1.15, animationDelay: '80ms' }}
             >
-              Drop anything.
+              Share files
               <br />
-              Share it{" "}
               <span className="bg-gradient-to-r from-[#ff7d3b] via-[#ff5a00] to-[#ff3600] bg-clip-text text-transparent">
                 instantly.
               </span>
@@ -392,8 +391,8 @@ export default function HeroSection() {
               className="hero-stagger-item mt-5 max-w-[460px] text-[15px] leading-relaxed text-zinc-500 dark:text-white/55 sm:text-base md:text-sm lg:text-base"
               style={{ animationDelay: '160ms' }}
             >
-              Create a temporary space for files, images, links, notes, and
-              code. Share it with anyone using a simple link or room code.
+              Send files between devices or to anyone using a link, room code,
+              or QR code. No sign-up required.
             </p>
 
             {/* CTA Buttons — directly under subtitle */}
@@ -425,7 +424,7 @@ export default function HeroSection() {
                     </g>
                   </svg>
                 )}
-                {isCreating ? "Creating..." : "Create Space"}
+                {isCreating ? "Creating..." : "Start sharing"}
               </button>
 
               <button
@@ -441,6 +440,10 @@ export default function HeroSection() {
               </button>
             </div>
 
+            <p className="hero-stagger-item mt-4 max-w-[460px] text-sm leading-relaxed text-zinc-600 dark:text-white/65" style={{ animationDelay: '280ms' }}>
+              For temporary sharing, not cloud storage. Keep your own copy.
+            </p>
+
             {/* Compact Feature Cards */}
             <div
               className="hero-stagger-item mt-10 grid gap-4 sm:grid-cols-3 md:grid-cols-1 lg:grid-cols-3"
@@ -453,8 +456,8 @@ export default function HeroSection() {
               />
               <FeatureCard
                 icon={<Share2 size={16} />}
-                title="Share anything"
-                text="Files, images, links, notes, and code in one space."
+                title="Files and more"
+                text="Share files with images, links, quick notes, and code."
               />
               <FeatureCard
                 icon={<Link2 size={16} />}
@@ -468,8 +471,7 @@ export default function HeroSection() {
               className="hero-stagger-item mt-8 text-xs text-zinc-400 dark:text-white/35"
               style={{ animationDelay: '400ms' }}
             >
-              Temporary spaces for files, images, links, notes, and code. No
-              account needed.
+              Move photos to your laptop or send a document to a teammate.
             </p>
           </div>
 

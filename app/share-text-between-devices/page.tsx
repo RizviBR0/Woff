@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Share Text Between Devices Instantly - Cross-Device Sync | Woff Space",
   description:
-    "Easily transfer text, links, and documents between phone, PC, and tablet. No accounts required. Fast, secure, and temporary peer-to-peer sharing.",
+    "Transfer text, links, and documents between phone, PC, and tablet with a link, room code, or QR code. No sign-up. Temporary sharing, not cloud storage.",
   alternates: {
     canonical: "/share-text-between-devices",
   },

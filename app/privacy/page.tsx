@@ -3,6 +3,7 @@ import { Footer } from "@/components/footer";
 import { Heart, EyeOff, Key, Database, Cookie } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { EXTENSION_FILE_RETENTION, PRO_SPACE_RETENTION, STANDARD_SPACE_RETENTION } from "@/lib/sharing-copy";
 
 export const metadata: Metadata = {
   title: "Privacy Policy - Woff Space",
@@ -38,7 +39,7 @@ export default function PrivacyPage() {
             </span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Last Updated: June 1, 2026. We prioritize simplicity and extreme privacy.
+            Last Updated: September 30, 2026. How we handle your temporary shares.
           </p>
         </div>
 
@@ -60,12 +61,14 @@ export default function PrivacyPage() {
               2. Data Storage and Retention
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              When you write a note, make a text clip, or upload files within a space, they are stored securely inside our encrypted cloud server databases and object storage.
+              We hold your files, notes, and text to make sharing possible. Woff is for instant sharing, not permanent cloud storage or backups. Keep your own copy of anything you need.
             </p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-2">
               <li>
-                <strong>Temporary Spaces:</strong> Non-Pro workspaces expire after 48 hours without content activity and are then queued for permanent database and object-storage deletion.
+                <strong>Temporary Spaces:</strong> {STANDARD_SPACE_RETENTION} Adding content or editing a note starts a new 48-hour window. Expired spaces become unavailable to open and their content is scheduled for permanent deletion.
               </li>
+              <li><strong>Extension Uploads:</strong> {EXTENSION_FILE_RETENTION}</li>
+              <li><strong>Pro Spaces:</strong> {PRO_SPACE_RETENTION}</li>
               <li>
                 <strong>Manual Deletion:</strong> A sender can delete only their own messages, while only the space creator can delete the complete space.
               </li>

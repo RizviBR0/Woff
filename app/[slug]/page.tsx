@@ -51,7 +51,7 @@ export async function generateMetadata({
   const { slug } = await params;
   return {
     title: { absolute: `Space ${slug} – Woff` },
-    description: "A private-by-code shared Woff space",
+    description: "A temporary Woff sharing space. Download files you want to keep; Woff is not cloud storage.",
     referrer: "no-referrer",
     robots: { index: false, follow: false, nocache: true },
   };

@@ -31,6 +31,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import { type Space, recoverSpace } from "@/lib/actions";
 import { getHoursUntilExpiry } from "@/lib/utils";
+import { SharingNotice } from "@/components/sharing-notice";
 import { Composer } from "./composer";
 import { EntryCard, type Entry } from "./entry-card";
 import { ProgressiveBlur } from "@/components/ui/progressive-blur";
@@ -567,7 +568,7 @@ export function SpaceContainer({
                     Copy & Share Room ID
                   </h4>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                    Clicking this copies the room code. Share it with anyone you want to invite; they can enter it on the home page to join.
+                    Share this code so another person or device can open the room and download your files. This is a temporary sharing space; keep your own copy.
                   </p>
                 </div>
                 <div className="flex justify-between items-center pt-1">
@@ -759,7 +760,7 @@ export function SpaceContainer({
                     Keep your recovery key safe
                   </h4>
                   <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-                    This key restores creator controls if this browser loses its anonymous session.
+                    This key restores creator controls if this browser loses its anonymous session. It cannot restore deleted files or notes.
                   </p>
                   {isCreator && ownerRecoveryKey ? (
                     <button
@@ -994,6 +995,9 @@ export function SpaceContainer({
           </header>
 
           <div className="container mx-auto px-4">
+            <div className="mx-auto max-w-3xl pt-4">
+              <SharingNotice isPro={isPro} />
+            </div>
             {!hasPosted || keepInitialComposerDuringUpload ? (
               <div className="flex min-h-screen items-center justify-center">
                 <div className="w-full max-w-4xl">

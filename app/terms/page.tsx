@@ -38,7 +38,7 @@ export default function TermsPage() {
             </span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Last Updated: June 1, 2026. Simple, common-sense terms for our instant sharing platform.
+            Last Updated: September 30, 2026. Simple, common-sense terms for our instant sharing platform.
           </p>
         </div>
 
@@ -78,7 +78,7 @@ export default function TermsPage() {
               3. No Permanent Backups
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              Woff Space is a utility for <strong>temporary, instant sharing</strong>. It is not a permanent backup or vault storage service.
+              Woff Space is for <strong>instant, temporary file sharing, not cloud storage</strong>. Keep your original files or download a copy of anything you need. It is not a permanent backup or vault storage service, including in Pro spaces.
             </p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-2">
               <li>We make no guarantees of permanent data availability, uptime, or safety.</li>

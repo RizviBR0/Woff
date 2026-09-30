@@ -17,10 +17,10 @@ export function Footer() {
               <Logo width={110} height={34} className="w-24 h-auto" />
             </Link>
             <p className="text-sm text-zinc-500 dark:text-zinc-400/80 max-w-sm leading-relaxed">
-              Create a secure shareable space for notes, files, images, markdown, and code snippets in seconds. No login required.
+              Share files between devices or with anyone in seconds. No sign-up required. Woff is for temporary sharing, not cloud storage. Keep your own copy.
             </p>
             <div className="text-xs text-zinc-400 dark:text-zinc-500">
-              © 2026 Woff Space. Simple shareable spaces.
+              © 2026 Woff Space. Instant file sharing.
             </div>
           </div>
 
@@ -106,7 +106,7 @@ export function Footer() {
             by the Woff Space team
           </div>
           <div className="text-xs text-zinc-400 dark:text-zinc-500">
-            Secure, temporary and frictionless.
+            Quick transfers. Temporary shares.
           </div>
         </div>
       </div>

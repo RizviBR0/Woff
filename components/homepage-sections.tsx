@@ -1,6 +1,7 @@
 import BentoGrid from "@/components/bento-grid";
 import TimelineDemo from "@/components/timeline-demo";
 import { Footer } from "@/components/footer";
+import { SharingFaq } from "@/components/sharing-faq";
 
 export function HomepageSections() {
   return (
@@ -11,6 +12,8 @@ export function HomepageSections() {
       <section id="how-it-works" className="relative">
         <TimelineDemo />
       </section>
+
+      <SharingFaq />
 
       {/* Contact Section */}
       <section

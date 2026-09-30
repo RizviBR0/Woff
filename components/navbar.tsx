@@ -155,7 +155,7 @@ export function Navbar() {
                     </g>
                   </svg>
                 )}
-                {isCreating ? "Creating..." : "Create Space"}
+                {isCreating ? "Creating..." : "Start sharing"}
                 {!isCreating && <ArrowRight className="w-3.5 h-3.5" />}
               </button>
             </div>
@@ -218,7 +218,7 @@ export function Navbar() {
                           />
                         </g>
                       </svg>
-                      Create Space
+                      Start sharing
                       <ArrowRight className="w-3.5 h-3.5" />
                     </>
                   )}

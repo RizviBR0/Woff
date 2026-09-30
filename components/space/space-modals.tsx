@@ -219,7 +219,7 @@ export function SpaceModals({
               Recover space ownership
             </DialogTitle>
             <DialogDescription>
-              Enter the 20-character recovery key saved when this space was created.
+              Enter the 20-character recovery key saved when this space was created to restore creator controls. It cannot restore deleted files or notes.
             </DialogDescription>
           </DialogHeader>
           <Input

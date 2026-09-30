@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { useCreateSpace } from "@/lib/hooks/use-create-space";
+import { STANDARD_SPACE_RETENTION, PRO_SPACE_RETENTION } from "@/lib/sharing-copy";
 import {
   Zap,
   Shield,
@@ -41,7 +42,7 @@ export function OnlineNotepadClient() {
     },
     {
       q: "How long do my shared notes stay active?",
-      a: "Shared spaces stay active while you use them. Non-Pro spaces are automatically deleted after 48 hours without content activity to protect your privacy.",
+      a: `${STANDARD_SPACE_RETENTION} Adding content or editing a note starts a new 48-hour window. Expired spaces become unavailable and are scheduled for deletion. ${PRO_SPACE_RETENTION} Save a copy of your notes outside Woff.`,
     },
     {
       q: "Can I share files and images too?",
@@ -91,11 +92,9 @@ export function OnlineNotepadClient() {
         </h1>
 
         <p className="text-lg sm:text-xl text-zinc-500 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-          Woff Space is the fastest way to write, save, and share text notes
-          online.
+          Write and share quick notes alongside your files in a temporary space.
           <br className="hidden sm:block" />
-          Create a secure space in one click with zero sign-up
-          required.
+          No sign-up required. Keep a copy of any notes you need outside Woff.
         </p>
 
         <div className="pt-4 flex justify-center">
