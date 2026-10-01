@@ -807,4 +807,50 @@ html[data-magicui-theme-vt="active"]::view-transition-new(root) {
   font-family: monospace;
 }
 
+/* High-fidelity vector print optimization for notes */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Hide application chrome, navigation, headers, footers, toolbars, buttons */
+  header,
+  .sticky,
+  .note-toolbar,
+  .note-editor-header,
+  .note-editor-footer,
+  .note-options-menu,
+  .note-recovery-banner,
+  button,
+  nav {
+    display: none !important;
+  }
+
+  /* Expand note canvas to full paper width without borders */
+  main,
+  article,
+  .note-editor-content,
+  .note-editor-content .tiptap {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  /* Avoid page breaks directly after headers */
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* Avoid splitting images, code blocks, or blockquotes across page margins */
+  img, pre, blockquote, .note-image {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+
 

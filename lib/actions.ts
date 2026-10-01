@@ -106,13 +106,24 @@ function sanitizeNoteHtml(value: string): string {
       img: ["src", "alt", "title", "width", "height", "data-align"],
       span: ["data-type", "data-checked"],
       div: ["data-type"],
-      li: ["data-checked"],
+      li: ["data-checked", "data-type"],
       ul: ["data-type"],
+      ol: ["type", "start"],
       input: ["type", "checked", "disabled"],
+      p: ["style", "class"],
+      h1: ["style", "class"],
+      h2: ["style", "class"],
+      h3: ["style", "class"],
+      blockquote: ["style", "class"],
+    },
+    allowedStyles: {
+      "*": {
+        "text-align": [/^left$/, /^right$/, /^center$/, /^justify$/],
+      },
     },
     allowedSchemes: ["http", "https", "mailto"],
     allowedSchemesByTag: {
-      img: ["http", "https"],
+      img: ["http", "https", "data"],
     },
     transformTags: {
       a: (_tagName, attribs) => ({
