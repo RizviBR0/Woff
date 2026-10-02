@@ -66,8 +66,24 @@ export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps
         <textarea
           value={editText}
           onChange={(e) => setEditText(e.target.value)}
-          rows={Math.min(10, Math.max(3, editText.split("\n").length))}
-          className="w-full rounded-lg border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          onKeyDown={(e) => {
+            if (e.key === "Tab") {
+              e.preventDefault();
+              const target = e.currentTarget;
+              const start = target.selectionStart;
+              const end = target.selectionEnd;
+              const nextVal = editText.substring(0, start) + "  " + editText.substring(end);
+              setEditText(nextVal);
+              requestAnimationFrame(() => {
+                target.selectionStart = target.selectionEnd = start + 2;
+              });
+            } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              void handleSave();
+            }
+          }}
+          rows={Math.min(12, Math.max(3, editText.split("\n").length))}
+          className="w-full rounded-lg border bg-background p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
           placeholder="Edit message…"
           autoFocus
         />

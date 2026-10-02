@@ -241,6 +241,25 @@ export async function joinSpace(slug: string): Promise<Space | null> {
   return joinSpaceByCode(slug);
 }
 
+function isRawBinaryUpload(value?: string | null): boolean {
+  if (!value) return false;
+  const trimmed = value.trim();
+  // Reject standalone data URI payloads (e.g. raw pasted binary images/files)
+  if (/^data:(image|audio|video|application|font)\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]{100,}$/i.test(trimmed)) {
+    return true;
+  }
+  if (
+    trimmed.startsWith("data:") &&
+    trimmed.includes(";base64,") &&
+    !trimmed.includes("\n") &&
+    trimmed.length > 500 &&
+    !/\b(const|let|var|function|def|import|export|class|return)\b/.test(trimmed)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export async function createEntry(
   spaceId: string,
   kind: "text" | "image" | "pdf" | "file",
@@ -255,7 +274,7 @@ export async function createEntry(
     throw new Error(`Messages can be at most ${MAX_TEXT_LENGTH} characters`);
   }
 
-  if (cleanText?.startsWith("data:") || cleanText?.includes(";base64,")) {
+  if (isRawBinaryUpload(cleanText)) {
     throw new Error("Binary data must be uploaded as a file");
   }
 
@@ -297,7 +316,7 @@ export async function updateTextEntry(
   if (cleanText.length > MAX_TEXT_LENGTH) {
     throw new Error(`Messages can be at most ${MAX_TEXT_LENGTH} characters`);
   }
-  if (cleanText.startsWith("data:") || cleanText.includes(";base64,")) {
+  if (isRawBinaryUpload(cleanText)) {
     throw new Error("Binary data must be uploaded as a file");
   }
 

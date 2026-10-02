@@ -1,7 +1,7 @@
 /**
  * Heuristic programming language detection and chat message code segmenter.
  * Automatically parses fenced code blocks (including unspaced syntax like ```#include<stdio.h>)
- * and detects raw code snippets in chat messages.
+ * and detects raw code snippets and full-file source code in chat messages.
  */
 
 export interface CodeSegment {
@@ -19,7 +19,7 @@ export interface TextSegment {
 export type MessageSegment = CodeSegment | TextSegment;
 
 // Map common markdown language tags to canonical display names
-const KNOWN_LANGUAGES: Record<string, string> = {
+export const KNOWN_LANGUAGES: Record<string, string> = {
   c: "C",
   cpp: "C++",
   "c++": "C++",
@@ -72,19 +72,58 @@ const KNOWN_LANGUAGES: Record<string, string> = {
   svg: "SVG",
   md: "Markdown",
   markdown: "Markdown",
+  sol: "Solidity",
+  solidity: "Solidity",
+  vue: "Vue",
+  svelte: "Svelte",
+  graphql: "GraphQL",
+  gql: "GraphQL",
+  proto: "Protobuf",
+  protobuf: "Protobuf",
+  elixir: "Elixir",
+  ex: "Elixir",
+  exs: "Elixir",
+  lua: "Lua",
+  haskell: "Haskell",
+  hs: "Haskell",
+  scala: "Scala",
+  toml: "TOML",
+  terraform: "Terraform",
+  tf: "Terraform",
+  docker: "Dockerfile",
+  dockerfile: "Dockerfile",
+  makefile: "Makefile",
+  make: "Makefile",
+  r: "R",
+  matlab: "MATLAB",
+  perl: "Perl",
+  pl: "Perl",
+  ps1: "PowerShell",
+  powershell: "PowerShell",
 };
+
+/**
+ * Formats a language tag into a clean, human-readable display name.
+ */
+export function formatLanguageTag(tag: string): string {
+  const clean = tag.trim().toLowerCase();
+  if (KNOWN_LANGUAGES[clean]) return KNOWN_LANGUAGES[clean];
+  if (clean === "c#" || clean === "c++") return clean.toUpperCase();
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
 
 /**
  * Checks if a string is a valid language identifier rather than actual code.
  */
-function isLanguageIdentifier(tag: string): boolean {
+export function isLanguageIdentifier(tag: string): boolean {
   if (!tag) return false;
   const clean = tag.trim().toLowerCase();
-  // If it contains symbols like #, <, >, ;, =, (, ), {, }, quotes or spaces, it's code, not a tag
-  // Exception: 'c#' and 'c++'
   if (clean === "c#" || clean === "c++") return true;
-  if (/[\s#<>;=(){}"'`]/.test(clean)) return false;
-  return clean in KNOWN_LANGUAGES;
+  // If it contains syntax characters, it's code, not a tag
+  if (/[\s<>;=(){}"'`]/.test(clean)) return false;
+  if (clean in KNOWN_LANGUAGES) return true;
+  // Standard identifier word (e.g. 'solidity', 'vue', 'terraform')
+  return /^[a-z0-9_#+.-]{1,25}$/.test(clean);
 }
 
 /**
@@ -92,8 +131,7 @@ function isLanguageIdentifier(tag: string): boolean {
  */
 export function detectLanguage(code: string, hintedLang?: string): string {
   if (hintedLang && isLanguageIdentifier(hintedLang)) {
-    const known = KNOWN_LANGUAGES[hintedLang.trim().toLowerCase()];
-    if (known) return known;
+    return formatLanguageTag(hintedLang);
   }
 
   const scores: Record<string, number> = {
@@ -112,6 +150,14 @@ export function detectLanguage(code: string, hintedLang?: string): string {
     Bash: 0,
     PHP: 0,
     "C#": 0,
+    Swift: 0,
+    Kotlin: 0,
+    Dart: 0,
+    Ruby: 0,
+    YAML: 0,
+    Solidity: 0,
+    GraphQL: 0,
+    Dockerfile: 0,
   };
 
   const text = code.trim();
@@ -171,47 +217,64 @@ export function detectLanguage(code: string, hintedLang?: string): string {
   if (/(^|\n)(import\s+[a-zA-Z0-9_]+(\s+as\s+[a-zA-Z0-9_]+)?|from\s+[a-zA-Z0-9_.]+\s+import\s+)/.test(text)) {
     scores.Python += 20;
   }
-  if (/\bprint\s*\([^)]*\)/.test(text) && !/[;{}]/.test(text)) {
+  if (/\bprint\s*\([^)]*\)/.test(text)) {
     scores.Python += 15;
   }
   if (/\bself\.[a-zA-Z_]/.test(text)) {
     scores.Python += 15;
   }
-  if (/\b(None|True|False)\b/.test(text) && !/[;{}]/.test(text)) {
+  if (/\b(None|True|False)\b/.test(text)) {
     scores.Python += 10;
   }
 
   // 4. JavaScript / TypeScript
   if (/\bconsole\.(log|error|warn|info|debug)\s*\(/.test(text)) {
     scores.JavaScript += 25;
-    scores.TypeScript += 25;
   }
   if (/\b(const|let|var)\s+[a-zA-Z_$]\w*\s*=/i.test(text)) {
     scores.JavaScript += 15;
-    scores.TypeScript += 15;
   }
   if (/=>\s*\{|=>\s*[a-zA-Z0-9_$]/.test(text)) {
     scores.JavaScript += 15;
-    scores.TypeScript += 15;
   }
   if (/import\s+.*\s+from\s+['"][^'"]+['"]/.test(text)) {
     scores.JavaScript += 20;
-    scores.TypeScript += 20;
   }
-  if (/export\s+(default\s+)?(const|function|class|type|interface)/.test(text)) {
+  if (/export\s+(default\s+)?(const|function|class)/.test(text)) {
     scores.JavaScript += 18;
-    scores.TypeScript += 18;
   }
-  // TypeScript specific indicators
-  if (
-    /:\s*(string|number|boolean|any|void|unknown|never|Record<|Array<)[,\s;=)]/.test(text) ||
-    /\binterface\s+[A-Z]\w*\s*\{/.test(text) ||
-    /\btype\s+[A-Z]\w*\s*=/.test(text) ||
-    /\bas\s+const\b/.test(text) ||
-    /<[A-Z]\w*>/g.test(text)
-  ) {
-    scores.TypeScript += 30;
+  // TypeScript specific indicators (explicitly separated from JS)
+  let tsIndicators = 0;
+  if (/:\s*(string|number|boolean|any|void|unknown|never|Record<|Array<|Promise<)[,\s;=)]/.test(text)) {
+    tsIndicators += 25;
   }
+  if (/\binterface\s+[A-Z]\w*\s*(\{|extends)/.test(text)) {
+    tsIndicators += 30;
+  }
+  if (/\btype\s+[A-Z]\w*\s*=/.test(text)) {
+    tsIndicators += 30;
+  }
+  if (/\bas\s+(const|[A-Z]\w*)/.test(text)) {
+    tsIndicators += 20;
+  }
+  if (/<[A-Z]\w*(\s*extends\s*[^>]+)?>/.test(text)) {
+    tsIndicators += 20;
+  }
+  if (/\b(private|protected|public|readonly)\s+[a-zA-Z_$]\w*\s*:/.test(text)) {
+    tsIndicators += 25;
+  }
+  scores.TypeScript = tsIndicators;
+
+  // React JSX / TSX detection
+  const hasReactOrJsx =
+    (/<(div|span|button|input|form|section|article|header|footer|table|p|h1|h2|h3)[^>]*>/i.test(text) ||
+     /<[A-Z]\w*[^>]*>/m.test(text)) &&
+    (/\bclassName=/i.test(text) ||
+     /\bonClick=/i.test(text) ||
+     /\buseState\b/i.test(text) ||
+     /\buseEffect\b/i.test(text) ||
+     /import\s+React/i.test(text) ||
+     /return\s*\(\s*</m.test(text));
 
   // 5. Java
   if (/public\s+static\s+void\s+main\s*\(/i.test(text)) {
@@ -270,7 +333,7 @@ export function detectLanguage(code: string, hintedLang?: string): string {
   if (/<!DOCTYPE\s+html>/i.test(text)) {
     scores.HTML += 40;
   }
-  if (/<(html|head|body|div|span|button|input|form|section|article|header|footer|table|tbody|tr|td)[^>]*>/i.test(text)) {
+  if (/<(html|head|body|div|span|button|input|form|section|article|header|footer|table|tbody|tr|td)[^>]*>/i.test(text) && !hasReactOrJsx) {
     scores.HTML += 25;
   }
 
@@ -312,6 +375,54 @@ export function detectLanguage(code: string, hintedLang?: string): string {
     scores["C#"] += 30;
   }
 
+  // 14. Swift
+  if (/\bimport\s+(UIKit|Foundation|SwiftUI|Cocoa)\b/.test(text)) {
+    scores.Swift += 35;
+  }
+  if (/\bguard\s+let\s+[a-zA-Z_$]\w*\s*=\s*/.test(text) || /\bfunc\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*->/.test(text)) {
+    scores.Swift += 30;
+  }
+
+  // 15. Kotlin
+  if (/\b(fun\s+[a-zA-Z_]\w*\s*\(|val\s+[a-zA-Z_]\w*\s*=|package\s+[a-z.]+|import\s+kotlin\.)/.test(text)) {
+    scores.Kotlin += 35;
+  }
+
+  // 16. Dart
+  if (/\b(void\s+main\(\)|import\s+['"]package:flutter|Widget\s+build\(|StatefulWidget|StatelessWidget)\b/.test(text)) {
+    scores.Dart += 35;
+  }
+
+  // 17. Ruby
+  if (/(^|\n)\s*(def\s+[a-zA-Z_]\w*|class\s+[A-Z]\w*\s*<|puts\s+|require\s+['"][^'"]+['"]|attr_accessor)\b/.test(text) && /\bend\b/.test(text)) {
+    scores.Ruby += 35;
+  }
+
+  // 18. YAML
+  if (/^[a-zA-Z0-9_-]+:\s*(\n\s*-\s+|\n\s+[a-zA-Z0-9_-]+:|"[^"]*"|'[^']*'|\S+)/m.test(text) && !/[;{}]/.test(text)) {
+    scores.YAML += 30;
+  }
+
+  // 19. Solidity
+  if (/pragma\s+solidity\b|contract\s+[A-Z]\w*\s*\{/i.test(text)) {
+    scores.Solidity += 45;
+  }
+
+  // 20. GraphQL
+  if (/\b(query|mutation|subscription|schema|type|input)\s+[A-Z]\w*\s*\{/i.test(text)) {
+    scores.GraphQL += 35;
+  }
+
+  // 21. Dockerfile
+  if (/^(FROM|RUN|COPY|ADD|ENTRYPOINT|CMD|WORKDIR|EXPOSE|ENV)\s+[^\n]+/m.test(text)) {
+    scores.Dockerfile += 35;
+  }
+
+  // React JSX / TSX override
+  if (hasReactOrJsx) {
+    return scores.TypeScript >= 20 ? "TypeScript (TSX)" : "JavaScript (JSX)";
+  }
+
   // Find best match
   let maxScore = 0;
   let detected = "Code";
@@ -333,8 +444,8 @@ export function detectLanguage(code: string, hintedLang?: string): string {
     }
   }
 
-  // TypeScript vs JavaScript disambiguation
-  if (detected === "JavaScript" && scores.TypeScript >= 25) {
+  // TypeScript vs JavaScript: Only promote to TypeScript if there are genuine TypeScript type constructs
+  if (detected === "JavaScript" && scores.TypeScript >= 20) {
     return "TypeScript";
   }
 
@@ -344,12 +455,19 @@ export function detectLanguage(code: string, hintedLang?: string): string {
 /**
  * Checks if an unfenced block of text strongly looks like source code.
  */
-function isRawCodeParagraph(paragraph: string): boolean {
+export function isRawCodeParagraph(paragraph: string): boolean {
   const trimmed = paragraph.trim();
   const lines = trimmed.split("\n").filter((l) => l.trim().length > 0);
-  if (lines.length < 2) return false;
+  if (lines.length < 1) return false;
 
-  // Obvious starts
+  // Single-line commands / queries
+  if (lines.length === 1) {
+    return /^(npm\s+(i|install|run|start|test|build|exec)|npx\s+|pnpm\s+|yarn\s+|git\s+(checkout|commit|push|pull|clone|status|diff|branch|add)|docker\s+|curl\s+-|wget\s+|sudo\s+|cargo\s+(build|run|test|add)|pip\s+install|SELECT\s+[\s\S]+\s+FROM)\b/i.test(
+      trimmed,
+    );
+  }
+
+  // Obvious signature starts
   if (
     /^#include\s*[<"][^>"]+[>"]/i.test(trimmed) ||
     /^(import|export)\s+/m.test(trimmed) ||
@@ -361,28 +479,44 @@ function isRawCodeParagraph(paragraph: string): boolean {
     /^<!DOCTYPE\s+html>/i.test(trimmed) ||
     /^<\?php/i.test(trimmed) ||
     /^using\s+System;/i.test(trimmed) ||
-    /^(SELECT|INSERT\s+INTO|CREATE\s+TABLE)\b/i.test(trimmed)
+    /^(SELECT|INSERT\s+INTO|CREATE\s+TABLE)\b/i.test(trimmed) ||
+    /^pragma\s+solidity\b/i.test(trimmed) ||
+    /^FROM\s+[a-zA-Z0-9_.-]+/m.test(trimmed)
   ) {
     return true;
   }
 
-  // Count code-like syntax characteristics
+  // Count code-like syntax characteristics with boundary checks
   let codeSignals = 0;
   for (const line of lines) {
     const l = line.trim();
-    if (l.endsWith(";") || l.endsWith("{") || l.endsWith("}") || l.endsWith(":")) {
+    // In code, lines ending in ; usually contain assignments, calls, or symbols
+    if (
+      l.endsWith(";") &&
+      (/(=|\(|\)|\{|\}|\[|\]|<|>|\$|=>|::)/.test(l) || /^\s*(return|break|continue|throw)\b/.test(l))
+    ) {
+      codeSignals++;
+    } else if (l.endsWith("{") || l.endsWith("}")) {
       codeSignals++;
     }
-    if (/(\bconst\b|\blet\b|\bvar\b|\bfunction\b|\bdef\b|\bclass\b|\breturn\b|\bif\s*\(|\bfor\s*\(|\bwhile\s*\()/.test(l)) {
+    // Python / YAML colon only when preceded by keywords or dict key
+    if (/(^(def|class|if|elif|else|for|while|try|except|finally|with|async|match|case)\b|["']\w+["']\s*):\s*$/.test(l)) {
       codeSignals++;
     }
-    if (/\bconsole\.(log|error)|\bprintf\(|\bstd::|\bSystem\.out|\bprintln!/.test(l)) {
+    // Keywords in explicit code positions (prevents matching English prose)
+    if (
+      /(\bconst\s+[a-zA-Z_$]|\blet\s+(mut\s+)?[a-zA-Z_$]|\bvar\s+[a-zA-Z_$]|\bfunction\s+[a-zA-Z_$]|\bdef\s+[a-zA-Z_]|\bclass\s+[A-Z]|(^\s*|[;{}])\s*return(\s+[^;]+;?|\s*;|\s*\{)|\bif\s*\(|\bfor\s*\(|\bwhile\s*\()/.test(
+        l,
+      )
+    ) {
+      codeSignals++;
+    }
+    if (/\bconsole\.(log|error)|\bprintf\(|\bstd::|\bSystem\.out|\bprintln!|\bfmt\.Print/.test(l)) {
       codeSignals += 2;
     }
   }
 
-  // If at least half the lines have distinct code tokens
-  return codeSignals >= Math.max(3, Math.ceil(lines.length * 0.4));
+  return codeSignals >= Math.max(2, Math.ceil(lines.length * 0.35));
 }
 
 /**
@@ -390,15 +524,15 @@ function isRawCodeParagraph(paragraph: string): boolean {
  * Correctly handles:
  * 1. Standard fenced code blocks (```python ... ```)
  * 2. Unspaced / malformed fences (```#include<stdio.h> ... ```)
- * 3. Multiple code blocks interspersed with normal text
- * 4. Raw code paragraphs that lack fences
+ * 3. Preserves entire source files without shattering them on blank lines
+ * 4. Merges contiguous code paragraphs into cohesive blocks
  */
 export function parseMessageSegments(content: string): MessageSegment[] {
   if (!content) return [];
 
   const segments: MessageSegment[] = [];
 
-  // Regex matching fenced code blocks: ```[tag or first line]\n[rest of body]``` or single-line ```...```
+  // Regex matching fenced code blocks
   const fenceRegex = /```([^\r\n`]*)[\r\n]?([\s\S]*?)```/g;
 
   let lastIndex = 0;
@@ -421,10 +555,9 @@ export function parseMessageSegments(content: string): MessageSegment[] {
     let language: string;
 
     if (isLanguageIdentifier(rawTag)) {
-      // Valid language tag provided by user
+      // Valid language tag identifier (e.g. ```python, ```solidity, ```ts)
       finalCode = rawBody;
-      const detected = detectLanguage(rawBody, rawTag);
-      language = detected !== "Code" ? detected : KNOWN_LANGUAGES[rawTag.toLowerCase()] || rawTag;
+      language = detectLanguage(rawBody, rawTag);
     } else if (rawTag.length > 0) {
       // The tag itself is actually the first line of code! (e.g. ```#include<stdio.h>)
       finalCode = rawBody ? `${rawTag}\n${rawBody}` : rawTag;
@@ -455,50 +588,88 @@ export function parseMessageSegments(content: string): MessageSegment[] {
 }
 
 /**
- * Inspects a plain text chunk (outside of fences).
- * If the chunk contains multiline raw code paragraphs, separates them as code segments.
+ * Inspects a plain text chunk outside of fences.
+ * Preserves full source files as single code blocks, and merges contiguous code paragraphs.
  */
 function processTextChunk(chunk: string, segments: MessageSegment[]): void {
   if (!chunk) return;
+  const trimmedChunk = chunk.trim();
+  if (!trimmedChunk) return;
 
-  // Split by double newlines into logical paragraphs
+  // 1. If the whole chunk is source code (even if it contains blank lines between functions!),
+  // keep it together as ONE cohesive code block instead of shattering it!
+  const detectedLang = detectLanguage(trimmedChunk);
+  const isLikelyFullFile =
+    isRawCodeParagraph(trimmedChunk) &&
+    (detectedLang !== "Code" ||
+      /(=|=>|::|\bfunction\b|\bdef\b|\bclass\b|\bconst\b|\blet\b|#include|\bimport\b|\bexport\b)/.test(
+        trimmedChunk,
+      ));
+
+  if (isLikelyFullFile) {
+    segments.push({
+      type: "code",
+      code: trimmedChunk.replace(/\r\n/g, "\n"),
+      language: detectedLang,
+    });
+    return;
+  }
+
+  // 2. Otherwise, chunk is mixed text & code. Split by double newlines into paragraphs.
   const paragraphs = chunk.split(/\n\s*\n/);
   if (paragraphs.length <= 1) {
-    // Single block - check if entire block is raw code
-    if (isRawCodeParagraph(chunk)) {
-      segments.push({
-        type: "code",
-        code: chunk.trim().replace(/\r\n/g, "\n"),
-        language: detectLanguage(chunk),
-      });
-      return;
-    }
     segments.push({ type: "text", content: chunk });
     return;
   }
 
   let accumulatedText = "";
+  let accumulatedCode = "";
+
+  const flushText = () => {
+    if (accumulatedText) {
+      segments.push({ type: "text", content: accumulatedText });
+      accumulatedText = "";
+    }
+  };
+
+  const flushCode = () => {
+    if (accumulatedCode) {
+      const code = accumulatedCode.trim().replace(/\r\n/g, "\n");
+      segments.push({
+        type: "code",
+        code,
+        language: detectLanguage(code),
+      });
+      accumulatedCode = "";
+    }
+  };
 
   for (let i = 0; i < paragraphs.length; i++) {
     const p = paragraphs[i];
     const isCode = isRawCodeParagraph(p);
 
     if (isCode) {
-      if (accumulatedText) {
-        segments.push({ type: "text", content: accumulatedText });
-        accumulatedText = "";
-      }
-      segments.push({
-        type: "code",
-        code: p.trim().replace(/\r\n/g, "\n"),
-        language: detectLanguage(p),
-      });
+      flushText();
+      accumulatedCode += (accumulatedCode ? "\n\n" : "") + p;
     } else {
-      accumulatedText += (accumulatedText ? "\n\n" : "") + p;
+      // Check if this paragraph is a small code continuation (closing brackets, returns, comments)
+      // while we are currently inside an active code block
+      const isContinuation =
+        accumulatedCode.length > 0 &&
+        p.trim().length > 0 &&
+        p.trim().length <= 80 &&
+        (/^([}\]);]|\/\/|#|\/\*|\*\/|\b(return|end|pass)\b)/.test(p.trim()) ||
+          p.split("\n").every((l) => /^\s*([}\]);]|\/\/|#|\/\*|\*\/|\b(return|end|pass)\b|$)/.test(l)));
+
+      if (isContinuation) {
+        accumulatedCode += "\n\n" + p;
+      } else {
+        flushCode();
+        accumulatedText += (accumulatedText ? "\n\n" : "") + p;
+      }
     }
   }
 
-  if (accumulatedText) {
-    segments.push({ type: "text", content: accumulatedText });
-  }
+  flushText();
+  flushCode();
 }

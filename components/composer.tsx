@@ -113,6 +113,24 @@ export function Composer({
     previewUrlsRef.current = [];
   }, []);
 
+  const adjustHeight = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const minHeight = centered ? 180 : 42;
+    const maxHeight = centered ? 450 : 280;
+    const scrollH = el.scrollHeight;
+    if (scrollH > minHeight) {
+      el.style.height = `${Math.min(scrollH, maxHeight)}px`;
+    } else {
+      el.style.height = `${minHeight}px`;
+    }
+  }, [centered]);
+
+  useEffect(() => {
+    adjustHeight();
+  }, [text, adjustHeight]);
+
   useEffect(() => {
     const activeUploads = activeUploadsRef.current;
     const cancelTransfers = cancelTransfersRef.current;
@@ -607,9 +625,21 @@ export function Composer({
         itemFiles.length > 0
           ? itemFiles
           : Array.from(event.clipboardData?.files || []);
-      if (!files.length) return;
-      event.preventDefault();
-      receiveFiles(files);
+      if (files.length > 0) {
+        event.preventDefault();
+        receiveFiles(files);
+        return;
+      }
+
+      // If user pasted text while focused outside any input/textarea, populate composer
+      if (activeEl !== textareaRef.current) {
+        const textData = event.clipboardData?.getData("text/plain");
+        if (textData) {
+          event.preventDefault();
+          setText((prev) => (prev ? `${prev}\n${textData}` : textData));
+          textareaRef.current?.focus();
+        }
+      }
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
@@ -817,23 +847,40 @@ export function Composer({
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
+            if (event.key === "Tab") {
+              event.preventDefault();
+              const target = event.currentTarget;
+              const start = target.selectionStart;
+              const end = target.selectionEnd;
+              const currentVal = target.value;
+              const nextVal = currentVal.substring(0, start) + "  " + currentVal.substring(end);
+              setText(nextVal);
+              requestAnimationFrame(() => {
+                target.selectionStart = target.selectionEnd = start + 2;
+              });
+              return;
+            }
             if (event.key === "Enter") {
               if (event.metaKey || event.ctrlKey) {
                 event.preventDefault();
                 void sendText();
               } else if (!centered && !event.shiftKey && typeof window !== "undefined" && window.innerWidth >= 640) {
-                event.preventDefault();
-                void sendText();
+                // If message contains multiple lines or starts with a code fence, allow Enter to insert a newline.
+                // Fast-send only applies to single-line messages.
+                if (!text.includes("\n") && !text.startsWith("```")) {
+                  event.preventDefault();
+                  void sendText();
+                }
               }
             }
           }}
           rows={centered ? 4 : 2}
           maxLength={50_000}
           placeholder={centered ? "What's on your mind?" : "Write something…"}
-          className={`relative z-10 w-full resize-none bg-transparent outline-none ${
+          className={`relative z-10 w-full resize-none bg-transparent outline-none overflow-y-auto ${
             centered
               ? "min-h-[180px] px-8 pb-3 pt-7 text-lg leading-relaxed text-neutral-900 placeholder:text-neutral-500/50 sm:px-10 sm:pt-8 sm:text-xl dark:text-white dark:placeholder:text-white/35"
-              : "max-h-36 min-h-[42px] px-1 py-1 text-[15px] leading-relaxed text-zinc-850 caret-orange-500 placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+              : "min-h-[42px] px-1 py-1 text-[15px] leading-relaxed text-zinc-850 caret-orange-500 placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
           }`}
           aria-label="Message"
         />
