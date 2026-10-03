@@ -84,44 +84,59 @@ export function EntryContextMenu({
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+      <div className="flex items-center gap-1">
+        {isMine && (
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity"
-            aria-label="More options"
+            onClick={() => setDeleteDialogOpen(true)}
+            className="h-7 w-7 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-500/10 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-500/20 opacity-70 sm:opacity-0 sm:group-hover:opacity-100 hover:!opacity-100 transition-all focus:opacity-100"
+            title="Delete message"
+            aria-label="Delete message"
           >
-            <MoreVertical className="h-4 w-4 text-muted-foreground" />
+            <Trash2 className="h-4 w-4" />
           </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          {entry.text && !isNote && (
-            <DropdownMenuItem onClick={handleCopy} className="gap-2">
-              <Copy className="h-4 w-4" />
-              <span>Copy text</span>
-            </DropdownMenuItem>
-          )}
+        )}
 
-          <DropdownMenuItem onClick={handleReport} className="gap-2 text-muted-foreground">
-            <Flag className="h-4 w-4" />
-            <span>Report entry</span>
-          </DropdownMenuItem>
-
-          {isMine && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setDeleteDialogOpen(true)}
-                className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>Delete</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground opacity-70 sm:opacity-0 sm:group-hover:opacity-100 data-[state=open]:opacity-100 hover:!opacity-100 transition-all focus:opacity-100"
+              aria-label="More options"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            {entry.text && !isNote && (
+              <DropdownMenuItem onClick={handleCopy} className="gap-2 cursor-pointer">
+                <Copy className="h-4 w-4" />
+                <span>Copy text</span>
               </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+            )}
+
+            <DropdownMenuItem onClick={handleReport} className="gap-2 text-muted-foreground cursor-pointer">
+              <Flag className="h-4 w-4" />
+              <span>Report entry</span>
+            </DropdownMenuItem>
+
+            {isMine && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => setDeleteDialogOpen(true)}
+                  className="gap-2 text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400 focus:bg-red-50 dark:focus:bg-red-950/40 cursor-pointer font-medium"
+                >
+                  <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  <span>Delete</span>
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {/* Delete Confirmation Alert Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -140,11 +155,13 @@ export function EntryContextMenu({
                 void handleDelete();
               }}
               disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold shadow-sm focus:ring-red-600"
             >
               {isDeleting ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : null}
+              ) : (
+                <Trash2 className="h-4 w-4 mr-1.5" />
+              )}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

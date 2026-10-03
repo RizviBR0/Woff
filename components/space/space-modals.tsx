@@ -341,7 +341,7 @@ export function SpaceModals({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="w-full justify-start text-destructive hover:bg-destructive/10"
+                    className="w-full justify-start text-red-600 dark:text-red-400 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30 dark:hover:text-red-300 font-medium"
                     onClick={() => {
                       setMobileSettingsOpen(false);
                       setDeleteDialogOpen(true);
