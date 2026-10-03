@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import type { Upload } from "tus-js-client";
 import {
+  Code2,
   FileText,
   Image as ImageIcon,
   Loader2,
@@ -107,6 +108,139 @@ export function Composer({
   const isPostingRef = useRef(false);
   const isSavingDrawingRef = useRef(false);
   const isCreatingNoteRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [selectionToolbar, setSelectionToolbar] = useState<{
+    visible: boolean;
+    start: number;
+    end: number;
+    top: number;
+    left: number;
+  } | null>(null);
+
+  const updateSelectionToolbar = useCallback(
+    (clientCoords?: { x: number; y: number }) => {
+      const textarea = textareaRef.current;
+      const container = containerRef.current;
+      if (!textarea || !container) {
+        setSelectionToolbar(null);
+        return;
+      }
+
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      if (start === end || end - start <= 0) {
+        setSelectionToolbar(null);
+        return;
+      }
+
+      const selected = textarea.value.substring(start, end).trim();
+      if (!selected) {
+        setSelectionToolbar(null);
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      let top: number;
+      let left: number;
+
+      if (clientCoords) {
+        left = Math.max(
+          12,
+          Math.min(clientCoords.x - containerRect.left - 35, containerRect.width - 95),
+        );
+        top = Math.max(8, clientCoords.y - containerRect.top - 42);
+      } else {
+        const textBefore = textarea.value.slice(0, start);
+        const lineCount = textBefore.split("\n").length;
+        const lineHeight = centered ? 28 : 22;
+        top = Math.max(
+          8,
+          textarea.offsetTop + lineCount * lineHeight - textarea.scrollTop - 40,
+        );
+        left = Math.max(16, Math.min(textarea.offsetLeft + 16, containerRect.width - 95));
+      }
+
+      setSelectionToolbar({
+        visible: true,
+        start,
+        end,
+        top,
+        left,
+      });
+    },
+    [centered],
+  );
+
+  const handleWrapSelectionWithCode = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = selectionToolbar?.start ?? textarea.selectionStart;
+    const end = selectionToolbar?.end ?? textarea.selectionEnd;
+
+    if (start === end) {
+      // Empty selection: insert empty code block at cursor
+      const before = text.substring(0, start);
+      const after = text.substring(end);
+      const needsPrefix = before.length > 0 && !before.endsWith("\n");
+      const needsSuffix = after.length > 0 && !after.startsWith("\n");
+      const snippet = (needsPrefix ? "\n" : "") + "```\n\n```" + (needsSuffix ? "\n" : "");
+      const nextText = before + snippet + after;
+      setText(nextText);
+      setSelectionToolbar(null);
+      requestAnimationFrame(() => {
+        textarea.focus();
+        const insidePos = before.length + (needsPrefix ? 1 : 0) + 4;
+        textarea.setSelectionRange(insidePos, insidePos);
+      });
+      return;
+    }
+
+    const before = text.substring(0, start);
+    const selected = text.substring(start, end);
+    const after = text.substring(end);
+
+    // Check if already enclosed in ``` (toggle off)
+    const trimmedSelected = selected.trim();
+    if (
+      trimmedSelected.startsWith("```") &&
+      trimmedSelected.endsWith("```") &&
+      trimmedSelected.length >= 6
+    ) {
+      const unwrapped = trimmedSelected
+        .replace(/^```[^\n]*\n?/, "")
+        .replace(/\n?```$/, "");
+      const nextText = before + unwrapped + after;
+      setText(nextText);
+      setSelectionToolbar(null);
+      requestAnimationFrame(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start, start + unwrapped.length);
+      });
+      return;
+    }
+
+    // Format selected portion as code block enclosed in ```
+    const needsPrefixNewline = before.length > 0 && !before.endsWith("\n");
+    const needsSuffixNewline = after.length > 0 && !after.startsWith("\n");
+    const cleanBlock = selected.replace(/^\r?\n+|\r?\n+$/g, "");
+    const wrapped =
+      (needsPrefixNewline ? "\n" : "") +
+      "```\n" +
+      cleanBlock +
+      "\n```" +
+      (needsSuffixNewline ? "\n" : "");
+
+    const nextText = before + wrapped + after;
+    setText(nextText);
+    setSelectionToolbar(null);
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const newPos = before.length + wrapped.length;
+      textarea.setSelectionRange(newPos, newPos);
+    });
+  }, [selectionToolbar, text]);
 
   const clearPreviews = useCallback(() => {
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -702,6 +836,7 @@ export function Composer({
   return (
     <>
       <div
+        ref={containerRef}
         className={`group relative transition-all duration-300 ${
           centered
             ? "overflow-hidden rounded-[28px] border border-black/10 bg-white/95 shadow-[0_20px_65px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-white/[0.12] dark:bg-[#0b0b0b]/80 dark:shadow-[0_24px_80px_rgba(0,0,0,0.4)]"
@@ -842,10 +977,40 @@ export function Composer({
           </div>
         )}
 
+        {selectionToolbar && selectionToolbar.visible && (
+          <div
+            style={{
+              top: `${selectionToolbar.top}px`,
+              left: `${selectionToolbar.left}px`,
+            }}
+            className="absolute z-40 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+              }}
+              onClick={handleWrapSelectionWithCode}
+              className="flex items-center gap-1.5 rounded-full bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white shadow-2xl ring-1 ring-white/20 backdrop-blur-md transition hover:scale-105 hover:bg-neutral-900 active:scale-95 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+              title="Format as code block (```)"
+            >
+              <Code2 className="h-3.5 w-3.5 text-orange-500" />
+              <span>Code</span>
+            </button>
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            setText(event.target.value);
+            setSelectionToolbar(null);
+          }}
+          onMouseUp={(e) => updateSelectionToolbar({ x: e.clientX, y: e.clientY })}
+          onKeyUp={() => updateSelectionToolbar()}
+          onSelect={() => updateSelectionToolbar()}
+          onScroll={() => setSelectionToolbar(null)}
           onKeyDown={(event) => {
             if (event.key === "Tab") {
               event.preventDefault();
@@ -917,6 +1082,20 @@ export function Composer({
             >
               <PenLine className="h-4 w-4" />
               <span className="hidden md:inline">Draw</span>
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+              }}
+              onClick={handleWrapSelectionWithCode}
+              disabled={Boolean(noteCreationStage) || isPosting}
+              className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
+              aria-label="Format as code block"
+              title="Code block (```)"
+            >
+              <Code2 className="h-4 w-4" />
+              <span className="hidden md:inline">Code</span>
             </button>
             <button
               onClick={() => void createNote()}

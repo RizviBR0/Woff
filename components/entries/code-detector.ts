@@ -588,88 +588,12 @@ export function parseMessageSegments(content: string): MessageSegment[] {
 }
 
 /**
- * Inspects a plain text chunk outside of fences.
- * Preserves full source files as single code blocks, and merges contiguous code paragraphs.
+ * Processes plain text outside of code fences.
+ * Unfenced text is preserved as plain text without automatic code block conversion.
+ * Code blocks are only created when explicitly fenced with triple backticks (```).
  */
 function processTextChunk(chunk: string, segments: MessageSegment[]): void {
   if (!chunk) return;
-  const trimmedChunk = chunk.trim();
-  if (!trimmedChunk) return;
-
-  // 1. If the whole chunk is source code (even if it contains blank lines between functions!),
-  // keep it together as ONE cohesive code block instead of shattering it!
-  const detectedLang = detectLanguage(trimmedChunk);
-  const isLikelyFullFile =
-    isRawCodeParagraph(trimmedChunk) &&
-    (detectedLang !== "Code" ||
-      /(=|=>|::|\bfunction\b|\bdef\b|\bclass\b|\bconst\b|\blet\b|#include|\bimport\b|\bexport\b)/.test(
-        trimmedChunk,
-      ));
-
-  if (isLikelyFullFile) {
-    segments.push({
-      type: "code",
-      code: trimmedChunk.replace(/\r\n/g, "\n"),
-      language: detectedLang,
-    });
-    return;
-  }
-
-  // 2. Otherwise, chunk is mixed text & code. Split by double newlines into paragraphs.
-  const paragraphs = chunk.split(/\n\s*\n/);
-  if (paragraphs.length <= 1) {
-    segments.push({ type: "text", content: chunk });
-    return;
-  }
-
-  let accumulatedText = "";
-  let accumulatedCode = "";
-
-  const flushText = () => {
-    if (accumulatedText) {
-      segments.push({ type: "text", content: accumulatedText });
-      accumulatedText = "";
-    }
-  };
-
-  const flushCode = () => {
-    if (accumulatedCode) {
-      const code = accumulatedCode.trim().replace(/\r\n/g, "\n");
-      segments.push({
-        type: "code",
-        code,
-        language: detectLanguage(code),
-      });
-      accumulatedCode = "";
-    }
-  };
-
-  for (let i = 0; i < paragraphs.length; i++) {
-    const p = paragraphs[i];
-    const isCode = isRawCodeParagraph(p);
-
-    if (isCode) {
-      flushText();
-      accumulatedCode += (accumulatedCode ? "\n\n" : "") + p;
-    } else {
-      // Check if this paragraph is a small code continuation (closing brackets, returns, comments)
-      // while we are currently inside an active code block
-      const isContinuation =
-        accumulatedCode.length > 0 &&
-        p.trim().length > 0 &&
-        p.trim().length <= 80 &&
-        (/^([}\]);]|\/\/|#|\/\*|\*\/|\b(return|end|pass)\b)/.test(p.trim()) ||
-          p.split("\n").every((l) => /^\s*([}\]);]|\/\/|#|\/\*|\*\/|\b(return|end|pass)\b|$)/.test(l)));
-
-      if (isContinuation) {
-        accumulatedCode += "\n\n" + p;
-      } else {
-        flushCode();
-        accumulatedText += (accumulatedText ? "\n\n" : "") + p;
-      }
-    }
-  }
-
-  flushText();
-  flushCode();
+  segments.push({ type: "text", content: chunk });
 }
+
