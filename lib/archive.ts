@@ -1,7 +1,20 @@
 import type JSZip from "jszip";
 
 export type ArchiveFile = { url: string; name: string };
-export type ArchiveOptions = { signal?: AbortSignal; onProgress?: (completed: number, total: number) => void };
+export type ArchiveOptions = { signal?: AbortSignal; maxBytes?: number; onProgress?: (completed: number, total: number) => void };
+const archiveBytes = new WeakMap<JSZip, number>();
+const MAX_ARCHIVE_BYTES = 128 * 1024 * 1024;
+
+function reserveBytes(zip: JSZip, size: number, limit = MAX_ARCHIVE_BYTES) {
+  const next = (archiveBytes.get(zip) || 0) + size;
+  if (next > limit) throw new Error("This ZIP exceeds the 128 MiB browser limit. Download files individually or in smaller groups.");
+  archiveBytes.set(zip, next);
+}
+
+export function addArchiveText(zip: JSZip, name: string, content: string) {
+  reserveBytes(zip, new TextEncoder().encode(content).byteLength);
+  zip.file(name, content);
+}
 
 /** Fetch at most three files at once; a failed file prevents a partial archive. */
 export async function addArchiveFiles(zip: JSZip, files: ArchiveFile[], options: ArchiveOptions = {}) {
@@ -32,7 +45,22 @@ export async function addArchiveFiles(zip: JSZip, files: ArchiveFile[], options:
           const file = targets[next++];
           const response = await fetch(file.url, { signal: controller.signal });
           if (!response.ok) throw new Error(`A file is unavailable (${response.status}). No partial ZIP was downloaded.`);
-          const bytes = await response.arrayBuffer();
+          const chunks: Uint8Array[] = [];
+          let size = 0;
+          if (!response.body) throw new Error("A file is unavailable. No partial ZIP was downloaded.");
+          const reader = response.body.getReader();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              reserveBytes(zip, value.byteLength, options.maxBytes);
+              size += value.byteLength;
+              chunks.push(value);
+            }
+          } catch (error) { await reader.cancel().catch(() => undefined); throw error; }
+          const bytes = new Uint8Array(size);
+          let offset = 0;
+          for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
           controller.signal.throwIfAborted();
           zip.file(file.name, bytes);
           options.onProgress?.(++completed, targets.length);

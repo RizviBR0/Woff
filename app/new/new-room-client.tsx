@@ -3,16 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertCircle, ArrowLeft, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowLeft, Loader2, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createSpace } from "@/lib/actions";
 import { rememberSpaceOwnership } from "@/lib/space-recovery";
 
 interface NewRoomClientProps {
   initialError?: string | null;
+  template?: "project-handoff";
 }
 
-export function NewRoomClient({ initialError = null }: NewRoomClientProps) {
+export function NewRoomClient({ initialError = null, template }: NewRoomClientProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(initialError);
   const [isCreating, setIsCreating] = useState(!initialError);
@@ -22,7 +23,7 @@ export function NewRoomClient({ initialError = null }: NewRoomClientProps) {
     setIsCreating(true);
     setError(null);
     try {
-      const space = await createSpace();
+      const space = await createSpace(template);
       rememberSpaceOwnership(space);
       router.replace(`/${space.slug}`);
     } catch (err) {
@@ -34,7 +35,7 @@ export function NewRoomClient({ initialError = null }: NewRoomClientProps) {
       );
       setIsCreating(false);
     }
-  }, [router]);
+  }, [router, template]);
 
   useEffect(() => {
     if (initialError) return;
@@ -53,7 +54,7 @@ export function NewRoomClient({ initialError = null }: NewRoomClientProps) {
         {!error ? (
           <div className="space-y-6">
             <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#ff5a00]/10 text-[#ff5a00] shadow-inner">
-              <Sparkles className="h-7 w-7 animate-pulse text-[#ff5a00]" />
+              <Plus className="h-7 w-7 animate-pulse text-[#ff5a00]" />
               <div className="absolute inset-0 rounded-2xl ring-2 ring-[#ff5a00]/20 animate-ping opacity-25" />
             </div>
 
@@ -86,9 +87,10 @@ export function NewRoomClient({ initialError = null }: NewRoomClientProps) {
 
             <div className="flex flex-col gap-2 pt-2">
               <Button
+                variant="primary"
                 onClick={() => void startCreation()}
                 disabled={isCreating}
-                className="w-full gap-2 bg-[#ff5a00] hover:bg-[#e04f00] text-white"
+                className="w-full"
               >
                 <RefreshCw className="h-4 w-4" />
                 <span>Try Again</span>

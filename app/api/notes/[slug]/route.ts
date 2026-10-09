@@ -10,7 +10,7 @@ export async function GET(_req: Request, context: any) {
     }
 
     const note = await getNote(slug);
-    if (!note) {
+    if (!note || (note.is_locked && !note.is_owner)) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

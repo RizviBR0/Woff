@@ -23,7 +23,7 @@ export default function TimelineDemo() {
               Add your files
             </h3>
             <p className="text-sm md:text-base text-zinc-500 dark:text-white/55 leading-relaxed">
-              Start a temporary sharing space in one click, then choose or drop the files you want to send. No sign-up required.
+              Start a sharing room in one click, then choose or drop the files you want to send. No sign-up required.
             </p>
           </div>
 
@@ -41,7 +41,7 @@ export default function TimelineDemo() {
               <div className="relative rounded-[14px] overflow-hidden border border-zinc-200/50 dark:border-zinc-800/50 bg-zinc-50 dark:bg-[#09090b]">
                 <Image
                   src="/process2.png"
-                  alt="Add files to a temporary Woff sharing space"
+                  alt="Add files to a Woff sharing room"
                   width={600}
                   height={400}
                   className="w-full h-auto object-cover transform hover:scale-[1.02] transition-transform duration-500"

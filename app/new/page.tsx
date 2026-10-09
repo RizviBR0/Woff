@@ -11,9 +11,11 @@ export const metadata: Metadata = {
   title: "Creating Room… – Woff",
   description: "Creating a new instant, private room on Woff Space.",
   robots: { index: false, follow: false },
+  referrer: "no-referrer",
 };
 
-export default async function NewRoomPage() {
+export default async function NewRoomPage({ searchParams }: { searchParams: Promise<{ template?: string }> }) {
+  const template = (await searchParams).template === "project-handoff" ? "project-handoff" : undefined;
   const headerList = await headers();
   const isPrefetch =
     headerList.get("next-router-prefetch") === "1" ||
@@ -21,17 +23,18 @@ export default async function NewRoomPage() {
     headerList.get("sec-purpose") === "prefetch";
 
   if (isPrefetch) {
-    return <NewRoomClient />;
+    return <NewRoomClient template={template} />;
   }
 
   try {
-    const space = await createSpace();
-    redirect(`/${space.slug}?created=1&rk=${space.recovery_key || ""}`);
+    const space = await createSpace(template);
+    redirect(`/${space.slug}?created=1&rk=${space.recovery_key || ""}&it=${space.invite_token || ""}`);
   } catch (err) {
     if (isRedirectError(err)) throw err;
     console.error("Failed to auto-create room from /new:", err);
     return (
       <NewRoomClient
+        template={template}
         initialError={
           err instanceof Error
             ? err.message

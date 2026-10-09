@@ -140,22 +140,36 @@ export function EntryContextMenu({
 
       {/* Delete Confirmation Alert Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="sm:max-w-md rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this message?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete this item and any attached files from the space. This action cannot be undone.
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-lg font-bold">
+                  Delete item
+                </AlertDialogTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  This action cannot be undone
+                </p>
+              </div>
+            </div>
+            <AlertDialogDescription className="text-sm text-foreground/80 pt-2 leading-relaxed">
+              Are you sure you want to delete this item? It and any attached files will be permanently removed from this room.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="mt-4 gap-2 sm:gap-0">
+            <AlertDialogCancel disabled={isDeleting} className="rounded-xl">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
                 void handleDelete();
               }}
               disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold shadow-sm focus:ring-red-600"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold rounded-xl"
             >
               {isDeleting ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

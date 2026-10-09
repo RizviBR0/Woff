@@ -66,12 +66,16 @@ import {
 import { toast } from "sonner";
 import TurndownService from "turndown";
 import { marked } from "marked";
-import type { Note } from "@/lib/actions";
+import type { Note, Space } from "@/lib/actions";
+import { prepareNoteShare } from "@/lib/note-sharing-actions";
+import { readBrowserValue, rememberSpaceInvitation } from "@/lib/space-recovery";
 import {
   createUploadIntents,
   registerNoteAsset,
   saveNoteSnapshot,
-  updateNote,
+  getNote,
+  setNotePrivacy,
+  cancelUploadIntents,
 } from "@/lib/actions";
 import {
   downloadMarkdownNote,
@@ -105,6 +109,7 @@ import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 interface NoteEditorProps {
   noteSlug: string;
   initialNote?: Note | null;
+  invitation?: { space: Pick<Space, "id" | "slug" | "access_version">; token: string };
 }
 
 type SaveState = "saved" | "unsaved" | "saving" | "offline" | "error" | "conflict";
@@ -346,10 +351,13 @@ turndownService.addRule("extendedImage", {
   },
 });
 
-export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
+export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProps) {
   const router = useRouter();
   const note = initialNote!;
-  const canEdit = Boolean(note?.is_owner);
+  const [roomSlug, setRoomSlug] = useState(note?.space_slug || "");
+  const [roomAccessVersion, setRoomAccessVersion] = useState(invitation?.space.access_version ?? 0);
+  const roomIdentityRef = useRef({ slug: note?.space_slug || "", accessVersion: invitation?.space.access_version ?? 0 });
+  const canEdit = Boolean(note?.can_edit ?? note?.is_owner);
   const [title, setTitle] = useState(note?.title || "Untitled Note");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [mode, setMode] = useState<"rich" | "raw">("rich");
@@ -364,6 +372,10 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkValue, setLinkValue] = useState("");
   const [qrCode, setQrCode] = useState("");
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareError, setShareError] = useState("");
+  const [shareGrantsRoomAccess, setShareGrantsRoomAccess] = useState(false);
+  const [qrFailed, setQrFailed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
@@ -375,7 +387,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   const [altDialogOpen, setAltDialogOpen] = useState(false);
   const [altTextValue, setAltTextValue] = useState("");
   const [lockDialogOpen, setLockDialogOpen] = useState(false);
-  const [passcodeValue, setPasscodeValue] = useState("");
+  const [privacyBusy, setPrivacyBusy] = useState(false);
   const [recoveryDraft, setRecoveryDraft] = useState<LocalDraft | null>(null);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -391,12 +403,88 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     revision: number;
   } | null>(null);
   const versionRef = useRef(note?.version || 1);
+  const mutationRef = useRef<Promise<void> | null>(null);
   const dirtyRef = useRef(false);
   const mountedRef = useRef(false);
   const imageUploadBusyRef = useRef(false);
   const pendingImagePreviewsRef = useRef<Map<string, string>>(new Map());
   const pasteImageHandlerRef = useRef<(files: File[]) => void>(() => undefined);
   const draftKey = `woff-note-draft:${noteSlug}`;
+
+  useEffect(() => {
+    const slug = note?.space_slug || "";
+    roomIdentityRef.current = { slug, accessVersion: 0 };
+    setRoomSlug(slug);
+    setRoomAccessVersion(0);
+  }, [note?.space_id, note?.space_slug]);
+
+  useEffect(() => {
+    const roomId = note?.space_id;
+    if (!roomId) return;
+    let disposed = false;
+    let refreshing = false;
+    let refreshAgain = false;
+    const refreshRoomIdentity = () => {
+      if (disposed) return;
+      if (refreshing) { refreshAgain = true; return; }
+      refreshing = true;
+      // Resolve the already-authorized room by UUID; a retired URL must never
+      // select another room or replace the note's unsaved document.
+      void Promise.resolve(supabaseBrowser.from("spaces").select("id,slug,access_version")
+        .eq("id", roomId).maybeSingle()).then(({ data: room, error }) => {
+          if (disposed || error) return;
+          if (!room || room.id !== roomId) {
+            roomIdentityRef.current = { slug: "", accessVersion: -1 };
+            setRoomSlug("");
+            setRoomAccessVersion(-1);
+            return;
+          }
+          const previousSlug = roomIdentityRef.current.slug;
+          if (previousSlug && previousSlug !== room.slug &&
+            readBrowserValue(`woff_invite_room_${previousSlug}`) === roomId &&
+            readBrowserValue(`woff_invite_version_${previousSlug}`) === String(room.access_version)) {
+            const token = readBrowserValue(`woff_invite_${previousSlug}`) || "";
+            if (/^[a-f0-9]{64}$/.test(token)) rememberSpaceInvitation(room, token);
+          }
+          roomIdentityRef.current = { slug: room.slug, accessVersion: room.access_version };
+          setRoomSlug(room.slug);
+          setRoomAccessVersion(room.access_version);
+          if (previousSlug && previousSlug !== room.slug &&
+            window.location.pathname === `/${previousSlug}/${noteSlug}`) {
+            window.history.replaceState(window.history.state, "",
+              `/${room.slug}/${noteSlug}${window.location.search}${window.location.hash}`);
+          }
+        }).catch(() => { /* Keep the authorized identity during a network interruption. */ })
+        .finally(() => {
+          refreshing = false;
+          if (refreshAgain) { refreshAgain = false; refreshRoomIdentity(); }
+        });
+    };
+    const channel = supabaseBrowser.channel(`note-room:${roomId}:${noteSlug}`)
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "spaces", filter: `id=eq.${roomId}`,
+      }, ({ new: room }) => {
+        if (room.slug !== roomIdentityRef.current.slug ||
+          room.access_version !== roomIdentityRef.current.accessVersion) refreshRoomIdentity();
+      })
+      .on("system", { event: "*" }, (payload) => {
+        if (payload.extension === "postgres_changes" && payload.status === "ok") refreshRoomIdentity();
+      })
+      .subscribe((status) => { if (status === "SUBSCRIBED") refreshRoomIdentity(); });
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshRoomIdentity();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    window.addEventListener("online", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      disposed = true;
+      window.removeEventListener("focus", refreshWhenVisible);
+      window.removeEventListener("online", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      void supabaseBrowser.removeChannel(channel);
+    };
+  }, [note?.space_id, noteSlug]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -544,8 +632,9 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       title: string;
       html: string;
       json: Record<string, unknown>;
-    }) => {
+    }): Promise<void> => {
       if (!editor || !canEdit) return Promise.resolve();
+      if (mutationRef.current) return mutationRef.current.catch(() => undefined).then(() => performSave(snapshot));
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (!dirtyRef.current) return saveQueueRef.current || Promise.resolve();
 
@@ -729,16 +818,54 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
     };
   }, [isFocusMode, performSave, scheduleSave, serializeDraft]);
 
-  // QR Code generation
+  useEffect(() => {
+    if (invitation) rememberSpaceInvitation(invitation.space, invitation.token);
+  }, [invitation]);
+
+  // Prepare one validated URL for both the clipboard and QR code.
   useEffect(() => {
     if (!shareOpen) return;
-    const url = window.location.href;
-    void import("qrcode")
-      .then(({ default: QRCode }) =>
-        QRCode.toDataURL(url, { width: 220, margin: 1 }),
-      )
-      .then(setQrCode);
-  }, [shareOpen]);
+    let cancelled = false;
+    setShareUrl("");
+    setQrCode("");
+    setShareError("");
+    setQrFailed(false);
+    setCopied(false);
+    if (note.is_locked) {
+      setShareError("This note is private. Choose Share Note with Room in Note options first.");
+      return;
+    }
+    if (!roomSlug) {
+      setShareError("Room access is unavailable. Reopen the room before sharing this note.");
+      return;
+    }
+    const slug = roomSlug;
+    const cached = {
+      token: readBrowserValue(`woff_invite_${slug}`) || "",
+      roomId: readBrowserValue(`woff_invite_room_${slug}`) || "",
+      accessVersion: Number(readBrowserValue(`woff_invite_version_${slug}`)),
+    };
+    void (async () => {
+      try {
+        const share = await prepareNoteShare(noteSlug, cached);
+        if (cancelled) return;
+        if (share.token) rememberSpaceInvitation(share.room, share.token);
+        const url = new URL(share.path, process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).toString();
+        setShareUrl(url);
+        setShareGrantsRoomAccess(share.grantsRoomAccess);
+        try {
+          const { default: QRCode } = await import("qrcode");
+          const qr = await QRCode.toDataURL(url, { width: 220, margin: 1 });
+          if (!cancelled) setQrCode(qr);
+        } catch {
+          if (!cancelled) setQrFailed(true);
+        }
+      } catch {
+        if (!cancelled) setShareError("Unable to prepare this link. Check room access and try again.");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [shareOpen, noteSlug, note.is_locked, roomSlug, roomAccessVersion]);
 
   const updateTitle = (value: string) => {
     const clean = value.slice(0, 120);
@@ -753,7 +880,8 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   };
 
   const copyShareUrl = async () => {
-    const ok = await copyTextToClipboard(window.location.href);
+    if (!shareUrl) return;
+    const ok = await copyTextToClipboard(shareUrl);
     if (ok) {
       setCopied(true);
       toast.success("Link copied to clipboard");
@@ -793,18 +921,30 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   };
 
   const handleToggleLock = async () => {
+    if (mutationRef.current) return;
+    setPrivacyBusy(true);
     try {
       const nextLocked = !note.is_locked;
-      await updateNote(noteSlug, {
-        is_locked: nextLocked,
-        passcode: nextLocked ? passcodeValue : undefined,
+      const saving = performSave();
+      const mutation = saving.then(async () => {
+        if (dirtyRef.current) throw new Error("Save your changes before changing privacy.");
+        const updated = await setNotePrivacy(noteSlug, nextLocked, versionRef.current);
+        versionRef.current = updated.version;
+        note.is_locked = updated.is_locked;
       });
-      note.is_locked = nextLocked;
+      mutationRef.current = mutation;
+      await mutation;
       setLockDialogOpen(false);
-      setPasscodeValue("");
-      toast.success(nextLocked ? "Note is now locked" : "Note is now unlocked");
+      toast.success(nextLocked ? "Note is now private to you" : "Note is shared with the room");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update lock");
+      const message = err instanceof Error ? err.message : "Failed to update privacy";
+      if (message.includes("changed elsewhere")) {
+        setSaveState("conflict"); setLockDialogOpen(false); setConflictOpen(true);
+      } else { toast.error(message); }
+    } finally {
+      mutationRef.current = null;
+      setPrivacyBusy(false);
+      if (dirtyRef.current) scheduleSave();
     }
   };
 
@@ -882,10 +1022,24 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   };
 
   const handleForceOverwrite = async () => {
-    setConflictOpen(false);
-    toast.info("Overwriting remote version with your changes…");
-    versionRef.current += 1;
-    await performSave();
+    if (mutationRef.current) return;
+    try {
+      const mutation = (saveQueueRef.current || Promise.resolve()).then(async () => {
+        const latest = await getNote(noteSlug);
+        if (!latest?.is_owner || !latest.version) throw new Error("Unable to read the current note version.");
+        versionRef.current = latest.version;
+        dirtyRef.current = true;
+      });
+      mutationRef.current = mutation;
+      await mutation;
+      mutationRef.current = null;
+      setConflictOpen(false);
+      await performSave();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to overwrite note");
+    } finally {
+      mutationRef.current = null;
+    }
   };
 
   // Inline Image Upload logic
@@ -1000,7 +1154,6 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
       const uploadOne = async (placeholder: PendingImage) => {
         const { file } = placeholder;
         setPlaceholderStatus(placeholder, "uploading");
-        let uploadedPath: string | null = null;
         try {
           const intent = placeholder.intent!;
           const dimensionsPromise = createImageBitmap(file)
@@ -1012,12 +1165,12 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
             .catch(() => ({}));
           const { error } = await supabaseBrowser.storage
             .from(intent.bucket)
-            .upload(intent.path, file, {
+            .upload(intent.path, await file.arrayBuffer(), {
               contentType: file.type,
+              cacheControl: "0",
               upsert: false,
             });
           if (error) throw error;
-          uploadedPath = intent.path;
           const dimensions = await dimensionsPromise;
           await registerNoteAsset(noteSlug, {
             path: intent.path,
@@ -1032,9 +1185,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
           placeholder.ready = { url, ...dimensions };
           return true;
         } catch (error) {
-          if (uploadedPath) {
-            await supabaseBrowser.storage.from("files").remove([uploadedPath]);
-          }
+          if (placeholder.intent) await cancelUploadIntents(note.space_id, [placeholder.intent.path]).catch(() => undefined);
           setPlaceholderStatus(placeholder, "failed");
           toast.error(
             error instanceof Error
@@ -1257,21 +1408,21 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
   }, [editor]);
 
   // Locked Note Guard
-  if (note.is_locked && !canEdit) {
+  if (note.is_locked && !note.is_owner) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6 bg-background">
         <div className="max-w-sm text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
             <Lock className="h-5 w-5" />
           </div>
-          <h1 className="text-xl font-semibold">This note is locked</h1>
+          <h1 className="text-xl font-semibold">This note is private</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Only its creator can open and edit it.
           </p>
           <Button
             className="mt-5"
             variant="outline"
-            onClick={() => router.push(`/${note.space_slug || ""}`)}
+            onClick={() => router.push(`/${roomSlug}`)}
           >
             Back to room
           </Button>
@@ -1318,25 +1469,26 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
           <header className="border-b border-border/40">
             <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-3 sm:px-6">
               {/* Left: Unified Navigation Breadcrumb */}
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 <Link
-                  href={`/${note.space_slug || ""}`}
-                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  href={`/${roomSlug}`}
+                  className="flex min-w-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                   aria-label="Back to room"
+                  title={roomSlug ? `Room ${roomSlug}` : "Back to space"}
                   onClick={() => {
                     serializeDraft();
                     if (dirtyRef.current) void performSave();
                   }}
                 >
-                  <ArrowLeft className="h-4 w-4" />
-                  <span>
-                    {note.space_slug ? `Room ${note.space_slug}` : "Back to space"}
+                  <ArrowLeft className="h-4 w-4 shrink-0" />
+                  <span className="truncate">
+                    {roomSlug ? `Room ${roomSlug}` : "Back to space"}
                   </span>
                 </Link>
               </div>
 
               {/* Right: Status badge, Share CTA, Theme, and Note Options */}
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 {/* Truthful Save Status Indicator */}
                 {canEdit ? (
                   <div className="flex items-center">
@@ -1371,25 +1523,29 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
                       </span>
                     )}
                     {saveState === "error" && (
-                      <button
+                      <Button
                         type="button"
+                        variant="link"
+                        size="sm"
                         onClick={() => void performSave()}
-                        className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:underline"
+                        className="h-auto p-0 flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:underline"
                         title="Click to retry saving"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
                         <span>Couldn&apos;t save · Retry</span>
-                      </button>
+                      </Button>
                     )}
                     {saveState === "conflict" && (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setConflictOpen(true)}
-                        className="flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/20"
+                        className="h-auto flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/20"
                       >
                         <AlertTriangle className="h-3.5 w-3.5" />
                         <span>Conflict · Resolve</span>
-                      </button>
+                      </Button>
                     )}
                   </div>
                 ) : (
@@ -1574,7 +1730,7 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
                         onClick={() => setLockDialogOpen(true)}
                       >
                         <Lock className="h-4 w-4 text-muted-foreground" />
-                        <span>{note.is_locked ? "Unlock Note" : "Lock Note with Passcode"}</span>
+                        <span>{note.is_locked ? "Share Note with Room" : "Make Note Private"}</span>
                       </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
@@ -1611,15 +1767,17 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
                   {/* Group 2: Text Style Dropdown */}
                   <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         type="button"
                         onMouseDown={(e) => e.preventDefault()}
-                        className="flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        className="h-8 flex items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                         title="Text style"
                       >
                         <span>{currentStyleLabel}</span>
                         <ChevronDown className="h-3 w-3 opacity-60" />
-                      </button>
+                      </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="start"
@@ -1686,21 +1844,23 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
                   {/* Group 4: Lists Dropdown */}
                   <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         type="button"
                         onMouseDown={(e) => e.preventDefault()}
-                        className={`flex h-8 items-center gap-1 rounded-md px-2 text-xs transition-colors ${
+                        className={`h-8 flex items-center gap-1 rounded-md px-2 text-xs ${
                           editor.isActive("bulletList") ||
                           editor.isActive("orderedList") ||
                           editor.isActive("taskList")
-                            ? "bg-foreground text-background font-medium"
+                            ? "bg-foreground text-background font-medium hover:bg-foreground hover:text-background"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
                         }`}
                         title="Lists"
                       >
                         <List className="h-4 w-4" />
                         <ChevronDown className="h-3 w-3 opacity-60" />
-                      </button>
+                      </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="start"
@@ -1760,15 +1920,17 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
                   {/* Group 6: Insert Menu */}
                   <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         type="button"
                         onMouseDown={(e) => e.preventDefault()}
-                        className="flex h-8 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        className="h-8 flex items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                         title="Insert block"
                       >
                         <span>Insert</span>
                         <ChevronDown className="h-3 w-3 opacity-60" />
-                      </button>
+                      </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="start"
@@ -1814,14 +1976,16 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
                   {/* Group 7: More Formatting Dropdown */}
                   <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         type="button"
                         onMouseDown={(e) => e.preventDefault()}
-                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        className="h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                         title="More formatting"
                       >
                         <MoreHorizontal className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="start"
@@ -1959,60 +2123,70 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
                 <span className="font-semibold text-orange-600 dark:text-orange-400 mr-1 flex items-center gap-1">
                   <ImagePlus className="h-3.5 w-3.5" /> Image:
                 </span>
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon"
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setContentAlignment("left")}
-                  className={`rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted ${
+                  className={`h-7 w-7 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted ${
                     isAlignmentActive("left") ? "bg-muted text-foreground font-bold" : ""
                   }`}
                   title="Align left"
                 >
                   <AlignLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setContentAlignment("center")}
-                  className={`rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted ${
+                  className={`h-7 w-7 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted ${
                     isAlignmentActive("center") ? "bg-muted text-foreground font-bold" : ""
                   }`}
                   title="Align center"
                 >
                   <AlignCenter className="h-3.5 w-3.5" />
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setContentAlignment("right")}
-                  className={`rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted ${
+                  className={`h-7 w-7 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted ${
                     isAlignmentActive("right") ? "bg-muted text-foreground font-bold" : ""
                   }`}
                   title="Align right"
                 >
                   <AlignRight className="h-3.5 w-3.5" />
-                </button>
+                </Button>
                 <span className="mx-1 h-3.5 w-px bg-border/60" />
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={handleOpenAltDialog}
-                  className="flex items-center gap-1 rounded px-2 py-0.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                  className="h-7 flex items-center gap-1 rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
                   title="Edit image alt text"
                 >
                   <Tag className="h-3 w-3" />
                   <span>Alt text</span>
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => editor.chain().focus().deleteSelection().run()}
-                  className="flex items-center gap-1 rounded px-2 py-0.5 text-red-500 hover:bg-red-500/10 ml-auto"
+                  className="h-7 flex items-center gap-1 rounded px-2 py-0.5 text-xs text-red-500 hover:bg-red-500/10 hover:text-red-600 ml-auto"
                   title="Remove image"
                 >
                   <Trash2 className="h-3 w-3" />
                   <span>Remove</span>
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -2191,11 +2365,15 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
 
       {/* Share Dialog */}
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="min-w-0 sm:max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Share Note</DialogTitle>
             <DialogDescription>
-              Anyone with this link or room access can view this note. Only its creator can edit it.
+              {shareUrl
+                ? shareGrantsRoomAccess
+                  ? "This invitation opens the note and grants access to the room's shared content until expiry or revocation. Private notes stay private. Only the note's creator can edit it."
+                  : "This link works for existing room members. Ask the room owner for an invitation when sharing with someone new. Only the note's creator can edit it."
+                : "Preparing a link with the current room permissions."}
             </DialogDescription>
           </DialogHeader>
           {qrCode && (
@@ -2203,7 +2381,10 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
               <Image src={qrCode} alt="Note share QR code" width={200} height={200} unoptimized />
             </div>
           )}
-          <Button className="w-full gap-2 mt-2" onClick={() => void copyShareUrl()}>
+          {shareError && <p role="alert" className="text-sm text-muted-foreground">{shareError}</p>}
+          {qrFailed && <p className="text-xs text-muted-foreground">QR code unavailable. You can still copy the link.</p>}
+          {!shareUrl && !shareError && <Loader2 aria-label="Preparing note link" className="mx-auto h-6 w-6 animate-spin text-orange-500" />}
+          <Button disabled={!shareUrl} className="w-full gap-2 mt-2" onClick={() => void copyShareUrl()}>
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             <span>{copied ? "Copied Link" : "Copy Note Link"}</span>
           </Button>
@@ -2274,9 +2455,9 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
               <span className="font-semibold text-foreground">{stats.characters}</span>
             </div>
             <div className="flex justify-between border-b pb-2">
-              <span>Room Code</span>
-              <span className="font-mono font-semibold text-foreground">
-                {note.space_slug ? `Room ${note.space_slug}` : "None"}
+              <span>Room</span>
+              <span className="max-w-[65%] truncate font-mono font-semibold text-foreground" title={roomSlug}>
+                {roomSlug ? `Room ${roomSlug}` : "None"}
               </span>
             </div>
             <div className="flex justify-between border-b pb-2">
@@ -2306,29 +2487,20 @@ export function NoteEditor({ noteSlug, initialNote }: NoteEditorProps) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Lock className="h-4 w-4" />
-              <span>{note.is_locked ? "Unlock Note" : "Lock Note with Passcode"}</span>
+              <span>{note.is_locked ? "Share Note with Room" : "Make Note Private"}</span>
             </DialogTitle>
             <DialogDescription>
               {note.is_locked
-                ? "Unlocking this note will allow anyone with the room link to view it."
-                : "Locking prevents viewers from reading the note without the passcode."}
+                ? "Room members will be able to read this note and its attached images."
+                : "Only you can read this note and its attached images. Room members will see a private note placeholder."}
             </DialogDescription>
           </DialogHeader>
-          {!note.is_locked && (
-            <Input
-              type="password"
-              value={passcodeValue}
-              onChange={(e) => setPasscodeValue(e.target.value)}
-              placeholder="Enter passcode"
-              maxLength={64}
-            />
-          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setLockDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => void handleToggleLock()}>
-              {note.is_locked ? "Unlock Note" : "Lock Note"}
+            <Button disabled={privacyBusy} onClick={() => void handleToggleLock()}>
+              {privacyBusy ? "Saving…" : note.is_locked ? "Share Note" : "Make Private"}
             </Button>
           </DialogFooter>
         </DialogContent>

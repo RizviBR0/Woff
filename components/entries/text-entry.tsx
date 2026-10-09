@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Check, Copy, Edit, Loader2, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { createEntry, updateTextEntry } from "@/lib/actions";
 import { parseMessageSegments } from "./code-detector";
 import { CodeBlock } from "./code-block";
@@ -63,7 +64,7 @@ export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps
   if (isEditing) {
     return (
       <div className="w-full space-y-2">
-        <textarea
+        <Textarea
           value={editText}
           onChange={(e) => setEditText(e.target.value)}
           onKeyDown={(e) => {
@@ -83,7 +84,7 @@ export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps
             }
           }}
           rows={Math.min(12, Math.max(3, editText.split("\n").length))}
-          className="w-full rounded-lg border bg-background p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full rounded-lg p-3 text-sm font-mono focus-visible:ring-primary"
           placeholder="Edit message…"
           autoFocus
         />
@@ -194,8 +195,10 @@ export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps
           <span className="text-[11px] font-medium text-destructive">
             Failed to send
           </span>
-          <button
+          <Button
             type="button"
+            variant="link"
+            size="sm"
             disabled={isRetrying}
             onClick={async (e) => {
               e.stopPropagation();
@@ -215,10 +218,10 @@ export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps
                 setIsRetrying(false);
               }
             }}
-            className="text-[11px] font-semibold text-primary underline underline-offset-2 hover:opacity-80 disabled:opacity-50"
+            className="h-auto p-0 text-[11px] font-semibold text-primary underline underline-offset-2 hover:opacity-80 disabled:opacity-50"
           >
             {isRetrying ? "Retrying…" : "Retry"}
-          </button>
+          </Button>
         </div>
       )}
 

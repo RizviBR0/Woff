@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     template: "%s | Woff Space",
   },
   description:
-    "Share files instantly between devices or with anyone using a link, room code, or QR code. No sign-up. Temporary sharing, not cloud storage. Keep your own copy.",
+    "Share files instantly between devices or with anyone using a link, room code, or QR code. No sign-up. Choose a time limit or leave the room open. Keep your own copy.",
   keywords: [
     "file sharing",
     "note sharing",
@@ -66,7 +66,7 @@ export const metadata: Metadata = {
     siteName: "Woff Space",
     title: "Woff Space: Instant File Sharing Without Sign Up",
     description:
-      "Send files with a link, room code, or QR code. No sign-up required. Woff is for temporary sharing, not cloud storage. Keep your own copy.",
+      "Send files with a link, room code, or QR code. No sign-up required. Choose a time limit or leave the room open. Keep your own copy.",
     images: [
       {
         url: `${siteUrl}/og-image.png`,
@@ -82,7 +82,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Woff Space: Instant File Sharing Without Sign Up",
     description:
-      "Send files with a link, room code, or QR code. No sign-up required. Woff is for temporary sharing, not cloud storage. Keep your own copy.",
+      "Send files with a link, room code, or QR code. No sign-up required. Choose a time limit or leave the room open. Keep your own copy.",
     images: [`${siteUrl}/og-image.png`],
     creator: "@woffspace",
   },
@@ -133,7 +133,7 @@ export default function RootLayout({
     name: "Woff",
     url: siteUrl,
     description:
-      "Instant, temporary file sharing between devices or with other people. Share through a link, room code, or QR code, and download a copy to keep.",
+      "Instant file sharing between devices or with other people. Share through a link, room code, or QR code, choose an optional time limit, and download a copy to keep.",
     applicationCategory: "ProductivityApplication",
     operatingSystem: "Any",
     offers: {
@@ -168,7 +168,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body>
+      <body className={`${inter.className} font-sans antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { SpaceContainer } from "@/components/space-container";
 import { displayNameForDevice } from "@/lib/display-name";
 import { requireAnonymousUser } from "@/lib/supabase";
+import { isValidRoomSlug, normalizeRoomSlug } from "@/lib/room-slug";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ interface SpacePageProps {
 }
 
 async function getSpaceAndEntries(slug: string) {
-  if (!/^\d{4}$/.test(slug)) return null;
+  if (!isValidRoomSlug(slug)) return null;
 
   const { supabase, user } = await requireAnonymousUser();
   const cookieStore = await cookies();
@@ -60,9 +61,13 @@ export async function generateMetadata({
 
 export default async function SpacePage({ params, searchParams }: SpacePageProps) {
   const { slug } = await params;
-  const data = await getSpaceAndEntries(slug);
+  const canonicalSlug = normalizeRoomSlug(slug);
+  if (!isValidRoomSlug(canonicalSlug)) notFound();
+  const query = await searchParams;
+  if (slug !== canonicalSlug) redirect(`/${canonicalSlug}${query.join === "1" ? "?join=1" : ""}`);
+  const data = await getSpaceAndEntries(canonicalSlug);
   if (!data) {
-    if ((await searchParams).join === "1") redirect(`/?joinError=1&room=${slug}`);
+    if (query.join === "1") redirect(`/?joinError=1&room=${encodeURIComponent(canonicalSlug)}`);
     notFound();
   }
 

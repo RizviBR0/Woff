@@ -31,6 +31,7 @@ interface UseSpaceRealtimeProps {
   initialEntries: Entry[];
   currentDeviceId?: string | null;
   onIncomingMessage?: () => void;
+  onRoomUpdated?: (room: Space) => void;
 }
 
 export function useSpaceRealtime({
@@ -38,6 +39,7 @@ export function useSpaceRealtime({
   initialEntries,
   currentDeviceId,
   onIncomingMessage,
+  onRoomUpdated,
 }: UseSpaceRealtimeProps) {
   const [entries, setEntriesState] = useState<Entry[]>(() =>
     dedupeEntries(initialEntries),
@@ -56,8 +58,12 @@ export function useSpaceRealtime({
     new Set(dedupeEntries(initialEntries).map((e) => e.id)),
   );
   const onIncomingMessageRef = useRef(onIncomingMessage);
+  const onRoomUpdatedRef = useRef(onRoomUpdated);
+  const roomRef = useRef(space);
   useEffect(() => {
     onIncomingMessageRef.current = onIncomingMessage;
+    onRoomUpdatedRef.current = onRoomUpdated;
+    roomRef.current = space;
   });
 
   const scrollToBottom = useCallback(() => {
@@ -291,8 +297,37 @@ export function useSpaceRealtime({
     const presenceKey = currentDeviceId || crypto.randomUUID();
     let disposed = false;
     let reconciling = false;
-    let connectedOnce = false;
+    let reconcileAgain = false;
     const changes = new Map<string, Entry | null>();
+    const reconcileEntries = () => {
+      if (disposed) return;
+      if (reconciling) { reconcileAgain = true; return; }
+      reconciling = true;
+      changes.clear();
+      // Room codes can change. Resolve this already-authorized room by UUID so
+      // reconnecting never joins an unrelated room through a retired code.
+      void Promise.resolve(supabase.from("spaces").select("slug").eq("id", space.id).maybeSingle())
+        .then(async ({ data: room, error: lookupError }) => {
+          if (disposed || lookupError || !room?.slug) return;
+          const { data, error } = await supabase.rpc("open_space", { p_slug: room.slug, p_display_name: displayNameForDevice(presenceKey) });
+          if (disposed || error || data?.space?.id !== space.id) return;
+          roomRef.current = data.space;
+          onRoomUpdatedRef.current?.(data.space);
+          const latest = new Map<string, Entry>((data.entries || []).map((entry: Entry) => [entry.id, entry]));
+          changes.forEach((entry, id) => { if (entry) latest.set(id, entry); else latest.delete(id); });
+          setEntries((current) => {
+            const pending = current.filter((entry) => entry.isLoading && (entry.id.startsWith("temp-") || entry.id.startsWith("placeholder-")));
+            const next = [...latest.values(), ...pending].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+            knownEntryIdsRef.current = new Set(next.map((entry) => entry.id));
+            return next;
+          });
+        }).catch(() => { /* Retain visible data until a later successful reconciliation. */ })
+        .finally(() => {
+          reconciling = false;
+          changes.clear();
+          if (reconcileAgain) { reconcileAgain = false; reconcileEntries(); }
+        });
+    };
 
     const channel = supabase
       .channel(`space:${space.id}`, {
@@ -301,6 +336,20 @@ export function useSpaceRealtime({
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
         setOnlineCount(Math.max(1, Object.keys(state).length));
+      })
+      .on("system", { event: "*" }, (payload) => {
+        // A channel join can finish before a cold Postgres replication worker.
+        // Recover writes made between the page snapshot and actual readiness.
+        if (payload.extension === "postgres_changes" && payload.status === "ok") reconcileEntries();
+      })
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "spaces", filter: `id=eq.${space.id}`,
+      }, (payload) => {
+        const next = payload.new as Partial<Space>;
+        const current = roomRef.current;
+        // Ordinary activity on an unlimited room doesn't need a full snapshot.
+        if (["slug", "expires_at", "expiry_mode", "code_enabled", "pairing_expires_at", "access_version", "delivery_mode", "name", "welcome_text"]
+          .some(key => next[key as keyof Space] !== current[key as keyof Space])) reconcileEntries();
       })
       .on(
         "postgres_changes",
@@ -372,28 +421,9 @@ export function useSpaceRealtime({
         if (status === "SUBSCRIBED") {
           setConnectionStatus("connected");
           void channel.track({ online_at: new Date().toISOString() });
-          // On reconnect, fetch and replay events received during the read
-          // so reconnect recovery cannot overwrite newer realtime changes.
-          if (connectedOnce && !reconciling) {
-            reconciling = true;
-            changes.clear();
-            void supabase.rpc("open_space", { p_slug: space.slug, p_display_name: displayNameForDevice(presenceKey) }).then(({ data, error }) => {
-              if (disposed) return;
-              if (!error && data?.space) {
-                const latest = new Map<string, Entry>((data.entries || []).map((entry: Entry) => [entry.id, entry]));
-                changes.forEach((entry, id) => { if (entry) latest.set(id, entry); else latest.delete(id); });
-                setEntries((current) => {
-                  const pending = current.filter((entry) => entry.isLoading && (entry.id.startsWith("temp-") || entry.id.startsWith("placeholder-")));
-                  const next = [...latest.values(), ...pending].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
-                  knownEntryIdsRef.current = new Set(next.map((entry) => entry.id));
-                  return next;
-                });
-              }
-              reconciling = false;
-              changes.clear();
-            });
-          }
-          connectedOnce = true;
+          // Reconcile the initial join and reconnects, replaying concurrent
+          // events so a snapshot cannot overwrite newer changes.
+          reconcileEntries();
         } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
           setConnectionStatus("disconnected");
         } else {

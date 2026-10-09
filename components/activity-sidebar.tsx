@@ -16,6 +16,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -24,21 +25,16 @@ import {
 import NextImage from "next/image";
 import { toast } from "sonner";
 import { downloadFileFromUrl, triggerBlobDownload } from "@/lib/download";
-import { addArchiveFiles, generateArchive } from "@/lib/archive";
+import { addArchiveFiles, addArchiveText, generateArchive } from "@/lib/archive";
+import { portableNoteHtml, printPortableNote } from "@/lib/portable-note";
+import { formatActivityDate } from "@/lib/date-labels";
+import { useClientNow } from "@/lib/hooks/use-client-now";
 
 async function createZip() {
   const JSZip = (await import("jszip")).default;
   return new JSZip();
 }
 
-async function createPdf(options: {
-  orientation: "portrait" | "landscape";
-  unit: "mm";
-  format: "a4";
-}) {
-  const { jsPDF } = await import("jspdf");
-  return new jsPDF(options);
-}
 
 interface ActivitySidebarProps {
   entries: Entry[];
@@ -47,43 +43,6 @@ interface ActivitySidebarProps {
 }
 
 type FilterType = "all" | "images" | "files" | "notes";
-
-function formatDateGroup(dateString: string): string {
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return "";
-    const now = new Date();
-    const isToday =
-      d.getDate() === now.getDate() &&
-      d.getMonth() === now.getMonth() &&
-      d.getFullYear() === now.getFullYear();
-    if (isToday) return "Today";
-
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    const isYesterday =
-      d.getDate() === yesterday.getDate() &&
-      d.getMonth() === yesterday.getMonth() &&
-      d.getFullYear() === yesterday.getFullYear();
-    if (isYesterday) return "Yesterday";
-
-    return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(d);
-  } catch {
-    return "";
-  }
-}
-
-function formatNoteDate(date: Date): string {
-  try {
-    return new Intl.DateTimeFormat("en-US", {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    }).format(date);
-  } catch {
-    return "";
-  }
-}
 
 function formatDateIso(date: Date): string {
   try {
@@ -530,7 +489,7 @@ function SidebarItem({ entry, spaceSlug, onDownload, isDownloading }: SidebarIte
                   e.stopPropagation();
                   onDownload(entry);
                 }}
-                title={isDownloading ? "Generating PDF…" : "Download PDF"}
+                title={isDownloading ? "Preparing print preview…" : "Print / Save as PDF"}
               >
                 {isDownloading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
@@ -549,6 +508,7 @@ function SidebarItem({ entry, spaceSlug, onDownload, isDownloading }: SidebarIte
 }
 
 export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarProps) {
+  const clientNow = useClientNow(60_000);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -591,12 +551,12 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
   const groupedItems = useMemo(() => {
     const groups: { [key: string]: Entry[] } = {};
     items.forEach((item) => {
-      const dateKey = formatDateGroup(item.created_at);
+      const dateKey = formatActivityDate(item.created_at, clientNow);
       if (!groups[dateKey]) groups[dateKey] = [];
       groups[dateKey].push(item);
     });
     return groups;
-  }, [items]);
+  }, [items, clientNow]);
 
   const [downloadingEntryId, setDownloadingEntryId] = useState<string | null>(null);
   const [downloadingDateGroup, setDownloadingDateGroup] = useState<string | null>(null);
@@ -692,69 +652,19 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
         const noteSlug = entry.meta?.note_slug || noteData[0];
         const noteTitle = entry.meta?.title || noteData[2] || "Untitled Note";
 
-        toastId = toast.loading(`Generating PDF for "${noteTitle}"...`);
+        toastId = toast.loading(`Preparing "${noteTitle}" for print…`);
         const res = await fetch(`/api/notes/${noteSlug}`);
         if (!res.ok) throw new Error("Failed to fetch note");
         const note = await res.json();
-
-        const pdf = await createPdf({
-          orientation: "portrait",
-          unit: "mm",
-          format: "a4",
-        });
-
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const margin = 20;
-        const contentWidth = pageWidth - margin * 2;
-        let yPos = margin;
-
-        pdf.setFontSize(24);
-        pdf.setFont("helvetica", "bold");
-        const titleLines = pdf.splitTextToSize(
-          note.title || noteTitle,
-          contentWidth
-        );
-        pdf.text(titleLines, margin, yPos);
-        yPos += titleLines.length * 10 + 10;
-
-        pdf.setFontSize(10);
-        pdf.setFont("helvetica", "normal");
-        pdf.setTextColor(128, 128, 128);
-        const dateStr = formatNoteDate(
-          new Date(note.updated_at || note.created_at)
-        );
-        pdf.text(dateStr, margin, yPos);
-        yPos += 15;
-
-        pdf.setFontSize(12);
-        pdf.setFont("helvetica", "normal");
-        pdf.setTextColor(0, 0, 0);
-
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = note.content || "";
-        const textContent = tempDiv.textContent || tempDiv.innerText || "";
-
-        const lines = pdf.splitTextToSize(textContent, contentWidth);
-        for (const line of lines) {
-          if (yPos > pageHeight - margin) {
-            pdf.addPage();
-            yPos = margin;
-          }
-          pdf.text(line, margin, yPos);
-          yPos += 6;
-        }
-
-        const safeFilename = `${(note.title || noteTitle).replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
-        const pdfBlob = pdf.output("blob");
-        triggerBlobDownload(pdfBlob, safeFilename);
-        toast.success(`PDF downloaded: ${note.title || noteTitle}`, { id: toastId });
+        if (note.is_locked && !note.is_owner) throw new Error("This note is private.");
+        await printPortableNote(note.title || noteTitle, note.content || "");
+        toast.success("Choose Save as PDF in the print dialog", { id: toastId });
       }
-    } catch {
+    } catch (error) {
       if (toastId) {
-        toast.error("Download failed. Please try again.", { id: toastId });
+        toast.error(error instanceof Error ? error.message : "Download failed. Please try again.", { id: toastId });
       } else {
-        toast.error("Download failed. Please try again.");
+        toast.error(error instanceof Error ? error.message : "Download failed. Please try again.");
       }
     } finally {
       setDownloadingEntryId(null);
@@ -837,7 +747,7 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
             }
           });
         }
-        // Notes as PDF
+        // Notes as portable HTML, including images and Unicode text
         else if (entry.meta?.type === "note" || entry.text?.startsWith("NOTE:")) {
           const noteData = entry.text?.startsWith("NOTE:")
             ? entry.text.replace("NOTE:", "").split(":")
@@ -850,64 +760,14 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
             if (res.ok) {
               const note = await res.json();
 
-              const pdf = await createPdf({
-                orientation: "portrait",
-                unit: "mm",
-                format: "a4",
-              });
-
-              const pageWidth = pdf.internal.pageSize.getWidth();
-              const pageHeight = pdf.internal.pageSize.getHeight();
-              const margin = 20;
-              const contentWidth = pageWidth - margin * 2;
-              let yPos = margin;
-
-              pdf.setFontSize(24);
-              pdf.setFont("helvetica", "bold");
-              const titleLines = pdf.splitTextToSize(
-                note.title || noteTitle,
-                contentWidth
-              );
-              pdf.text(titleLines, margin, yPos);
-              yPos += titleLines.length * 10 + 10;
-
-              pdf.setFontSize(10);
-              pdf.setFont("helvetica", "normal");
-              pdf.setTextColor(128, 128, 128);
-              const dateStr = formatNoteDate(
-                new Date(note.updated_at || note.created_at)
-              );
-              pdf.text(dateStr, margin, yPos);
-              yPos += 15;
-
-              pdf.setFontSize(12);
-              pdf.setFont("helvetica", "normal");
-              pdf.setTextColor(0, 0, 0);
-
-              const tempDiv = document.createElement("div");
-              tempDiv.innerHTML = note.content || "";
-              const textContent =
-                tempDiv.textContent || tempDiv.innerText || "";
-
-              const lines = pdf.splitTextToSize(textContent, contentWidth);
-              for (const line of lines) {
-                if (yPos > pageHeight - margin) {
-                  pdf.addPage();
-                  yPos = margin;
-                }
-                pdf.text(line, margin, yPos);
-                yPos += 6;
-              }
-
-              const pdfBlob = pdf.output("blob");
-              const safeName = (note.title || noteTitle).replace(
-                /[^a-zA-Z0-9]/g,
-                "_"
-              );
-              let filename = `notes/${safeName}.pdf`;
+              if (note.is_locked && !note.is_owner) throw new Error("A note is private. No partial ZIP was downloaded.");
+              const html = await portableNoteHtml(note.title || noteTitle, note.content || "", controller.signal);
+              const safeName = (note.title || noteTitle).replace(/[\x00-\x1f/\\:*?"<>|]/g, "_").slice(0,120) || "note";
+              let filename = `notes/${safeName}.html`;
               let suffix = 1;
-              while (zip.files[filename]) filename = `notes/${safeName} (${suffix++}).pdf`;
-              zip.file(filename, pdfBlob);
+              while (zip.files[filename]) filename = `notes/${safeName} (${suffix++}).html`;
+              addArchiveText(zip, filename, html);
+              zip.file("README.txt", "Notes are portable HTML with embedded images. Open a note in a browser and choose Print / Save as PDF. Files retain their original formats. Keep this export before your room expires.");
             } else { throw new Error("A note is unavailable. No partial ZIP was downloaded."); }
           } catch (error) {
             throw error;
@@ -918,8 +778,9 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
       const content = await generateArchive(zip, { signal: controller.signal });
       triggerBlobDownload(content, `woff-files-${formatDateIso(new Date())}.zip`);
       toast.success("ZIP download started", { id: toastId });
-    } catch {
-      toast.error("Failed to generate ZIP archive", { id: toastId });
+    } catch (error) {
+      if (controller.signal.aborted) toast.message("ZIP cancelled", { id: toastId });
+      else toast.error(error instanceof Error ? error.message : "Failed to generate ZIP archive", { id: toastId });
     } finally {
       setDownloadingDateGroup(null);
     }
@@ -954,13 +815,13 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
       <div className="p-3 border-b border-zinc-200/80 dark:border-white/[0.06]">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-            <input
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500 z-10" />
+            <Input
               type="text"
               placeholder="Search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-9 pl-9 pr-3 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100/60 dark:bg-zinc-900/50 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-zinc-400 focus:border-transparent placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+              className="w-full h-9 pl-9 pr-3 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100/60 dark:bg-zinc-900/50 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
             />
           </div>
           <Popover open={filterOpen} onOpenChange={setFilterOpen}>
@@ -1024,10 +885,12 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
                   {dateGroup}
                 </span>
                 {groupEntries.length > 1 && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleDownloadAll(dateGroup, groupEntries)}
                     disabled={downloadingDateGroup === dateGroup}
-                    className="inline-flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="h-auto p-0 inline-flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-transparent font-normal disabled:opacity-60"
                   >
                     {downloadingDateGroup === dateGroup ? (
                       <>
@@ -1037,7 +900,7 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
                     ) : (
                       "Download all"
                     )}
-                  </button>
+                  </Button>
                 )}
               </div>
               {/* Items */}

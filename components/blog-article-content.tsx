@@ -225,10 +225,10 @@ export function BlogArticleContent({ post }: { post: BlogPost }) {
                 <div className="mt-3 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
                   <p className="max-w-xl text-lg font-semibold leading-7">{block.text}</p>
                   <Link
-                    href="/"
+                    href={post.cta?.href || "/new"}
                     className="inline-flex shrink-0 items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
                   >
-                    Open Woff
+                    {post.cta?.label || "Start sharing"}
                   </Link>
                 </div>
               </aside>

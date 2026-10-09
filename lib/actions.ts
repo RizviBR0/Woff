@@ -5,7 +5,10 @@ import { cookies } from "next/headers";
 import sanitizeHtml from "sanitize-html";
 import { marked } from "marked";
 import { customAlphabet } from "nanoid";
+import { after } from "next/server";
 import { displayNameForDevice } from "@/lib/display-name";
+import { isValidRoomSlug, normalizeRoomSlug } from "@/lib/room-slug";
+import { HANDOFF_HTML, HANDOFF_JSON } from "@/lib/handoff-template";
 import {
   createServerSupabaseClient,
   requireAnonymousUser,
@@ -31,7 +34,20 @@ export interface Space {
   last_activity_at: string;
   expires_at?: string | null;
   is_pro?: boolean;
+  can_customize_identity?: boolean;
   recovery_key?: string;
+  invite_token?: string;
+  invitation_id?: string;
+  secure_invites?: boolean;
+  pairing_expires_at?: string | null;
+  code_enabled?: boolean;
+  expiry_mode?: "none" | "fixed" | "inactivity";
+  name?: string;
+  welcome_text?: string;
+  delivery_mode?: "collaborative" | "read_only";
+  retention_days?: number;
+  can_write?: boolean;
+  access_version?: number;
 }
 
 export interface Entry {
@@ -61,6 +77,7 @@ export interface Note {
   updated_at: string;
   is_locked?: boolean;
   is_owner?: boolean;
+  can_edit?: boolean;
   version?: number;
 }
 
@@ -138,10 +155,6 @@ function sanitizeNoteHtml(value: string): string {
   });
 }
 
-function normalizeRoomCode(value: string) {
-  return value.replace(/\D/g, "").slice(0, 4);
-}
-
 function safeFileName(value: string) {
   const extension = value.includes(".")
     ? `.${value.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}`
@@ -182,8 +195,8 @@ async function assertRateLimit(
 }
 
 async function joinSpaceByCode(slug: string): Promise<Space | null> {
-  const code = normalizeRoomCode(slug);
-  if (code.length !== 4) return null;
+  const code = normalizeRoomSlug(slug);
+  if (!isValidRoomSlug(code)) return null;
 
   const { supabase, user } = await requireAnonymousUser();
   const { data, error } = await supabase.rpc("join_space", {
@@ -194,7 +207,7 @@ async function joinSpaceByCode(slug: string): Promise<Space | null> {
   if (error || !data) return null;
   const result = Array.isArray(data) ? data[0] : data;
   return {
-    ...(result.space as Space),
+    ...((result.space || result) as Space),
     recovery_key: result.recovery_key,
   };
 }
@@ -202,25 +215,29 @@ async function joinSpaceByCode(slug: string): Promise<Space | null> {
 export async function recoverSpace(
   slug: string,
   recoveryKey: string,
-): Promise<boolean> {
-  const { supabase, user } = await requireAnonymousUser();
-  if (!/^\d{4}$/.test(slug) || !/^[A-F0-9]{20}$/i.test(recoveryKey.trim())) {
+): Promise<{ recovery_key: string; space: Space } | false> {
+  const canonicalSlug = normalizeRoomSlug(slug);
+  if (!isValidRoomSlug(canonicalSlug) || !/^(?:[A-F0-9]{20}|[A-F0-9]{32})$/i.test(recoveryKey.trim())) {
     return false;
   }
-  const { data, error } = await supabase.rpc("recover_space", {
-    p_slug: slug,
+  const { supabase, user } = await requireAnonymousUser();
+  const { data, error } = await supabase.rpc("recover_space_ownership", {
+    p_slug: canonicalSlug,
     p_recovery_key: recoveryKey.trim(),
     p_display_name: displayNameForDevice(user.id),
   });
   if (error) throw new Error(`Unable to recover space: ${error.message}`);
-  return Boolean(data);
+  return data?.recovered ? { recovery_key: data.recovery_key, space: data.space } : false;
 }
 
-export async function createSpace(): Promise<Space> {
+export async function createSpace(template?: "project-handoff"): Promise<Space> {
   const { supabase, user } = await requireAnonymousUser();
-  const { data, error } = await supabase.rpc("create_space", {
-    p_display_name: displayNameForDevice(user.id),
-  });
+  let { data, error } = template
+    ? await supabase.rpc("create_room_from_template", { p_device_id: displayNameForDevice(user.id) })
+    : await supabase.rpc("create_space", { p_display_name: displayNameForDevice(user.id) });
+  if (template && error?.message === "Pro is required") {
+    ({ data, error } = await supabase.rpc("create_space", { p_display_name: displayNameForDevice(user.id) }));
+  }
 
   if (error || !data) {
     throw new Error(error?.message || "Unable to create a space");
@@ -229,16 +246,107 @@ export async function createSpace(): Promise<Space> {
   const payload = (Array.isArray(data) ? data[0] : data) as {
     space?: Space;
     recovery_key?: string;
+    invite_token?: string;
+    invitation_id?: string;
   } & Partial<Space>;
   const space = payload.space ?? (payload as Space);
+  if (template) {
+    try {
+      const { noteSlug } = await createNoteEntry(space.id, "Project handoff");
+      const saved = await saveNoteSnapshot(noteSlug, { title: "Project handoff", content: HANDOFF_HTML, content_json: HANDOFF_JSON, version: 1 });
+      if (saved.error) throw new Error(saved.error);
+    } catch (error) {
+      await supabase.from("spaces").delete().eq("id", space.id);
+      throw error;
+    }
+  }
   return {
     ...space,
     recovery_key: payload.recovery_key,
+    invite_token: payload.invite_token,
+    invitation_id: payload.invitation_id,
   };
 }
 
 export async function joinSpace(slug: string): Promise<Space | null> {
   return joinSpaceByCode(slug);
+}
+
+export async function createRoomInvitation(spaceId: string, rotate = false): Promise<{ token: string; id: string; access_version: number }> {
+  const { supabase } = await requireAnonymousUser();
+  const { data, error } = await supabase.rpc(rotate ? "rotate_room_access" : "create_room_invitation", {
+    p_space_id: spaceId,
+  });
+  if (error || !data) throw new Error(error?.message || "Unable to create invitation");
+  return data;
+}
+
+export async function rotateRoomRecoveryKey(spaceId: string): Promise<string> {
+  const { supabase } = await requireAnonymousUser();
+  const { data, error } = await supabase.rpc("rotate_room_recovery_key", { p_space_id: spaceId });
+  if (error || !data?.recovery_key) throw new Error(error?.message || "Unable to replace recovery key");
+  return data.recovery_key;
+}
+
+export async function setRoomPairing(spaceId: string, minutes: number): Promise<string | null> {
+  const { supabase } = await requireAnonymousUser();
+  const { data, error } = await supabase.rpc("set_room_pairing", { p_space_id: spaceId, p_minutes: minutes });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function setRoomAccess(
+  spaceId: string,
+  options: { codeEnabled: boolean; expiresAt?: string | null },
+): Promise<Space> {
+  const { supabase } = await requireAnonymousUser();
+  if (typeof options.codeEnabled !== "boolean") throw new Error("Choose whether the room code is open");
+  const updateExpiry = options.expiresAt !== undefined;
+  if (updateExpiry && options.expiresAt !== null && (
+    typeof options.expiresAt !== "string" || !Number.isFinite(Date.parse(options.expiresAt))
+  )) throw new Error("Choose a valid time limit");
+  const { data, error } = await supabase.rpc("set_room_access", {
+    p_space_id: spaceId,
+    p_code_enabled: options.codeEnabled,
+    p_expires_at: options.expiresAt ?? null,
+    p_update_expiry: updateExpiry,
+  });
+  if (error || !data) throw new Error(error?.message || "Unable to update room access");
+  return data as Space;
+}
+
+export async function rotateRoomCode(spaceId: string, code?: string): Promise<Space> {
+  const canonicalCode = code === undefined ? undefined : normalizeRoomSlug(code);
+  if (canonicalCode !== undefined && !isValidRoomSlug(canonicalCode)) throw new Error("Use a four-digit code or a valid custom room URL");
+  const { supabase } = await requireAnonymousUser();
+  const { data, error } = await supabase.rpc("rotate_room_code", {
+    p_space_id: spaceId, p_slug: canonicalCode ?? null,
+  });
+  if (error || !data) throw new Error(error?.message || "Unable to change the room code");
+  return data as Space;
+}
+
+export async function cancelUploadIntents(spaceId: string, paths: string[]): Promise<void> {
+  if (!paths.length) return;
+  const { supabase } = await requireAnonymousUser();
+  const { error } = await supabase.rpc("cancel_upload_reservations", { p_space_id: spaceId, p_paths: paths });
+  if (error) throw new Error("Unable to release upload reservation. It will expire automatically.");
+}
+
+export async function recordRoomEvent(spaceId: string, event: "share_initiated" | "upload_failed"): Promise<void> {
+  try {
+    const { supabase } = await requireAnonymousUser();
+    after(async () => { await supabase.rpc("record_room_event", { p_space_id: spaceId, p_event: event }); });
+  } catch { /* Metrics must not interrupt sharing. */ }
+}
+
+export async function setNotePrivacy(noteSlug: string, isLocked: boolean, version: number): Promise<{ version: number; is_locked: boolean }> {
+  const { supabase } = await requireAnonymousUser();
+  const { data, error } = await supabase.rpc("set_note_privacy", {
+    p_slug: noteSlug, p_is_locked: isLocked, p_expected_version: version,
+  });
+  if (error || !data) throw new Error(error?.message || "Unable to change note privacy");
+  return data;
 }
 
 function isRawBinaryUpload(value?: string | null): boolean {
@@ -398,7 +506,7 @@ export async function createUploadIntents(
     },
   );
   if (reserveError) throw new Error(`Unable to reserve upload: ${reserveError.message}`);
-  if (!reserved) throw new Error("Unable to reserve upload slot. Please retry.");
+  if (!reserved) throw new Error("Upload cannot start. Check room expiry, write access, storage allowance and the file limits, then retry.");
 
   return reservations.map(({ path }) => ({
     path,
@@ -675,7 +783,10 @@ export async function getNote(noteSlug: string): Promise<Note | null> {
     p_note_slug: noteSlug,
     p_display_name: displayNameForDevice(user.id),
   });
-  if (openError) throw new Error(`Unable to open note: ${openError.message}`);
+  if (openError) {
+    if (/invitation|required|closed|not found|expired|Invalid room/i.test(openError.message)) return null;
+    throw new Error("Unable to open note. Please try again.");
+  }
   if (openedNote) {
     return {
       id: openedNote.id,
@@ -693,6 +804,7 @@ export async function getNote(noteSlug: string): Promise<Note | null> {
       updated_at: openedNote.updated_at,
       is_locked: openedNote.is_locked,
       is_owner: openedNote.is_owner,
+      can_edit: openedNote.can_edit,
       version: openedNote.version,
     };
   }
@@ -909,7 +1021,7 @@ export async function deleteEntry(entryId: string): Promise<void> {
   const { supabase, user } = await requireAnonymousUser();
   const { data: entry } = await supabase
     .from("entries")
-    .select("created_by_device_id, meta")
+    .select("created_by_device_id")
     .eq("id", entryId)
     .single();
 
@@ -917,16 +1029,8 @@ export async function deleteEntry(entryId: string): Promise<void> {
     throw new Error("You can only delete messages you sent");
   }
 
-  const paths = Array.isArray(entry.meta?.items)
-    ? entry.meta.items
-        .map((item: any) => item.path)
-        .filter((path: unknown): path is string => typeof path === "string")
-    : [];
-  if (paths.length) {
-    const { error } = await supabase.storage.from("files").remove(paths);
-    if (error) throw new Error(`Unable to remove attached files: ${error.message}`);
-  }
-
+  // Cascading asset deletion queues physical cleanup without requiring browser
+  // Storage read/sign permissions. Logical access ends in this transaction.
   const { error } = await supabase.from("entries").delete().eq("id", entryId);
   if (error) throw new Error(`Unable to delete entry: ${error.message}`);
 }

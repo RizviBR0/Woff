@@ -94,7 +94,7 @@ export function NoteEntryCard({ entry, currentDeviceId, spaceSlug }: NoteEntryCa
                     <span>{isMine ? "Locked Note (Author Access)" : "Author Locked Note"}</span>
                   </>
                 ) : (
-                  <span>Collaborative Rich Note</span>
+                  <span>Shared rich note</span>
                 )}
               </p>
             </div>

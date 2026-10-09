@@ -1,13 +1,13 @@
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
-import { Heart, Shield, Zap, Sparkles } from "lucide-react";
+import { Heart, Shield, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { EXTENSION_FILE_RETENTION, PRO_SPACE_RETENTION, STANDARD_SPACE_RETENTION } from "@/lib/sharing-copy";
 
 export const metadata: Metadata = {
-  title: "About Us - Woff Space",
-  description: "Woff Space is for instant, temporary file sharing between devices and people. Learn how sharing works and why you should keep your own copies.",
+  title: "About",
+  description: "Woff Space is for instant file sharing between devices and people. Learn how sharing works and why you should keep your own copies.",
   alternates: {
     canonical: "/about",
   },
@@ -25,11 +25,10 @@ export default function AboutPage() {
 
       <Navbar />
 
-      <main className="relative max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8 z-10">
+      <main id="main-content" className="relative max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8 z-10">
         {/* Header */}
         <div className="text-center space-y-4 mb-16">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#ff5a00]">
-            <Sparkles className="w-3.5 h-3.5" />
             Our Story
           </div>
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
@@ -49,38 +48,44 @@ export default function AboutPage() {
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-foreground">The Mission</h2>
             <p className="text-muted-foreground leading-relaxed">
-              Woff Space was born out of frustration with modern web tools that lock simple utility behind login screens, tracking scripts, and subscription models. We wanted to build the absolute fastest way to drop text, transfer files, or paste code snippets between devices or with teammates—instantly.
+              Woff makes a small handoff easy: a file, its explanation, and a link the recipient can open. Basic sharing stays available without signup. Optional sender accounts and professional tools support people who repeatedly deliver work to clients.
             </p>
           </div>
 
           {/* Pillars Grid */}
           <div className="grid gap-6 sm:grid-cols-3 pt-4">
-            <div className="space-y-3">
-              <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
-                <Zap className="w-5 h-5" />
+            <div className="rounded-[20px] border bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-orange-500/30 flex flex-col justify-between">
+              <div>
+                <div className="h-11 w-11 rounded-xl bg-orange-500/10 dark:bg-orange-500/15 border border-orange-500/20 flex items-center justify-center text-orange-500 mb-4">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <h3 className="font-bold text-lg text-foreground">Zero Friction</h3>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                  Start basic sharing without signup. Recipients do not need an account. Sender accounts are optional for managing owned rooms across devices.
+                </p>
               </div>
-              <h3 className="font-bold text-lg">Zero Friction</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                No sign-ups, no verification emails, and no passwords. Create a secure space and share instantly.
-              </p>
             </div>
-            <div className="space-y-3">
-              <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
-                <Shield className="w-5 h-5" />
+            <div className="rounded-[20px] border bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-500/30 flex flex-col justify-between">
+              <div>
+                <div className="h-11 w-11 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-500 mb-4">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <h3 className="font-bold text-lg text-foreground">Deliberate Sharing</h3>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                  Share a room code or invitation with intended recipients. Room and note pages are not indexed by search engines. Anyone with an enabled code or valid link can join.
+                </p>
               </div>
-              <h3 className="font-bold text-lg">Private By Default</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Share a room code or link with the people who need your files. Shared spaces are not indexed by search engines.
-              </p>
             </div>
-            <div className="space-y-3">
-              <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
-                <Heart className="w-5 h-5" />
+            <div className="rounded-[20px] border bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-sky-500/30 flex flex-col justify-between">
+              <div>
+                <div className="h-11 w-11 rounded-xl bg-sky-500/10 dark:bg-sky-500/15 border border-sky-500/20 flex items-center justify-center text-sky-500 mb-4">
+                  <Heart className="w-5 h-5" />
+                </div>
+                <h3 className="font-bold text-lg text-foreground">Your Time Limit</h3>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                  Leave a new room open without a deadline, or set one from Share. Keep your own copies of files and notes.
+                </p>
               </div>
-              <h3 className="font-bold text-lg">Temporary Spaces</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Shares are temporary. Download files and save notes outside Woff before they expire.
-              </p>
             </div>
           </div>
 
@@ -95,8 +100,8 @@ export default function AboutPage() {
             <p className="text-muted-foreground leading-relaxed">
               {EXTENSION_FILE_RETENTION} {PRO_SPACE_RETENTION} Keep your originals or download a copy to your device.
             </p>
-            <Link href="/#sharing-faq" className="inline-block text-sm font-medium text-orange-600 underline underline-offset-4 dark:text-orange-400">
-              Read the sharing FAQ
+            <Link href="/help" className="inline-block text-sm font-medium text-orange-600 underline underline-offset-4 dark:text-orange-400">
+              Read the sharing guide
             </Link>
           </div>
         </div>

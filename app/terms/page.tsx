@@ -1,11 +1,11 @@
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
-import { Heart, FileText, AlertTriangle, CloudOff, Info } from "lucide-react";
+import { FileText, AlertTriangle, CloudOff, Info } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service - Woff Space",
+  title: "Terms of Service",
   description: "Read our terms of service. Understand the acceptable use guidelines, disclaimer of backups, and moderation policies at Woff Space.",
   alternates: {
     canonical: "/terms",
@@ -24,7 +24,7 @@ export default function TermsPage() {
 
       <Navbar />
 
-      <main className="relative max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8 z-10">
+      <main id="main-content" className="relative max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8 z-10">
         {/* Header */}
         <div className="text-center space-y-4 mb-16">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#ff5a00]">
@@ -38,7 +38,7 @@ export default function TermsPage() {
             </span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Last Updated: September 30, 2026. Simple, common-sense terms for our instant sharing platform.
+            Last updated: October 4, 2026. Sharing, sender accounts, and the Pro pilot.
           </p>
         </div>
 
@@ -60,7 +60,7 @@ export default function TermsPage() {
               2. Acceptable Use Guidelines
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              Because Woff Space requires no login, you must act responsibly. You agree not to use our Service to:
+              Basic sharing does not require signup. Every participant must act responsibly. You agree not to use our Service to:
             </p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-2">
               <li>Upload, post, or share any content that is illegal, defamatory, harmful, or abusive.</li>
@@ -71,11 +71,28 @@ export default function TermsPage() {
           </div>
 
           <hr className="border-zinc-200 dark:border-zinc-800" />
+          <section id="billing" className="scroll-mt-24 space-y-4">
+            <h2 className="text-2xl font-bold">3. Sender Accounts and Paid Plans</h2>
+            <p className="leading-relaxed text-muted-foreground">Sender accounts are optional for basic sharing. Keep your sign-in email and recovery secrets under your control. A room recovery key restores room controls; it is not proof of ownership of a paid account or subscription.</p>
+            <p className="leading-relaxed text-muted-foreground">The pricing page states whether Pro checkout is open. The monthly pilot has explicit file, storage, room, and availability limits. Review the price, tax, billing interval, and checkout provider before confirming a purchase. Recipients do not need a paid plan to open an authorized delivery.</p>
+            <p className="leading-relaxed text-muted-foreground">When subscriptions are available, use Account to manage renewal and billing. Cancellation or a payment failure can change future plan access and room availability; review the effective date and room deadlines shown in your account. Download anything you need before those deadlines. Existing downloads cannot be recalled.</p>
+            <p className="leading-relaxed text-muted-foreground">For an incorrect charge, refund request, or billing problem, contact support with the purchase reference. Requests are reviewed with the checkout provider and the circumstances of the purchase. This page does not promise automatic refunds or remove rights that apply to your purchase.</p>
+          </section>
+
+          <hr className="border-zinc-200 dark:border-zinc-800" />
+          <section className="space-y-4">
+            <h2 className="text-2xl font-bold">4. Availability and Support</h2>
+            <p className="leading-relaxed text-muted-foreground">New sharing rooms have no expiry by default. Owners can set or remove a deadline, change the room code, or disable code access. Existing rooms keep their earlier deadline until the owner updates it. A deadline shown in the room governs availability. Keep a separate copy of important files; no-expiry rooms are not a guarantee of permanent storage. The service may restrict uploads when an allowance is exhausted or access when an invitation is expired or revoked.</p>
+            <p className="leading-relaxed text-muted-foreground">Woff is operated from Bangladesh for an international audience. For sharing, account, abuse, or billing questions, use the contact page. Support and moderation response times vary; no response-time service level is included in the pilot.</p>
+            <Link href="/contact" className="text-sm font-semibold text-orange-600 underline underline-offset-4 dark:text-orange-400">Contact support</Link>
+          </section>
+
+          <hr className="border-zinc-200 dark:border-zinc-800" />
 
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <CloudOff className="w-5 h-5 text-orange-500" />
-              3. No Permanent Backups
+              5. No Permanent Backups
             </h2>
             <p className="text-muted-foreground leading-relaxed">
               Woff Space is for <strong>instant, temporary file sharing, not cloud storage</strong>. Keep your original files or download a copy of anything you need. It is not a permanent backup or vault storage service, including in Pro spaces.
@@ -92,7 +109,7 @@ export default function TermsPage() {
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <Info className="w-5 h-5 text-orange-500" />
-              4. Content Moderation and Removal
+              6. Content Moderation and Removal
             </h2>
             <p className="text-muted-foreground leading-relaxed">
               We reserve the right (but have no obligation) to remove any shared note, space, or file immediately if we receive a valid abuse report, copyright complaint, or detect activities violating security protocols. Suspicious or abusive IP ranges or device IDs may be blocked from creating spaces.

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, ArrowUpRight, Clock3 } from "lucide-react";
+import { ArrowLeft, Clock3 } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { BlogArticleContent } from "@/components/blog-article-content";
@@ -41,7 +41,9 @@ export async function generateMetadata({
 }: BlogPostPageProps): Promise<Metadata> {
   const { slug } = await params;
   const post = getPostBySlug(slug);
-  if (!post) return { title: "Article not found", robots: { index: false } };
+  if (!post || post.date > new Date().toISOString().slice(0, 10)) {
+    return { title: "Article not found", robots: { index: false } };
+  }
 
   const title = post.seoTitle || post.title;
   const description = post.seoDescription || post.excerpt;
@@ -128,7 +130,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main>
+      <main id="main-content">
         <article>
           <header className="border-b pt-24 sm:pt-28">
             <div className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
@@ -154,10 +156,10 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                       </span>
                     ))}
                   </div>
-                  <h1 className="text-balance text-4xl font-extrabold leading-[1.04] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
+                  <h1 className="text-balance text-3xl font-extrabold leading-[1.15] tracking-[-0.035em] sm:text-4xl lg:text-5xl">
                     {post.title}
                   </h1>
-                  <p className="mt-6 max-w-3xl text-lg leading-8 text-muted-foreground sm:text-xl">
+                  <p className="mt-5 max-w-3xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
                     {post.excerpt}
                   </p>
                 </div>
@@ -277,7 +279,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                     {related.title}
                   </h3>
                   <span className="mt-6 inline-flex items-center gap-1 text-xs font-bold text-orange-400">
-                    Read note <ArrowUpRight className="h-3.5 w-3.5" />
+                    Read note
                   </span>
                 </Link>
               ))}

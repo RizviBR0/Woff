@@ -3,8 +3,8 @@ import styles from "./BentoGrid.module.css";
 const cards = [
   {
     className: styles.cardSecure,
-    title: "Private by Room Code",
-    text: "Only people you share the four-digit room code with can join the space.",
+    title: "Share With a Link",
+    text: "Send the room invitation to the people who need it. Treat links and room codes as access credentials.",
     visual: <ShieldVisual />,
   },
   {
@@ -91,10 +91,10 @@ function ChartVisual() {
     <div className={styles.chart}>
       <div className={styles.chartTop}>
         <div>
-          <strong>4.2k</strong>
-          <span>Shared items</span>
+          <strong>Your room</strong>
+          <span>Files and context</span>
         </div>
-        <em>+90%</em>
+        <em>Preview</em>
       </div>
 
       <svg viewBox="0 0 680 170" aria-hidden="true">

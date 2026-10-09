@@ -17,7 +17,7 @@ export function Footer() {
               <Logo width={110} height={34} className="w-24 h-auto" />
             </Link>
             <p className="text-sm text-zinc-500 dark:text-zinc-400/80 max-w-sm leading-relaxed">
-              Share files between devices or with anyone in seconds. No sign-up required. Woff is for temporary sharing, not cloud storage. Keep your own copy.
+              Share files between devices or with anyone in seconds. No sign-up required. Choose a room time limit when you need one. Keep your own copy.
             </p>
             <div className="text-xs text-zinc-400 dark:text-zinc-500">
               © 2026 Woff Space. Instant file sharing.
@@ -30,6 +30,7 @@ export function Footer() {
               Instant Tools
             </h3>
             <ul className="space-y-2.5 text-sm">
+              <li><Link href="/for-freelancers" className="text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">Project handoffs</Link></li>
               <li>
                 <Link href="/online-notepad" className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors duration-200">
                   Online Notepad
@@ -64,6 +65,12 @@ export function Footer() {
               Trust & Company
             </h3>
             <ul className="space-y-2.5 text-sm">
+              <li>
+                <Link href="/pricing" className="flex items-center gap-2 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"><Info className="h-4 w-4 text-orange-500/80" />Pricing and limits</Link>
+              </li>
+              <li>
+                <Link href="/help" className="flex items-center gap-2 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"><Info className="h-4 w-4 text-orange-500/80" />Sharing help</Link>
+              </li>
               <li>
                 <Link href="/about" className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors duration-200">
                   <Info className="w-4 h-4 text-orange-500/80" />

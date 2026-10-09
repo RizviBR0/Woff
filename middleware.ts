@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isValidRoomSlug, normalizeRoomSlug } from "@/lib/room-slug";
 
 function parseJwtPayload(token: string): { sub?: string; exp?: number } | null {
   try {
@@ -21,8 +22,11 @@ export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
   const needsIdentity =
-    /^\/\d{4}(?:\/|$)/.test(pathname) ||
+    isValidRoomSlug(normalizeRoomSlug(pathname.split("/")[1] || "")) ||
     pathname === "/new" ||
+    pathname.startsWith("/s/") ||
+    pathname === "/dashboard" ||
+    pathname.startsWith("/account") ||
     pathname.startsWith("/n/");
   // Marketing and information pages do not query protected room data. Avoid an
   // Auth network request on every asset-free page navigation.

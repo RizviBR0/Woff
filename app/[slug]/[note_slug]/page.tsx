@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { NoteEditor } from "@/components/note-editor";
 import { getNote } from "@/lib/actions";
+import { isValidRoomSlug, normalizeRoomSlug } from "@/lib/room-slug";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +32,11 @@ export async function generateMetadata({
 export default async function SpaceNotePage({ params }: SpaceNotePageProps) {
   const { slug, note_slug } = await params;
 
-  // Validate room code format (must be 4 digits)
-  if (!/^\d{4}$/.test(slug)) {
+  const canonicalSlug = normalizeRoomSlug(slug);
+  if (!isValidRoomSlug(canonicalSlug) || !/^[a-zA-Z0-9_-]{1,128}$/.test(note_slug)) {
     notFound();
   }
+  if (slug !== canonicalSlug) redirect(`/${canonicalSlug}/${note_slug}`);
 
   const note = await getNote(note_slug);
   if (!note) {

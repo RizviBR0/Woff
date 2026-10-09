@@ -380,7 +380,9 @@ export function DrawingCanvas({
       {/* Header */}
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-border/80 bg-background/90 px-3 sm:px-5 backdrop-blur-md z-20">
         <div className="flex items-center gap-2.5">
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
             disabled={isSending}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -388,7 +390,7 @@ export function DrawingCanvas({
             title="Close (Esc)"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold tracking-tight text-foreground">
               {title}
@@ -634,7 +636,9 @@ export function DrawingCanvas({
             </ToolbarButton>
 
             {/* Delete Selected (Active whenever items selected) */}
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               type="button"
               disabled={selectedIds.size === 0}
               onClick={deleteSelected}
@@ -655,7 +659,7 @@ export function DrawingCanvas({
                   {selectedIds.size}
                 </span>
               )}
-            </button>
+            </Button>
 
             {/* Clear Canvas */}
             <ToolbarButton
@@ -690,22 +694,24 @@ function ToolbarButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="icon"
       type="button"
       onClick={onClick}
       disabled={disabled}
       title={title}
       aria-label={title}
-      className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs font-medium transition-all active:scale-95 ${
+      className={`h-8 w-8 rounded-xl text-xs font-medium transition-all active:scale-95 ${
         active
-          ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 shadow-sm"
+          ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 shadow-sm hover:bg-zinc-900 dark:hover:bg-white"
           : danger
             ? "text-muted-foreground hover:bg-red-500/10 hover:text-red-600"
             : "text-muted-foreground hover:bg-muted hover:text-foreground"
       } disabled:opacity-25 disabled:pointer-events-none`}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

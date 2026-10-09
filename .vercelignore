@@ -1,0 +1,21 @@
+# Local credentials and Vercel state must never enter a source upload.
+.env*
+!.env.example
+.vercel/
+.git/
+.agents/
+
+# Local database/browser fixtures and generated build output.
+internal
+node_modules/
+.next/
+out/
+build/
+coverage/
+extension/dist/
+
+# Local logs, signing files, and TypeScript caches.
+*.log
+*.pem
+*.tsbuildinfo
+next-env.d.ts

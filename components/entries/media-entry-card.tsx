@@ -3,12 +3,13 @@
 import { useState } from "react";
 import NextImage from "next/image";
 import dynamic from "next/dynamic";
-import { Edit3, Eye, Play, Sparkles } from "lucide-react";
+import { Edit3, Eye, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   createUploadedEntry,
   createUploadIntents,
+  cancelUploadIntents,
 } from "@/lib/actions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import type { Entry, UploadedFileItem } from "./entry-types";
@@ -34,6 +35,7 @@ const ImageMarkupEditor = dynamic(
 interface MediaEntryCardProps {
   entry: Entry;
   onNewEntry?: (entry: Entry) => void;
+  canWrite?: boolean;
 }
 
 function ShimmerImage({
@@ -74,7 +76,7 @@ function ShimmerImage({
   );
 }
 
-export function MediaEntryCard({ entry, onNewEntry }: MediaEntryCardProps) {
+export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntryCardProps) {
   const [showGallery, setShowGallery] = useState(false);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [galleryIndex, setGalleryIndex] = useState(0);
@@ -173,7 +175,7 @@ export function MediaEntryCard({ entry, onNewEntry }: MediaEntryCardProps) {
             bucketName: intent.bucket,
             objectName: intent.path,
             contentType: file.type,
-            cacheControl: "3600",
+            cacheControl: "0",
           },
           onError: reject,
           onSuccess: () => resolve(),
@@ -198,10 +200,7 @@ export function MediaEntryCard({ entry, onNewEntry }: MediaEntryCardProps) {
       onNewEntry(created as Entry);
       toast.success("Annotated image sent");
     } catch (error) {
-      await supabaseBrowser.storage
-        .from("files")
-        .remove([intent.path])
-        .catch(() => undefined);
+      await cancelUploadIntents(entry.space_id, [intent.path]).catch(() => undefined);
       throw error;
     } finally {
       bitmap?.close();
@@ -235,6 +234,7 @@ export function MediaEntryCard({ entry, onNewEntry }: MediaEntryCardProps) {
               variant="secondary"
               className="h-8 w-8 rounded-lg shadow bg-background/80 hover:bg-background backdrop-blur-sm"
               onClick={() => setMarkupImage(src)}
+              disabled={!canWrite}
               aria-label="Annotate drawing"
             >
               <Edit3 className="h-4 w-4" />
@@ -269,6 +269,7 @@ export function MediaEntryCard({ entry, onNewEntry }: MediaEntryCardProps) {
               variant="secondary"
               className="h-8 w-8 rounded-lg shadow bg-background/80 hover:bg-background backdrop-blur-sm"
               onClick={() => setMarkupImage(singlePhotoUrl)}
+              disabled={!canWrite}
               aria-label="Annotate photo"
             >
               <Edit3 className="h-4 w-4" />
@@ -316,6 +317,7 @@ export function MediaEntryCard({ entry, onNewEntry }: MediaEntryCardProps) {
               variant="secondary"
               className="h-8 w-8 rounded-lg shadow bg-background/80 hover:bg-background backdrop-blur-sm"
               onClick={() => setMarkupImage(src)}
+              disabled={!canWrite}
               aria-label="Annotate photo"
             >
               <Edit3 className="h-4 w-4" />
@@ -374,7 +376,8 @@ export function MediaEntryCard({ entry, onNewEntry }: MediaEntryCardProps) {
                       e.stopPropagation();
                       setMarkupImage(src);
                     }}
-                    aria-label="Annotate photo"
+                    disabled={!canWrite}
+              aria-label="Annotate photo"
                   >
                     <Edit3 className="h-3.5 w-3.5" />
                   </Button>

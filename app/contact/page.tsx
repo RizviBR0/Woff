@@ -1,11 +1,11 @@
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
-import { Heart, Mail, Calendar, MessageSquare, ShieldAlert } from "lucide-react";
+import { Mail, Calendar, MessageSquare, ShieldAlert } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Contact Us - Woff Space",
+  title: "Contact and Support",
   description: "Get in touch with the Woff Space team. Send us feedback, submit abuse reports, or book a scheduling meeting directly.",
   alternates: {
     canonical: "/contact",
@@ -24,7 +24,7 @@ export default function ContactPage() {
 
       <Navbar />
 
-      <main className="relative max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8 z-10">
+      <main id="main-content" className="relative max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8 z-10">
         {/* Header */}
         <div className="text-center space-y-4 mb-16">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#ff5a00]">
@@ -38,7 +38,7 @@ export default function ContactPage() {
             </span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Have questions or suggestion? We want to hear from you.
+            Get help with sharing, accounts, billing, or your next project handoff.
           </p>
         </div>
 
@@ -93,10 +93,16 @@ export default function ContactPage() {
           <div className="flex-1 space-y-1">
             <h4 className="font-bold text-foreground">Report Abuse or Copyright Issues</h4>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              If you found malicious, fraudulent, or copyrighted content hosted on our service, please contact us immediately at <a href="mailto:sabbirh9990@gmail.com" className="underline font-medium hover:text-red-500 transition-colors">sabbirh9990@gmail.com</a>. We will review and purge illegal content within 24 hours.
+              To report malicious, fraudulent, or unauthorized copyrighted content, email <a href="mailto:sabbirh9990@gmail.com" className="underline font-medium hover:text-red-500 transition-colors">sabbirh9990@gmail.com</a> with the relevant reference and your concern. We review reports and may restrict or remove content. Review times depend on the report; an immediate response is not guaranteed.
             </p>
           </div>
         </div>
+
+        <section className="mt-8 space-y-4 rounded-[24px] border bg-white/70 p-6 dark:bg-zinc-900/50">
+          <h2 className="text-xl font-bold">Make a support request useful</h2>
+          <p className="text-sm leading-7 text-muted-foreground">For an upload or account issue, include the action, error message, browser, and approximate time. For a billing or refund request, include the purchase reference and the account email used at checkout. Do not send passwords, recovery keys, card details, or private file contents.</p>
+          <div className="flex flex-wrap gap-5 text-sm font-semibold text-orange-600 dark:text-orange-400"><Link href="/help">Sharing help</Link><Link href="/account">Account and billing</Link><Link href="/terms#billing">Billing terms</Link></div>
+        </section>
 
       </main>
 

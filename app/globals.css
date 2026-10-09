@@ -324,9 +324,9 @@
   * {
     @apply border-border;
   }
-  body, button, input, select, textarea, .font-sans {
+  body, button, input, select, textarea {
     @apply bg-background text-foreground;
-    font-family: var(--font-almarai), 'Almarai', system-ui, -apple-system, sans-serif !important;
+    font-family: var(--font-inter), var(--font-almarai), 'Almarai', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 }
 
@@ -570,11 +570,6 @@ html[data-magicui-theme-vt="active"]::view-transition-new(root) {
     animation: none;
     transform: none;
   }
-}
-
-/* ─── Font-display reinforcement for all custom fonts ─── */
-@font-face {
-  font-display: swap !important;
 }
 
 /* ─── Rich Markdown Preview Styling ─── */

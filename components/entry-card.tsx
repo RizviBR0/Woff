@@ -13,6 +13,7 @@ import { NoteEntryCard } from "./entries/note-entry-card";
 import { MediaEntryCard } from "./entries/media-entry-card";
 import { FileEntryCard } from "./entries/file-entry-card";
 import { EntryContextMenu } from "./entries/entry-context-menu";
+import { LocalDateTime } from "./local-date-time";
 
 export type { Entry } from "./entries/entry-types";
 
@@ -24,20 +25,7 @@ interface EntryCardProps {
   onUpdate?: (entryId: string, updates: Partial<Entry>) => void;
   onReplace?: (placeholderId: string, realEntry: Entry) => void;
   onNewEntry?: (entry: Entry) => void;
-}
-
-function formatTime(dateString: string) {
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return "";
-  }
+  canWrite?: boolean;
 }
 
 export const EntryCard = memo(function EntryCard({
@@ -48,6 +36,7 @@ export const EntryCard = memo(function EntryCard({
   onUpdate,
   onReplace,
   onNewEntry,
+  canWrite = true,
 }: EntryCardProps) {
   const isMine =
     Boolean(entry.created_by_device_id) &&
@@ -127,14 +116,12 @@ export const EntryCard = memo(function EntryCard({
             <span className="text-xs font-semibold truncate text-foreground">
               {nameLabel}
             </span>
-            <time className="text-[10px] text-muted-foreground shrink-0">
-              {formatTime(entry.created_at)}
-            </time>
+            <LocalDateTime value={entry.created_at} mode="time" className="text-[10px] text-muted-foreground shrink-0" />
           </div>
 
           <EntryContextMenu
             entry={entry}
-            isMine={isMine}
+            isMine={isMine && canWrite}
             onDelete={onDelete}
           />
         </div>
@@ -149,7 +136,7 @@ export const EntryCard = memo(function EntryCard({
             />
           )}
           {category === "media" && (
-            <MediaEntryCard entry={entry} onNewEntry={onNewEntry} />
+            <MediaEntryCard entry={entry} onNewEntry={canWrite ? onNewEntry : undefined} canWrite={canWrite} />
           )}
           {category === "file" && (
             <FileEntryCard entry={entry} spaceSlug={spaceSlug} />
@@ -157,7 +144,7 @@ export const EntryCard = memo(function EntryCard({
           {category === "text" && (
             <TextEntry
               entry={entry}
-              isMine={isMine}
+              isMine={isMine && canWrite}
               onUpdate={onUpdate}
               onReplace={onReplace}
             />

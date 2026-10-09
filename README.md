@@ -23,7 +23,9 @@
 
 ## 📖 Overview
 
-**Woff Space** is a minimal, zero-friction sharing platform. Create a temporary space in one click, drop in files, images, notes, or code, and share it instantly via a short room code or link. No accounts, no verification — just fast, secure sharing.
+**Woff Space** is an instant sharing platform. Create a room, add files, images, notes or code, and share its code or invitation link. New rooms have no time limit; owners can choose a deadline, change the code, close code joining, or revoke recipient access. Basic sharing and receiving work without signup. Optional verified sender accounts organize client handoffs; paid checkout stays gated until merchant, storage and hosting setup is complete.
+
+The Free release uses the existing production Supabase and Vercel projects. Email sign-in was enabled after real confirmation delivery, account conversion and browser-room transfer checks on October 4. The October 7 update includes refreshed sign-in/sign-up screens, a complete checkout interface, and simpler room access controls; its current verification and deployment status is recorded in [launch readiness](docs/launch-readiness.md). Follow [release steps](docs/release-steps.md), [Pro checkout setup](docs/pro-checkout-setup.md), and [local database verification](supabase/tests/README.md) for setup details and migration-history mapping. The owner explicitly omitted cloud staging and a backup for this release; live payments remain closed.
 
 🔗 **Live**: [https://woff.space](https://woff.space)
 
@@ -47,18 +49,21 @@
 ## ✨ Features
 
 - **Instant Spaces** — Create a shareable space in one click, no sign-up
-- **4-Digit Room Code** — Join any space with a simple 4-digit code
+- **Room Sharing** — New rooms have open four-digit codes and no expiry; owners can change or disable code access, set a visible deadline, and revoke recipient access. Historical rooms keep their previous settings until their owner changes them.
 - **Multi-Content Support** — Share text, images, files, PDFs, and code snippets
 - **Rich Note Editor** — TipTap editor with Markdown shortcuts, versioned autosave, and offline drafts
 - **Resumable Uploads** — Real byte progress, cancellation, retry, and atomic multi-file publishing
 - **QR Code Sharing** — Generate and scan QR codes to share/join spaces
-- **Invisible Anonymous Auth** — Secure ownership through Supabase Auth with no login UI
+- **Anonymous Sharing** — Supabase Auth establishes guest ownership; verified sender sign-in is optional
 - **Owner Recovery** — A recovery key can restore room ownership after a session is lost
 - **Dark/Light Theme** — System-aware theme with manual toggle
 - **Online Notepad** — Dedicated notepad with shareable link
 - **SEO Optimized** — Structured data, meta tags, sitemap, and blog
 - **Responsive Design** — Works across desktop, tablet, and mobile
-- **Privacy-aware Analytics** — Analytics are disabled on room and note routes
+- **Private Aggregate Metrics** — First-party daily counters contain no room codes, tokens, filenames or note content; third-party tracking is disabled
+- **Sender Handoffs** — Dashboard search, room names, welcome instructions, read-only delivery and one reusable settings template
+- **Gated Pro Pilot** — Checkout review, hosted payment, confirmation state, customer billing portal and server-verified entitlements; live sales open only after provider, storage and commercial-hosting checks
+- **Portable Note Exports** — Browser Print / Save as PDF and ZIPs containing HTML notes with embedded images
 
 ---
 
@@ -92,9 +97,8 @@
 | --------------------------------- | -------------------------- |
 | `nanoid`                          | Short unique ID generation |
 | `qrcode` / `qr-scanner`           | QR generation and scanning |
-| `date-fns`                        | Date formatting            |
-| `html2canvas` / `jspdf` / `jszip` | Export/download utilities  |
-| `@vercel/speed-insights`          | Performance monitoring     |
+| `jszip`                          | Bounded browser ZIP exports |
+| Browser Print                    | Rich note PDF export       |
 
 ### Dev
 

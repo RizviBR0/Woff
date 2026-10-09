@@ -1,11 +1,11 @@
 export const SHARING_NOTICE =
-  "This is a temporary sharing space. Download anything you want to keep.";
+  "Keep a copy of anything you need. Woff is for sharing, not backups.";
 
 export const STANDARD_SPACE_RETENTION =
-  "Non-Pro spaces expire after 48 hours without new or edited content. Opening a room or downloading files does not reset the timer.";
+  "New rooms have no time limit. The owner can set or remove a deadline from Share. Older rooms may still have their original 48-hour inactivity timer until the owner changes it.";
 
 export const PRO_SPACE_RETENTION =
-  "Pro spaces do not expire from inactivity. Woff is still for sharing, not permanent storage or backups.";
+  "Time limits are available on Free and Pro. A chosen deadline does not move when someone posts or downloads a file. Check the time shown in the room and keep your own copies.";
 
 export const EXTENSION_FILE_RETENTION =
   "Chrome extension uploads expire 48 hours after upload, even if the room stays active or is Pro.";
@@ -14,11 +14,11 @@ export const SHARING_FAQS = [
   {
     question: "Is Woff cloud storage?",
     answer:
-      "No. Woff is for instant, temporary file sharing between devices or with other people. Keep your original files or download a copy of anything you need. Woff is not a permanent storage or backup service.",
+      "No. Woff is for instant file sharing between devices or with other people. Keep your original files or download a copy of anything you need. Woff is not a permanent storage or backup service.",
   },
   {
     question: "How long are files available?",
-    answer: `${STANDARD_SPACE_RETENTION} Adding content or editing a note starts a new 48-hour window. ${EXTENSION_FILE_RETENTION} ${PRO_SPACE_RETENTION}`,
+    answer: `${STANDARD_SPACE_RETENTION} ${EXTENSION_FILE_RETENTION} Keep your originals or download a copy; a room without a deadline is still not a backup.`,
   },
   {
     question: "What happens when a space expires?",

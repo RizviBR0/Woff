@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { cleanupRoomQueue } from "@/lib/storage-cleanup";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -16,18 +17,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseServiceKey) {
+  if (!supabaseUrl || !supabaseServiceKey) {
     return NextResponse.json(
-      { error: "SUPABASE_SERVICE_ROLE_KEY is not configured in environment variables" },
-      { status: 500 }
+      { error: "Cleanup database configuration is unavailable" },
+      { status: 503 }
     );
   }
 
   // Create admin client with service role key to bypass RLS and delete files
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  let failedRoomCount = 0;
+  let failedObjectCount = 0;
+  let failedReservationCount = 0;
 
   try {
     // Expire extension uploads first. The database also runs this idempotent
@@ -37,7 +41,7 @@ export async function GET(request: NextRequest) {
       await supabaseAdmin.rpc("cleanup_expired_entries");
     if (entryExpiryError) throw entryExpiryError;
 
-    // Expire inactive non-Pro rooms next. Their delete trigger queues all
+    // Expire rooms with an elapsed owner deadline or legacy inactivity timer. Their delete trigger queues all
     // storage cleanup work processed below in the same invocation.
     const { data: expiredSpaceCount, error: expiryError } = await supabaseAdmin
       .rpc("cleanup_expired_spaces");
@@ -46,89 +50,22 @@ export async function GET(request: NextRequest) {
     // 1. Fetch pending deleted spaces from the queue
     const { data: queueItems, error: fetchError } = await supabaseAdmin
       .from("deleted_spaces_queue")
-      .select("id, space_id");
+      .select("id, space_id")
+      .order("id", { ascending: true })
+      .limit(100);
 
     if (fetchError) {
-      // If table doesn't exist yet, return helpful error
-      if (fetchError.code === "P0001" || fetchError.message.includes("does not exist")) {
-        return NextResponse.json(
-          { error: "Table deleted_spaces_queue does not exist. Please run the SQL migration first." },
-          { status: 400 }
-        );
-      }
       throw fetchError;
     }
 
-    const processedIds: number[] = [];
-    const results = [];
-
-    // 2. Process each deleted space
-    for (const item of queueItems || []) {
-      const spaceId = item.space_id;
-      const deletedFiles: string[] = [];
-      let hasError = false;
-
-      try {
-        const pageSize = 1000;
-        let hasMore = true;
-
-        // List and delete all files in the bucket for this space ID
-        while (hasMore) {
-          const { data: fileList, error: listError } = await supabaseAdmin.storage
-            .from("files")
-            .list(spaceId, { limit: pageSize, offset: 0 });
-
-          if (listError) {
-            console.error(`Error listing files for space ${spaceId}:`, listError);
-            hasError = true;
-            break;
-          }
-
-          if (!fileList || fileList.length === 0) {
-            hasMore = false;
-            break;
-          }
-
-          const filePaths = fileList.map((f) => `${spaceId}/${f.name}`);
-          const { error: removeError } = await supabaseAdmin.storage
-            .from("files")
-            .remove(filePaths);
-
-          if (removeError) {
-            console.error(`Error deleting files for space ${spaceId}:`, removeError);
-            hasError = true;
-            break;
-          }
-
-          deletedFiles.push(...filePaths);
-
-          // Deleting reindexes the directory, so the next page is offset zero.
-          if (fileList.length < pageSize) hasMore = false;
-        }
-
-        if (!hasError) {
-          processedIds.push(item.id);
-          results.push({ spaceId, status: "success", deletedCount: deletedFiles.length });
-        } else {
-          results.push({ spaceId, status: "partial_failure" });
-        }
-      } catch (err) {
-        console.error(`Unexpected error processing space ${spaceId}:`, err);
-        results.push({ spaceId, status: "error" });
-      }
-    }
-
-    // 3. Remove successfully processed spaces from the queue
-    if (processedIds.length > 0) {
-      const { error: deleteError } = await supabaseAdmin
-        .from("deleted_spaces_queue")
-        .delete()
-        .in("id", processedIds);
-
-      if (deleteError) {
-        console.error("Error clearing processed queue items:", deleteError);
-      }
-    }
+    // 2/3. Recurse only beneath queued private UUID prefixes. Keep incomplete
+    // prefixes queued, including when removing the successful queue rows fails.
+    const roomCleanup = await cleanupRoomQueue(
+      supabaseAdmin.storage.from("files"),
+      queueItems || [],
+      async (ids) => await supabaseAdmin.from("deleted_spaces_queue").delete().in("id", ids),
+    );
+    failedRoomCount = roomCleanup.failedCount;
 
     // 4. Remove individual objects queued when an entry/note is deleted.
     const { data: keyItems, error: keyFetchError } = await supabaseAdmin
@@ -142,12 +79,18 @@ export async function GET(request: NextRequest) {
       const { error: removeKeysError } = await supabaseAdmin.storage
         .from("files")
         .remove(keyItems.map((item) => item.bucket_key));
-      if (removeKeysError) throw removeKeysError;
+      if (removeKeysError) {
+        failedObjectCount = keyItems.length;
+        throw removeKeysError;
+      }
       const { error: clearKeysError } = await supabaseAdmin
         .from("deleted_storage_keys")
         .delete()
         .in("id", keyItems.map((item) => item.id));
-      if (clearKeysError) throw clearKeysError;
+      if (clearKeysError) {
+        failedObjectCount = keyItems.length;
+        throw clearKeysError;
+      }
       deletedKeyCount = keyItems.length;
     }
 
@@ -166,25 +109,41 @@ export async function GET(request: NextRequest) {
       const { error: removeAbandonedError } = await supabaseAdmin.storage
         .from("files")
         .remove(paths);
-      if (removeAbandonedError) throw removeAbandonedError;
+      if (removeAbandonedError) {
+        failedReservationCount = expiredIntents.length;
+        throw removeAbandonedError;
+      }
       const { error: clearIntentError } = await supabaseAdmin
         .from("upload_intents")
         .delete()
         .in("path", paths);
-      if (clearIntentError) throw clearIntentError;
+      if (clearIntentError) {
+        failedReservationCount = expiredIntents.length;
+        throw clearIntentError;
+      }
       abandonedUploadCount = paths.length;
     }
 
     return NextResponse.json({
-      message: `Expired ${expiredEntryCount || 0} extension entries and ${expiredSpaceCount || 0} inactive spaces; processed ${queueItems?.length || 0} storage queues, ${deletedKeyCount} objects, and ${abandonedUploadCount} abandoned uploads.`,
-      results,
+      message: `Expired ${expiredEntryCount || 0} extension entries and ${expiredSpaceCount || 0} rooms; processed ${queueItems?.length || 0} storage queues, ${deletedKeyCount} objects, and ${abandonedUploadCount} abandoned uploads.`,
+      results: roomCleanup.results,
       expiredEntryCount: expiredEntryCount || 0,
       expiredSpaceCount: expiredSpaceCount || 0,
       deletedKeyCount,
       abandonedUploadCount,
-    });
-  } catch (error: any) {
-    console.error("Cleanup job failed:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+      failedRoomCount,
+      failedObjectCount,
+      failedReservationCount,
+      failedOperationCount: failedRoomCount ? 1 : 0,
+    }, { status: failedRoomCount ? 503 : 200 });
+  } catch {
+    console.error("Storage cleanup incomplete; queued work will be retried.");
+    return NextResponse.json({
+      error: "Cleanup incomplete. Retry queued work.",
+      failedRoomCount,
+      failedObjectCount,
+      failedReservationCount,
+      failedOperationCount: (failedRoomCount ? 1 : 0) + 1,
+    }, { status: 503 });
   }
 }

@@ -22,6 +22,7 @@ const siteHost = (() => {
 })();
 
 const nextConfig = {
+  distDir: isDevelopment && process.env.WOFF_TEST_FIXTURE === "true" ? "internal/launch-next" : ".next",
   experimental: {
     serverActions: {
       allowedOrigins: Array.from(
@@ -52,10 +53,12 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: supabaseHost,
+        pathname: "/storage/v1/object/public/**",
       },
       {
         protocol: "https",
         hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
       },
     ],
     // Optimize image loading
@@ -71,6 +74,9 @@ const nextConfig = {
   poweredByHeader: false,
   // Optimize production builds
   productionBrowserSourceMaps: false,
+  async redirects() {
+    return [{ source: "/blog/tips", destination: "/blog", permanent: true }];
+  },
   // Configure headers for caching
   async headers() {
     const securityHeaders = [
@@ -94,11 +100,11 @@ const nextConfig = {
           "object-src 'none'",
           "frame-ancestors 'none'",
           "form-action 'self'",
-          `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""} https://www.googletagmanager.com https://va.vercel-scripts.com`,
+          `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' data: https://fonts.gstatic.com",
           "img-src 'self' data: blob: https:",
-          "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.google.com https://vitals.vercel-insights.com",
+          `connect-src 'self' https://*.supabase.co wss://*.supabase.co${isDevelopment ? " http://127.0.0.1:* ws://127.0.0.1:*" : ""}`,
           "worker-src 'self' blob:",
           "upgrade-insecure-requests",
         ].join("; "),
@@ -109,23 +115,28 @@ const nextConfig = {
         source: "/:path*",
         headers: securityHeaders,
       },
+      ...["/s/:path*", "/n/:path*", "/:slug(\\d{4})/:path*", "/account/:path*", "/auth/:path*", "/checkout/:path*", "/api/billing/:path*", "/dashboard", "/sign-in", "/sign-up", "/recover", "/new"].map((source) => ({ source, headers: [
+        { key: "Referrer-Policy", value: "no-referrer" },
+        { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+        { key: "Cache-Control", value: "private, no-store" },
+      ] })),
       {
-        // Cache static assets aggressively
+        // Development URLs are reused after edits; never cache their old content.
         source: "/:all*(svg|jpg|jpeg|png|gif|ico|webp|avif|woff|woff2)",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
+            value: isDevelopment ? "no-store, must-revalidate" : "public, max-age=31536000, immutable",
           },
         ],
       },
       {
-        // Cache JS and CSS with revalidation
+        // Only production chunks have content hashes safe for immutable caching.
         source: "/_next/static/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
+            value: isDevelopment ? "no-store, must-revalidate" : "public, max-age=31536000, immutable",
           },
         ],
       },

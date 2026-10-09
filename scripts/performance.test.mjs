@@ -1,8 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 import JSZip from 'jszip';
 import { addArchiveFiles, generateArchive } from '../lib/archive.ts';
 import { downloadFileFromUrl } from '../lib/download.ts';
+
+for (const [mode, expected] of [
+  ['development', 'no-store, must-revalidate'],
+  ['production', 'public, max-age=31536000, immutable'],
+]) {
+  test(`${mode} chunk and image caching prevents stale dev code while preserving production caching`, async () => {
+    const source = await readFile(new URL('../next.config.js', import.meta.url), 'utf8');
+    const module = { exports: {} };
+    vm.runInNewContext(source, { module, process: { env: { NODE_ENV: mode } }, URL, Set });
+    const rules = await module.exports.headers();
+    const chunks = rules.find(rule => rule.source === '/_next/static/:path*');
+    const images = rules.find(rule => rule.source.startsWith('/:all*'));
+    for (const rule of [chunks, images]) {
+      assert.ok(rule);
+      assert.equal(rule.headers.find(header => header.key === 'Cache-Control')?.value, expected);
+    }
+  });
+}
 
 test('ZIP queue bounds concurrency, keeps duplicate filenames and reports all completions', async () => {
   const original = globalThis.fetch;
@@ -41,6 +61,16 @@ test('cancelled archives do not fetch or generate a download', async () => {
   const zip = new JSZip();
   await assert.rejects(addArchiveFiles(zip, [{ url: 'https://fixture.invalid', name: 'x' }], { signal: controller.signal }), { name: 'AbortError' });
   await assert.rejects(generateArchive(zip, { signal: controller.signal }), { name: 'AbortError' });
+});
+
+test('archive byte budget stops oversized responses before download generation', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response('123456789');
+  try {
+    const zip = new JSZip();
+    await assert.rejects(addArchiveFiles(zip, [{ url: 'https://fixture.invalid', name: 'large.txt' }], { maxBytes: 8 }), /browser limit/);
+    assert.equal(Object.keys(zip.files).length, 0);
+  } finally { globalThis.fetch = original; }
 });
 
 test('individual private downloads dispatch an attachment URL without buffering bytes', async () => {

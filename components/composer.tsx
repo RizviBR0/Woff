@@ -23,6 +23,8 @@ import {
   createNoteEntry,
   createUploadedEntry,
   createUploadIntents,
+  cancelUploadIntents,
+  recordRoomEvent,
 } from "@/lib/actions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { formatBytes } from "@/lib/utils";
@@ -272,11 +274,11 @@ export function Composer({
       batchControllerRef.current?.abort();
       activeUploads.forEach((upload) => void upload.abort(true));
       cancelTransfers.forEach((cancel) => cancel());
-      const paths = retainedBatchRef.current?.uploaded.filter(Boolean).map((item) => item.path) || [];
-      if (paths.length && !publishingRef.current) void supabaseBrowser.storage.from("files").remove(paths);
+      const paths = retainedBatchRef.current?.intents.map((intent) => intent.path) || [];
+      if (paths.length && !publishingRef.current) void cancelUploadIntents(spaceId, paths).catch(() => undefined);
       clearPreviews();
     };
-  }, [clearPreviews]);
+  }, [clearPreviews, spaceId]);
 
   const validateFiles = useCallback((files: File[]) => {
     if (!files.length) throw new Error("Choose at least one file");
@@ -349,7 +351,7 @@ export function Composer({
             bucketName: intent.bucket,
             objectName: intent.path,
             contentType: file.type || "application/octet-stream",
-            cacheControl: "3600",
+            cacheControl: "0",
           },
           onError(error) {
             finish(() => reject(error));
@@ -397,8 +399,7 @@ export function Composer({
         const previous = retainedBatchRef.current;
         retainedBatchRef.current = null;
         onRemoveEntry(previous.id);
-        const paths = previous.uploaded.filter(Boolean).map((item) => item.path);
-        if (paths.length) void supabaseBrowser.storage.from("files").remove(paths);
+        await cancelUploadIntents(spaceId, previous.intents.map((intent) => intent.path)).catch(() => undefined);
       }
       onUploadStateChange?.(true);
       const batchId = existingId || `placeholder-${crypto.randomUUID()}`;
@@ -479,8 +480,7 @@ export function Composer({
         if (retainedIntents) {
           const { data, error } = await supabaseBrowser.from("upload_intents").select("path").in("path", retainedIntents.map((item) => item.path)).gt("expires_at", new Date(Date.now() + 60_000).toISOString());
           if (error || data?.length !== retainedIntents.length) {
-            const paths = uploaded.filter(Boolean).map((item) => item.path);
-            if (paths.length) await supabaseBrowser.storage.from("files").remove(paths);
+            await cancelUploadIntents(spaceId, retainedIntents.map((intent) => intent.path));
             uploaded = new Array(files.length);
             retainedIntents = undefined;
           }
@@ -519,13 +519,8 @@ export function Composer({
             }
           }),
         );
-        const uploadedPaths = uploaded
-          .filter(Boolean)
-          .map((item) => item.path);
         if (controller.signal.aborted) {
-          if (uploadedPaths.length) {
-            await supabaseBrowser.storage.from("files").remove(uploadedPaths);
-          }
+          await cancelUploadIntents(spaceId, intents.map((intent) => intent.path)).catch(() => undefined);
           return;
         }
         const failedWorker = workerResults.find(
@@ -549,6 +544,7 @@ export function Composer({
       } catch (error) {
         if (controller.signal.aborted) return;
         const message = error instanceof Error ? error.message : "Upload failed";
+        void recordRoomEvent(spaceId, "upload_failed");
         setBatch({
           id: batchId,
           files,
@@ -592,15 +588,15 @@ export function Composer({
     cancelTransfersRef.current.forEach((cancel) => cancel());
     await Promise.all(aborts);
     activeUploadsRef.current.clear();
-    const paths = retainedBatchRef.current?.uploaded.filter(Boolean).map((item) => item.path) || [];
+    const reservedPaths = retainedBatchRef.current?.intents.map((intent) => intent.path) || [];
     retainedBatchRef.current = null;
-    if (paths.length) await supabaseBrowser.storage.from("files").remove(paths);
+    await cancelUploadIntents(spaceId, reservedPaths).catch((error) => toast.error(error.message));
     if (batch) onRemoveEntry(batch.id);
     setBatch(null);
     onUploadStateChange?.(false);
     clearPreviews();
     toast.message("Upload cancelled");
-  }, [batch, clearPreviews, onRemoveEntry, onUploadStateChange]);
+  }, [batch, clearPreviews, onRemoveEntry, onUploadStateChange, spaceId]);
 
   const retryUpload = useCallback(() => {
     if (!batch || batch.status !== "failed") return;

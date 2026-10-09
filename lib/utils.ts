@@ -1,11 +1,26 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { extractRoomSlug } from "@/lib/room-slug";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Prefer the server-provided expiry timestamp. Legacy rows fall back to 48 hours.
+// New rooms have no deadline. Only legacy inactivity rooms use the old fallback.
+export function roomExpiryTimestamp(room: {
+  expires_at?: string | null;
+  expiry_mode?: "none" | "fixed" | "inactivity";
+  last_activity_at?: string;
+}): string | null {
+  if (room.expiry_mode === "none") return null;
+  if (room.expires_at) return room.expires_at;
+  if ((room.expiry_mode === "inactivity" || room.expiry_mode === undefined) && room.last_activity_at) {
+    const activity = Date.parse(room.last_activity_at);
+    return Number.isFinite(activity) ? new Date(activity + 172800000).toISOString() : null;
+  }
+  return null;
+}
+
 export function getHoursUntilExpiry(value: string, isExpiryTimestamp = false): number {
   const date = new Date(value);
   const expiryDate = isExpiryTimestamp
@@ -23,27 +38,5 @@ export function formatBytes(bytes: number): string {
 }
 
 export function extractRoomCode(input: string): string {
-  const value = input.trim();
-  try {
-    const url = new URL(value);
-    const path = url.pathname || "/";
-    if (path.startsWith("/r/")) {
-      const code = path.slice(3).split("/")[0];
-      return /^\d{4}$/.test(code) ? code : "";
-    }
-    const seg = path.split("/").filter(Boolean)[0];
-    return /^\d{4}$/.test(seg || "") ? seg : "";
-  } catch {
-    if (value.includes("/r/")) {
-      const code = value.split("/r/")[1].split("/")[0].split("?")[0];
-      return /^\d{4}$/.test(code) ? code : "";
-    }
-    if (value.includes("/")) {
-      const seg = value.split("/").filter(Boolean)[0];
-      const code = (seg || "").split("?")[0];
-      return /^\d{4}$/.test(code) ? code : "";
-    }
-    const digits = value.replace(/\D/g, "").slice(0, 4);
-    return digits.length === 4 ? digits : "";
-  }
+  return extractRoomSlug(input);
 }

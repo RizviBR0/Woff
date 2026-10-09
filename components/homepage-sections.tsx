@@ -1,6 +1,5 @@
 import BentoGrid from "@/components/bento-grid";
 import TimelineDemo from "@/components/timeline-demo";
-import { Footer } from "@/components/footer";
 import { SharingFaq } from "@/components/sharing-faq";
 
 export function HomepageSections() {
@@ -130,8 +129,6 @@ export function HomepageSections() {
         </div>
       </section>
 
-      {/* Unified Premium Footer */}
-      <Footer />
     </>
   );
 }

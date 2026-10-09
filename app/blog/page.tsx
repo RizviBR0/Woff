@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, ArrowUpRight, Clock3 } from "lucide-react";
+import { Clock3 } from "lucide-react";
 import { getPublishedBlogPosts, getReadingTime } from "@/lib/blog";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
@@ -76,24 +76,24 @@ export default function BlogPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="pt-24 sm:pt-28">
+      <main id="main-content" className="pt-24 sm:pt-28">
         <section className="border-b">
-          <div className="mx-auto grid max-w-7xl gap-10 px-4 pb-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_330px] lg:px-8 lg:pb-20">
+          <div className="mx-auto grid max-w-7xl gap-8 px-4 pb-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8 lg:pb-14 items-end">
             <div>
               <p className="font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-orange-600 dark:text-orange-400">
                 Woff field notes
               </p>
-              <h1 className="mt-5 max-w-4xl text-balance text-5xl font-extrabold leading-[0.98] tracking-[-0.055em] sm:text-7xl lg:text-8xl">
+              <h1 className="mt-3.5 max-w-3xl text-balance text-3xl font-extrabold leading-[1.12] tracking-[-0.035em] sm:text-4xl lg:text-5xl">
                 Move information
                 <span className="block text-orange-500">without ceremony.</span>
               </h1>
             </div>
-            <div className="flex items-end border-l-2 border-orange-500 pl-6">
+            <div className="flex items-end border-l-2 border-orange-500 pl-6 lg:py-1">
               <div>
-                <p className="text-lg font-semibold leading-7">
+                <p className="text-base sm:text-lg font-medium leading-relaxed text-foreground/90">
                   Practical notes on quick sharing, useful context, and choosing the lightest tool for the job.
                 </p>
-                <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                   Guides · Workflows · Product decisions
                 </p>
               </div>
@@ -142,8 +142,8 @@ export default function BlogPage() {
                   <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                     {formatDate(featured.date)} · {getReadingTime(featured)} min read
                   </span>
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-white transition group-hover:rotate-45">
-                    <ArrowUpRight className="h-5 w-5" />
+                  <span className="inline-flex text-xs font-bold text-orange-500">
+                    Read note
                   </span>
                 </div>
               </div>
@@ -201,7 +201,7 @@ export default function BlogPage() {
                       href={`/blog/${post.slug}`}
                       className="mt-7 inline-flex items-center gap-2 self-start text-xs font-bold text-foreground transition group-hover:text-orange-600"
                     >
-                      Read field note <ArrowRight className="h-3.5 w-3.5" />
+                      Read field note
                     </Link>
                   </div>
                 </article>

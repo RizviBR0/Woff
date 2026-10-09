@@ -99,7 +99,9 @@ module.exports = {
   			shimmer: 'shimmer 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite'
   		},
   		fontFamily: {
-  			sans: ['var(--font-inter)', 'var(--font-almarai)', 'Almarai', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif']
+  			sans: ['var(--font-inter)', 'var(--font-almarai)', 'Almarai', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
+  			inter: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
+  			almarai: ['var(--font-almarai)', 'Almarai', 'sans-serif']
   		}
   	}
   },

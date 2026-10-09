@@ -10,7 +10,6 @@ import {
   Zap,
   Shield,
   RefreshCw,
-  ArrowRight,
   Loader2,
   ChevronDown,
   ChevronUp,
@@ -22,6 +21,7 @@ import {
   Lock,
   Info,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function OnlineNotepadClient() {
   const { isCreating, createAndNavigate: handleCreateSpace } = useCreateSpace();
@@ -34,15 +34,15 @@ export function OnlineNotepadClient() {
   const faqs = [
     {
       q: "Is Woff Space completely free?",
-      a: "Yes, Woff Space is 100% free to use for sharing notes, code snippets, and files instantly. No credit card or subscription is required.",
+      a: "Basic sharing is free within its file and storage limits. Optional Pro sender tools have a separate pilot plan; see Pricing for availability. Readers do not need a subscription.",
     },
     {
       q: "Do I need to sign up or create an account?",
-      a: "No registration is required. You can open Woff Space, create a notepad instantly, and share it with a link immediately.",
+      a: "No registration is required for basic sharing or receiving. Optional sender accounts, when available, help you manage owned rooms across devices.",
     },
     {
       q: "How long do my shared notes stay active?",
-      a: `${STANDARD_SPACE_RETENTION} Adding content or editing a note starts a new 48-hour window. Expired spaces become unavailable and are scheduled for deletion. ${PRO_SPACE_RETENTION} Save a copy of your notes outside Woff.`,
+      a: `${STANDARD_SPACE_RETENTION} ${PRO_SPACE_RETENTION} Expired rooms become unavailable and are scheduled for deletion. Save a copy of your notes outside Woff.`,
     },
     {
       q: "Can I share files and images too?",
@@ -76,6 +76,7 @@ export function OnlineNotepadClient() {
       <div className="pointer-events-none absolute right-1/4 bottom-1/4 h-[400px] w-[400px] rounded-full bg-[#ff5a00]/3 dark:bg-[#ff5a00]/10 blur-[130px]" />
 
       <Navbar />
+      <main id="main-content">
 
       {/* Hero Section */}
       <section className="relative max-w-5xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8 text-center z-10 space-y-6">
@@ -92,7 +93,7 @@ export function OnlineNotepadClient() {
         </h1>
 
         <p className="text-lg sm:text-xl text-zinc-500 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-          Write and share quick notes alongside your files in a temporary space.
+          Write and share quick notes alongside your files in one room.
           <br className="hidden sm:block" />
           No sign-up required. Keep a copy of any notes you need outside Woff.
         </p>
@@ -112,7 +113,6 @@ export function OnlineNotepadClient() {
               <>
                 <FileText className="w-5.5 h-5.5 text-[#ff5a00]" />
                 Create a Free Notepad
-                <ArrowRight className="w-5 h-5 transition-transform hover:translate-x-1" />
               </>
             )}
           </button>
@@ -169,37 +169,53 @@ export function OnlineNotepadClient() {
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-4">
-          <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-900/40 p-5 rounded-xl shadow-sm space-y-2.5">
-            <Info className="w-5 h-5 text-orange-500" />
-            <h4 className="font-bold text-base">Meeting Notes</h4>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Share action items, decisions, and agendas with your remote team
-              instantly.
-            </p>
+          <div className="rounded-[20px] border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-orange-500/30 flex flex-col justify-between">
+            <div>
+              <div className="h-10 w-10 rounded-xl bg-orange-500/10 dark:bg-orange-500/15 border border-orange-500/20 flex items-center justify-center text-orange-500 mb-3.5">
+                <Info className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-base text-foreground">Meeting Notes</h4>
+              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                Share action items, decisions, and agendas with your remote team
+                instantly.
+              </p>
+            </div>
           </div>
-          <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-900/40 p-5 rounded-xl shadow-sm space-y-2.5">
-            <Terminal className="w-5 h-5 text-orange-500" />
-            <h4 className="font-bold text-base">Code Snippets</h4>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Send JSON, SQL, or component codes with teammates, styled with
-              exact formatting.
-            </p>
+          <div className="rounded-[20px] border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-500/30 flex flex-col justify-between">
+            <div>
+              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-500 mb-3.5">
+                <Terminal className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-base text-foreground">Code Snippets</h4>
+              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                Send JSON, SQL, or component codes with teammates, styled with
+                exact formatting.
+              </p>
+            </div>
           </div>
-          <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-900/40 p-5 rounded-xl shadow-sm space-y-2.5">
-            <Laptop className="w-5 h-5 text-orange-500" />
-            <h4 className="font-bold text-base">Transfer Text</h4>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Move clipboard links, captions, and texts between your phone and
-              laptop in seconds.
-            </p>
+          <div className="rounded-[20px] border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-sky-500/30 flex flex-col justify-between">
+            <div>
+              <div className="h-10 w-10 rounded-xl bg-sky-500/10 dark:bg-sky-500/15 border border-sky-500/20 flex items-center justify-center text-sky-500 mb-3.5">
+                <Laptop className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-base text-foreground">Transfer Text</h4>
+              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                Move clipboard links, captions, and texts between your phone and
+                laptop in seconds.
+              </p>
+            </div>
           </div>
-          <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-900/40 p-5 rounded-xl shadow-sm space-y-2.5">
-            <FileText className="w-5 h-5 text-orange-500" />
-            <h4 className="font-bold text-base">Study Topics</h4>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Distribute exam notes, lists, reference sites, and PDFs with study
-              groups quickly.
-            </p>
+          <div className="rounded-[20px] border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-amber-500/30 flex flex-col justify-between">
+            <div>
+              <div className="h-10 w-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/20 flex items-center justify-center text-amber-500 mb-3.5">
+                <FileText className="w-5 h-5" />
+              </div>
+              <h4 className="font-bold text-base text-foreground">Study Topics</h4>
+              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                Distribute exam notes, lists, reference sites, and PDFs with study
+                groups quickly.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -244,8 +260,7 @@ export function OnlineNotepadClient() {
             <div className="space-y-1">
               <h4 className="font-bold text-base">Multi-device sync</h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Open on phone, tablet or desktop. Updates instantly in
-                real-time.
+                Open the same room on your devices. Room messages update while connected; a note has one editing owner.
               </p>
             </div>
           </div>
@@ -269,9 +284,10 @@ export function OnlineNotepadClient() {
               key={idx}
               className="border border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/40 rounded-xl overflow-hidden transition-all duration-200"
             >
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => toggleFaq(idx)}
-                className="w-full px-6 py-4 flex items-center justify-between font-bold text-base text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
+                className="w-full h-auto px-6 py-4 flex items-center justify-between font-bold text-base text-left rounded-none hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
               >
                 <span>{faq.q}</span>
                 {openFaq === idx ? (
@@ -279,7 +295,7 @@ export function OnlineNotepadClient() {
                 ) : (
                   <ChevronDown className="w-4 h-4 text-zinc-400" />
                 )}
-              </button>
+              </Button>
               {openFaq === idx && (
                 <div className="px-6 pb-5 text-sm text-muted-foreground border-t border-zinc-100 dark:border-zinc-900/60 pt-3 leading-relaxed">
                   {faq.a}
@@ -310,6 +326,7 @@ export function OnlineNotepadClient() {
         </div>
       </section>
 
+      </main>
       <Footer />
     </div>
   );

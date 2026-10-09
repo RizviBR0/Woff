@@ -17,6 +17,7 @@ export type BlogPost = {
   takeaways?: string[];
   faq?: Array<{ question: string; answer: string }>;
   featured?: boolean;
+  cta?: { href: string; label: string };
 };
 
 const baseBlogPosts: BlogPost[] = [
@@ -39,7 +40,7 @@ const baseBlogPosts: BlogPost[] = [
       {
         question: "Can someone read a shared note without creating an account?",
         answer:
-          "Yes. A recipient can open a Woff space from its link or four-digit code without creating a traditional account.",
+          "Yes. A recipient can open a Woff room using its enabled four-digit code or a valid invitation link without creating a traditional account. The owner can close code access or set a deadline.",
       },
       {
         question: "What should I avoid putting in a quick shared note?",
@@ -152,7 +153,7 @@ const baseBlogPosts: BlogPost[] = [
       "Copy paste works for small text, but it gets messy when the content is long or structured.",
       "A shareable notepad link is better because:",
       "1. The content stays in one place",
-      "2. The receiver can open it anytime",
+      "2. The receiver can reopen it while the room is available",
       "3. Long notes are easier to read",
       "4. You can share it across any platform",
       "5. It feels cleaner than sending multiple messages",
@@ -527,15 +528,15 @@ const baseBlogPosts: BlogPost[] = [
   // Keep rest of older posts
   {
     slug: "best-free-online-notepad-tools-2026",
-    title: "Best Free Online Notepad Tools in 2026 (and When You Should Use Woff)",
-    excerpt: "Compare the top free online notepads in 2026 and learn when a fast, link-based notepad like Woff is the best fit.",
+    title: "Choose a Free Online Notepad for Your Task",
+    excerpt: "Compare the jobs a scratchpad, shared room, document editor, and knowledge base do before choosing an online notepad.",
     date: "2026-08-12",
     tags: ["comparison", "online-notepad", "2026"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "/blog/best-free-online-notepad-tools-2026.svg",
-    coverAlt: "2026 comparison benchmark of the best free online notepad tools",
+    coverAlt: "A visual guide to choosing a notepad for capture, sharing, or long-term organization",
     content: [
-      "Online notepads shine when you need speed and simplicity. We review popular options and where each excels.",
+      "An online notepad can be a private scratchpad, a shared handoff, or the beginning of a longer document. This guide compares those jobs rather than ranking products we have not tested.",
       "If instant sharing is your priority, Woff's no-login, shareable link model keeps you moving.",
       "Use this guide to pick the fastest tool for your specific job: quick capture, comparison, or collaboration.",
     ],
@@ -552,7 +553,7 @@ const baseBlogPosts: BlogPost[] = [
     content: [
       "Teachers often need to get notes out fast. Woff creates a link you can post in LMS, email, or chat.",
       "Open Woff, paste your notes, click Share. Students can view instantly on any device.",
-      "You can add a passcode if needed, and update notes later without changing the link.",
+      "The note creator can update shared notes. A private note is visible only to its creator, so keep a note shared if students need to read it.",
     ],
   },
   {
@@ -567,7 +568,7 @@ const baseBlogPosts: BlogPost[] = [
     content: [
       "Group chats get messy; screenshots are hard to read. A single Woff link keeps everyone on the same page.",
       "Paste your notes, add headings or bullet points, share the link with your study group.",
-      "Edit live to fix typos or add tips; changes show up instantly for your friends.",
+      "The creator can fix typos or add tips. Ask readers to reopen the note to see the saved version; participants can add their own notes and messages in the room.",
     ],
   },
   {
@@ -593,7 +594,7 @@ const baseBlogPosts: BlogPost[] = [
     tags: ["family", "lists", "how-to"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "/blog/share-lists-online-with-family.svg",
-    coverAlt: "Shared family to-do and grocery list with live sync checkboxes",
+    coverAlt: "A family grocery-list example with one editor and a shared reading link",
     content: [
       "Create a list in Woff and share the link with family. Everyone can reference the same page.",
       "Update the list before heading out; the latest version is always just a tap away.",
@@ -655,10 +656,10 @@ const baseBlogPosts: BlogPost[] = [
     tags: ["announcement", "product"],
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "/blog/introducing-woff.svg",
-    coverAlt: "Introducing Woff - simple shareable spaces with live multi-user cursors and 4-digit code",
+    coverAlt: "Introducing Woff rooms for files, rich notes, and a shared conversation",
     content: [
       "We built Woff to remove friction from sharing ideas. Create a space instantly, share a URL or QR code, and collaborate in real-time.",
-      "No accounts are required to get started, and you can add a passcode if you need privacy.",
+      "Basic sharing does not require signup. Send the full invitation only to intended recipients. A private note belongs to its creator; it is not a password-protected recipient document.",
       "We're just getting started — expect frequent improvements and a growing set of building blocks for your documents.",
     ],
   },
@@ -672,9 +673,9 @@ const baseBlogPosts: BlogPost[] = [
     coverImageUrl: "/blog/tips-for-faster-sharing.svg",
     coverAlt: "5 power user tips for faster sharing including QR codes, clipboard paste, and markup",
     content: [
-      "Use the '+' menu to quickly add photos, notes, or drawings.",
+      "Use Photos, Files, Draw, or Note in the composer to add the content your handoff needs.",
       "Share a space via QR code for instant access across devices.",
-      "Protect a space with a passcode when collaborating beyond your team.",
+      "Use the full invitation link and keep recovery keys to yourself. Private notes are creator-only, not shared with a passcode.",
       "Try the rich note editor for headings, lists, and formatting.",
       "Use the image viewer for multi-photo previews and quick downloads.",
     ],
@@ -760,7 +761,7 @@ const contentEnhancements: Record<string, string[]> = {
     "## A practical evaluation checklist",
     "Check how quickly you can start, whether recipients need an account, what kinds of content are supported, how sharing permissions work, and what happens to old content. Also test the mobile experience instead of relying only on a desktop demo.",
     "## When Woff is the right fit",
-    "Choose Woff when the job is a fast handoff: open a space, add text, notes, images, drawings, or files, and send one short code or link. Choose a full document platform when you need permanent records, advanced permissions, or a long editorial workflow.",
+    "Choose Woff when the job is a fast handoff: open a space, add text, notes, images, drawings, or files, and send the full invitation link. Choose a full document platform when you need permanent records or multi-user document editing.",
     "**CTA:** Create a Woff space and test the complete handoff from your phone to another device.",
   ],
   "share-class-notes-online": [
@@ -809,7 +810,7 @@ const contentEnhancements: Record<string, string[]> = {
   ],
   "share-lists-online-with-family": [
     "## Give the list one clear owner",
-    "A shared list works best when everyone can contribute but one person decides how items are grouped and cleaned up. Without that small convention, duplicates and vague entries appear quickly.",
+    "In Woff one person edits a note. Others can suggest additions in the room and the owner updates the list. Choose a shared-document app if everyone needs to check off items in the same document.",
     "## Write items that are easy to act on",
     "Use a quantity, item, and useful detail: “2 cartons oat milk” is better than “milk.” For chores, include the room or deadline. For travel, separate must-have documents from optional items.",
     "## Useful list sections",
@@ -872,7 +873,7 @@ const contentEnhancements: Record<string, string[]> = {
     "A Woff space can hold plain messages, rich notes, images, drawings, videos, and files in one chronological view. That makes it useful when a screenshot needs an explanation or a file needs a quick instruction.",
     "## Built for short-lived collaboration",
     "Woff prioritizes a fast start and an easy handoff. Treat it as a temporary communication surface, and move durable or sensitive work into the appropriate long-term system.",
-    "**CTA:** Create a space, add one piece of context, and share the four-digit code.",
+    "**CTA:** Create a space, add one piece of context, and share the full invitation link.",
   ],
   "introducing-woff-simple-shareable-spaces": [
     "## Temporary by design",
@@ -926,13 +927,225 @@ const contentEnhancements: Record<string, string[]> = {
   ],
 };
 
-export const blogPosts: BlogPost[] = baseBlogPosts
+const guideRevisions: Record<string, Partial<BlogPost>> = {
+  "how-to-share-notes-online-without-login": {
+    excerpt: "Create a note, save it, and share the correct link. A practical guide to ownership, recipient access, and keeping a copy.",
+    takeaways: [
+      "Recipients can read a shared note without creating an account.",
+      "A note has one editing owner; room messages are the place for feedback.",
+      "Save a local copy before the room expires and treat invitation links as access credentials.",
+    ],
+    faq: [
+      { question: "Can someone else edit my note?", answer: "A note is edited by its creator. Sharing it does not turn it into a document that everyone can edit. Other room participants can send their own messages or notes." },
+      { question: "Does a private note become shared when I send the room link?", answer: "No. Private notes are creator-only. To send a note to someone else, use a shared note and check the saved result before sharing its link." },
+      { question: "Can I keep the note forever?", answer: "New rooms have no time limit, but Woff is not a backup service. The owner can set a deadline or delete the room. Keep an export of any note you need later; older rooms may still use their original inactivity timer." },
+    ],
+    cta: { href: "/new", label: "Create a note room" },
+    content: [
+      "A short meeting recap or set of delivery instructions often needs one readable page. Woff lets you create that page in a temporary room and send it without asking the recipient to register.",
+      "This guide follows the note workflow in the app. For a few lines of plain text, send a room message instead. For a document that several people must edit at the same time, choose a tool built for that workflow.",
+      "## 1. Create the room and open Note",
+      "Start a [new room](/new). In the composer, choose **Note**. Add a descriptive title, such as ‘Homepage review — next actions’, so the recipient understands the purpose before reading the details.",
+      "Use a shared note when it should be readable by recipients. A private note stays accessible to its creator; a room invitation does not unlock it for other people.",
+      "## 2. Write a note with an explicit next action",
+      "Put the purpose first, followed by the decision, owner, and deadline. You can paste the example below into the editor and replace its placeholders.",
+      "```text\nHomepage review — next actions\n\nDecision: keep the current headline and replace the hero image.\nOwner: [name]\nDue: [date and timezone]\n\nPlease review:\n1. Updated hero screenshot attached in this room\n2. Mobile spacing at 390px\n\nReply with the filename and the change you want.\n```",
+      "Avoid placing account passwords, API keys, or customer identity documents in the note. A link that gives access can be forwarded, and content can be copied after someone opens it.",
+      "## 3. Save, then share the intended destination",
+      "Save the note and wait for the app to confirm it. Use the note’s sharing control when the recipient should land on that note. Use the room’s invitation control when the recipient needs the surrounding messages and attachments.",
+      "Send the full link with a short explanation: ‘Here are the homepage review notes; please reply with the filename and requested change.’ Copy the invitation supplied by Woff instead of inventing a URL from a short room code.",
+      "Recipients need a browser and the correct link. Optional sender accounts are for managing your own rooms; they are not a requirement for a recipient to read a shared note.",
+      "## 4. Keep feedback separate from editing",
+      "The creator edits the note. Recipients can add their own messages or notes in the room, but cannot rewrite yours. If you update the note, ask readers to reopen the saved version before acting on a changed instruction.",
+      "If the editor reports a conflict, use its recovery choices before replacing saved content. Keep a copy of your draft when a connection is unreliable. The [help page](/help#notes) explains saving and ownership.",
+      "## 5. Export the outcome before expiry",
+      "Use a note export for a local Markdown or text copy. For a visual document, use **Print / PDF** and review the browser’s print preview, especially for images, page breaks, and non-Latin text.",
+      "New rooms have no time limit unless the owner sets one. A chosen deadline does not move when someone edits a note. Check the room's top bar and export anything you need before a deadline ends.",
+      "**CTA:** Create a room, write one clear note, and share its saved link.",
+    ],
+  },
+  "how-to-share-text-between-devices-instantly": {
+    excerpt: "Move a caption, link list, or command between devices using a room invitation or QR code, with clear limits and no automatic clipboard access.",
+    takeaways: [
+      "Paste and send the text deliberately; Woff does not automatically sync your clipboard.",
+      "Open the full invitation or scan its QR code on the second device.",
+      "Keep durable information in a local file or the app where you will use it.",
+    ],
+    cta: { href: "/new", label: "Move some text" },
+    content: [
+      "You have a caption ready on your laptop and need it on your phone. A temporary Woff room gives the text one destination that both browsers can open, without installing an app.",
+      "The transfer is explicit: paste text into the room, send it, then copy it on the other device. Woff does not read your clipboard in the background or keep two devices’ clipboards synchronized.",
+      "## 1. Send the text from your first device",
+      "Open a [new room](/new), paste the text into the composer, and send it. A short message is enough for a caption or address. Choose **Note** when you need headings, a checklist, or several sections.",
+      "```text\nCaption for Friday’s post\n\nA small update to the studio: more daylight, fewer cables.\n\nLink: https://example.com/studio\nNext step: copy this into the post draft and check the link.\n```",
+      "Wait for the entry to appear as sent. If the app shows a connection or upload error, resolve it before leaving the first device.",
+      "## 2. Open the full invitation on your second device",
+      "Use the room’s invitation control to copy the full link. Send it to yourself through a channel you already use, or display the invitation QR code and scan it with your phone’s camera or Woff’s scanner.",
+      "Share the invitation link or the room code. New room codes are open by default. The owner can change the code, close code joining, or add a time limit from Share.",
+      "Open the destination in a browser on the second device. Recipients do not need a Woff account. Keep the link private because it grants access to the room.",
+      "## 3. Copy into the app where you need it",
+      "Use the text entry’s copy action, or select the text you need, then paste into your final destination. Check line breaks, punctuation, and URLs before publishing or sending.",
+      "For a command or code snippet, use a fenced block with a language label so formatting is easier to inspect. Do not put credentials or tokens into a room just to move them between devices.",
+      "## When the transfer does not appear",
+      "Check that both devices opened the same full invitation and that the first entry was sent successfully. If a browser disconnected, refresh and inspect the saved room contents. An expired or revoked invitation needs a fresh link from the owner.",
+      "For a private note, sharing the room does not grant another browser editing access. Move text as a room message or a shared note when the second device should read it; do not share a recovery key as a reading invitation.",
+      "## Keep a copy of anything that matters",
+      "New rooms stay open without a time limit unless the owner sets a deadline. Check the room's top bar for its current time limit. A successful transfer should finish with the text saved in your final app or a local file.",
+      "See [help](/help#connection) for connection and recovery guidance, or the [sharing page](/share-text-between-devices) for another reusable example.",
+      "**CTA:** Send a small piece of text and open its invitation on your other device.",
+    ],
+  },
+  "how-to-share-code-snippets-online": {
+    excerpt: "Share a readable code snippet with a language label, reproducible steps, and a screenshot, without exposing secrets or pretending the code runs in Woff.",
+    takeaways: [
+      "Use a language-labelled fenced block and the smallest example that reproduces the issue.",
+      "Include expected behavior, actual behavior, and reproduction steps beside the code.",
+      "Woff displays shared code; it does not execute it or replace version control.",
+    ],
+    cta: { href: "/new", label: "Share a code example" },
+    content: [
+      "A snippet is useful when someone can understand both the code and the question. Woff lets you put the example, reproduction steps, and a screenshot in one temporary room. It displays code as content; it does not execute your snippet.",
+      "## Start with the smallest useful example",
+      "Remove unrelated code and real customer data. Replace passwords, access tokens, cookies, private keys, and internal URLs with harmless placeholders. Inspect screenshots and logs for the same information.",
+      "Use the language name after the opening three backticks. This example is short enough to paste into a room message.",
+      "```tsx\nfunction SubmitButton({ pending }: { pending: boolean }) {\n  return (\n    <button disabled={pending}>\n      {pending ? 'Sending…' : 'Send'}\n    </button>\n  );\n}\n```",
+      "## Add the question and reproduction steps",
+      "A reviewer needs to know what you expected and what happened instead. Include a browser or runtime version when it changes how the issue can be reproduced.",
+      "```text\nIssue: button remains disabled after a failed request\n\nExpected: show the error and allow another attempt.\nActual: label returns to Send but the button stays disabled.\n\nReproduce:\n1. Open the form.\n2. Submit while the network is offline.\n3. Reconnect and try again.\n\nQuestion: where should the pending state reset?\n```",
+      "## Create the room and share its invitation",
+      "Open a [new room](/new), send the explanation and fenced code, then attach a redacted screenshot if it helps. Use **Note** for a longer setup guide and save it before sharing.",
+      "Copy the full room invitation when the reviewer needs every entry. Send a direct shared-note link when the note alone contains the context. A recipient can open either supported invitation without registering.",
+      "Use the existing **Photos**, **Files**, and markup actions for supporting media. Uploads are limited to 50 MiB per file and 20 files per batch; the room and sender quotas also apply. Wait for the batch to finish before telling the reviewer the attachment is ready.",
+      "## Review without losing the original question",
+      "Ask the reviewer to reply with the line or function name and the proposed change. Notes have one editing owner, so feedback belongs in a separate message or note. For changes to a repository, move the resulting patch into version control and review it there.",
+      "Do not rely on a temporary room for a permanent bug history, automated tests, or an audit trail. Keep a local copy of useful explanations and use your issue tracker for the outcome.",
+      "## Check access and expiry before handing off",
+      "Invitation links grant access and can be forwarded. New rooms have no time limit unless the owner chooses one. If a deadline is shown in the top bar, tell the recipient to download what they need before it ends.",
+      "For a compact example of this workflow, see [share code snippets](/share-code-snippets-online). Read [help](/help#uploads) if an attachment fails.",
+      "**CTA:** Share one minimal code example with the question beside it.",
+    ],
+  },
+};
+
+const focusedHandoffPosts: BlogPost[] = [
+  {
+    slug: "website-project-handoff-checklist",
+    title: "A Website Project Handoff Checklist for Freelancers",
+    excerpt: "Deliver a website with a clear summary, labelled files, review instructions, and a download deadline—without making the client learn a new workspace.",
+    date: "2026-10-03",
+    tags: ["Freelancers", "Guides", "Handoffs"],
+    author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
+    coverImageUrl: "/blog/website-project-handoff-checklist.svg",
+    coverAlt: "Website handoff with a delivery note, labelled files, and three review steps",
+    featured: true,
+    cta: { href: "/new?template=project-handoff", label: "Start a handoff" },
+    takeaways: [
+      "Deliver context with the files: what changed, what to inspect, and what happens next.",
+      "Share credentials through a separate channel designed for secrets.",
+      "Woff supports a temporary handoff; your agreement and permanent archive belong elsewhere.",
+    ],
+    content: [
+      "A finished website can still produce a confusing delivery. The client sees a link, a ZIP, and several screenshots but does not know which version is final or what you want them to review. A small handoff note makes the delivery easier to act on.",
+      "## Gather the delivery package",
+      "Keep only the files required for this handoff. Use recognizable names such as `homepage-v3-desktop.png`, `homepage-v3-mobile.png`, and `site-source-v3.zip`. Say whether the ZIP contains source files, a deployable build, or both.",
+      "Woff’s file limit is 50 MiB per file, with up to 20 files in one batch. Check the remaining room allowance before uploading. Use an appropriate existing storage link for a larger archive rather than splitting an essential project into unexplained fragments.",
+      "Do not bundle hosting passwords, API keys, database exports with personal data, or private signing keys. Transfer sensitive access through a separate method agreed with the client.",
+      "## Put this note beside the files",
+      "Start with the [handoff template](/new?template=project-handoff), then replace the placeholders with actual details. The free workflow uses a note and attachments in the same room.",
+      "```text\nWebsite handoff — [project] — version [number]\n\nDelivered: [date]\nPreview: [public preview URL]\n\nIncluded:\n- [filename]: [what it contains]\n- [filename]: [what it shows]\n\nPlease review:\n1. Main navigation on desktop and mobile\n2. Contact form confirmation\n3. Agreed pages and supplied content\n\nKnown limits: [anything still pending]\nNext action: reply with the page, screenshot, and requested change.\nDownload by: [expiry shown in this room]\n```",
+      "Keep the note honest about anything unfinished. ‘Ready for your review’ means a different next step from ‘Already published’; say which one applies.",
+      "## Share and make the next action explicit",
+      "Wait for all files to finish uploading, then copy the full room invitation and send it with one sentence explaining the review. A recipient can read the delivery without creating an account. An invitation grants access, so send it through the intended client conversation.",
+      "If you need several people to edit the instructions together, use a collaborative document elsewhere. A Woff note has one editing owner. Feedback can arrive as messages or separate notes in the room.",
+      "## Close the handoff with copies in the right places",
+      "Ask the client to download the final package and keep your own source archive. New rooms have no time limit by default. You can choose a deadline from Share on either Free or Pro; include the time actually shown in the room when sending a delivery.",
+      "Woff does not replace a signed acceptance record, a maintenance contract, deployment access management, or a permanent project repository. Keep the agreed outcome in the system where your business records live.",
+      "See [pricing](/pricing) for the current availability of the monthly Pro pilot and [help](/help) for upload, export, and ownership details.",
+      "**CTA:** Start a handoff and replace the template with one real project’s delivery instructions.",
+    ],
+  },
+  {
+    slug: "design-file-delivery-checklist",
+    title: "A Clear Design File Delivery Checklist",
+    excerpt: "Package a small design delivery with final exports, source-file labels, usage notes, and a concrete feedback request.",
+    date: "2026-10-03",
+    tags: ["Freelancers", "Design", "Handoffs"],
+    author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
+    coverImageUrl: "/blog/design-file-delivery-checklist.svg",
+    coverAlt: "Design package with source files, final exports, and a usage note",
+    cta: { href: "/new?template=project-handoff", label: "Prepare a delivery" },
+    content: [
+      "A client should not need to guess which image to publish or which file another designer can edit. A delivery package is easier to use when each file has a purpose and the instructions travel with it.",
+      "## Separate source files from ready-to-use exports",
+      "Name the final exports clearly: `campaign-square-final.png` and `campaign-story-final.png` are more useful than `export-12.png`. Label editable source files separately and explain which application the client needs to open them.",
+      "Include dimensions, intended use, and any agreed font or image-license instructions. Explain the license requirements in your delivery note rather than suggesting that a file download grants rights you did not sell.",
+      "## Use a delivery note the client can scan",
+      "Create a [handoff room](/new?template=project-handoff), then adapt this note. Remove any format that is not part of the actual delivery.",
+      "```text\nDesign delivery — [campaign] — [version]\n\nFinal exports:\n- [square filename]: [dimensions], social feed\n- [story filename]: [dimensions], story placement\n\nEditable source:\n- [source filename]: opens in [application/version]\n\nUsage notes:\n- [font or asset licence instructions]\n- [crop, colour, or placement constraints]\n\nReview request: reply with the filename and the change.\nDownload deadline: [expiry shown in this room]\n```",
+      "## Attach the package and check it finished",
+      "Use **Photos** for image previews and **Files** for the source package. Each file must be at most 50 MiB, and a batch can contain up to 20 files. The room and sender allowances also apply; see [help](/help#uploads).",
+      "Wait for the batch to publish before sharing the invitation. If a source archive is too large, put it in your existing storage service and include the agreed access link with a clear label.",
+      "## Make feedback specific",
+      "Ask for a filename and a requested change. For a visual correction, a marked-up screenshot can show the exact area. A new annotated image preserves the original context and keeps the review focused.",
+      "The delivery note has one editing owner. Recipients can send feedback in the room, but the note is not a shared editing canvas or a formal design approval system.",
+      "## Archive the accepted version yourself",
+      "Save the final source files and agreed feedback in your usual archive. New rooms have no time limit unless the owner sets one. Downloading a file creates a copy that later link revocation cannot remove.",
+      "Check [pricing](/pricing) before expecting a paid retention feature. The [freelancer workflow](/for-freelancers) shows how to do a small delivery with the current free tools.",
+      "**CTA:** Prepare one small design package with labelled files and a next action.",
+    ],
+  },
+  {
+    slug: "keep-a-copy-before-a-shared-room-expires",
+    title: "Keep a Copy Before a Shared Room Expires",
+    excerpt: "A practical checklist for downloading files, exporting notes, checking expiry, and closing a temporary handoff.",
+    date: "2026-10-03",
+    tags: ["Guides", "Handoffs", "Temporary sharing"],
+    author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
+    coverImageUrl: "/blog/keep-a-copy-before-a-shared-room-expires.svg",
+    coverAlt: "Temporary room deadline beside a saved note and downloaded file package",
+    cta: { href: "/help#export", label: "Read export help" },
+    content: [
+      "Temporary sharing is useful when the room is a bridge to the next step. It becomes risky when the room is the only place holding something you need later. Finish a handoff by putting durable information in a durable destination.",
+      "## Check the deadline shown in the room",
+      "New Woff rooms have no time limit. The owner can add a deadline from Share, and activity does not extend it. Older rooms may still use their original inactivity timer. Use the time displayed in the room rather than assuming every invitation lasts the same length of time.",
+      "Keep your own copy of an important delivery. Choose a room deadline that gives the recipient enough time, or leave it open without a deadline. Use your usual permanent storage for information that must remain accessible.",
+      "## Save files and review the result",
+      "Download each file you need. For a file batch, use its download-all action if available, then check that the archive opens and contains the expected filenames. Keep large source packages in the project folder where you normally archive them.",
+      "For images, keep both the original and any marked-up copy that explains the agreed change. A screenshot of the room is useful context, but it is not a substitute for the underlying source files.",
+      "## Export the note in a useful format",
+      "Use a Markdown or plain-text export for an editable local copy. Use **Print / PDF** when you need a visual record, then review the browser’s preview for page breaks, images, and language rendering before saving.",
+      "Copy important room messages into your own notes or project record. Woff is not a permanent archive or a complete audit-history export.",
+      "```text\nBefore closing the handoff\n\n[ ] Downloaded the required files\n[ ] Opened the downloads and checked their names\n[ ] Exported the final instructions\n[ ] Recorded the agreed next action\n[ ] Told the recipient the room deadline\n[ ] Stored the final package in the project archive\n```",
+      "## Keep access and copies separate",
+      "An invitation grants access to the room. A recovery key is for owner recovery and should not be sent as a recipient invitation. Where the owner can revoke a link, revocation prevents later access through that link; it cannot retrieve files or text already copied by a recipient.",
+      "Delete content you no longer need using the controls available to its owner. If the room has expired or content has been deleted, do not rely on recovery as a way to restore it.",
+      "## If something is missing",
+      "Ask the sender for a new delivery from their own archive. For an upload or export problem while the room still exists, collect the visible error and browser details and use [help](/help) or [contact](/contact). Do not send recovery keys or secret invitation URLs in a support message.",
+      "**CTA:** Use the export checklist while your room and its files are still available.",
+    ],
+  },
+];
+
+const articleActions: Record<string, { href: string; label: string }> = {
+  "best-online-notepad-with-shareable-link": { href: "/online-notepad-with-shareable-link", label: "Try a shareable note" },
+  "best-free-online-notepad-tools-2026": { href: "/online-notepad", label: "Try the notepad" },
+};
+
+export const blogPosts: BlogPost[] = [...baseBlogPosts, ...focusedHandoffPosts]
   .map((post) => ({
     ...post,
+    ...(guideRevisions[post.slug] || {}),
+    updatedDate: "2026-10-04",
     coverImageUrl: post.coverImageUrl || `/blog/${post.slug}.svg`,
     coverAlt:
       post.coverAlt || `Visual guide and overview for ${post.title.toLowerCase()}`,
-    content: [...post.content, ...(contentEnhancements[post.slug] || [])],
+    cta: guideRevisions[post.slug]?.cta || post.cta || articleActions[post.slug] || { href: "/new", label: "Start sharing" },
+    content: guideRevisions[post.slug]?.content || (focusedHandoffPosts.includes(post)
+      ? post.content
+      : [...post.content, ...(contentEnhancements[post.slug] || []),
+        "## Current sharing and retention limits",
+        "Share the enabled room code or a valid invitation link. Either can be forwarded. A note has one editing owner; private notes are creator-only. New rooms have no time limit unless the owner sets one. A chosen deadline is shown in the top bar and does not move with activity. Keep a local copy of anything you need later. See [help](/help) and [pricing](/pricing) for current limits and availability.",
+      ]),
   }))
   .sort((a, b) => b.date.localeCompare(a.date));
 
@@ -966,7 +1179,7 @@ export function getPostHeadings(post: BlogPost) {
 
 export function getRelatedPosts(post: BlogPost, limit = 3): BlogPost[] {
   const tags = new Set(post.tags.map((tag) => tag.toLowerCase()));
-  return blogPosts
+  return getPublishedBlogPosts()
     .filter((candidate) => candidate.slug !== post.slug)
     .map((candidate) => ({
       candidate,
