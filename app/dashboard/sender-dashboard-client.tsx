@@ -498,7 +498,7 @@ export function SenderDashboardClient({
           </div>
           <div className={styles.cardBody}>
             <span className={styles.cardMetricValue}>{initial.rooms.length}</span>
-            <span className={styles.cardBadgeGreen}>
+            <span className={`${styles.cardBadge} ${styles.cardBadgeGreen}`}>
               <Check size={11} strokeWidth={2.5} aria-hidden="true" />
               {activeRooms.length} active
             </span>
@@ -521,90 +521,68 @@ export function SenderDashboardClient({
           <div className={styles.cardBody}>
             <span className={styles.cardMetricValue}>{activeRooms.length}</span>
             {initial.is_pro ? (
-              <span className={styles.cardBadgePro}>
+              <span className={`${styles.cardBadge} ${styles.cardBadgePro}`}>
                 {initial.active_room_count} / {initial.active_room_limit} slots
               </span>
             ) : expiredRooms.length > 0 ? (
-              <span className={styles.cardBadgeMuted}>
+              <span className={`${styles.cardBadge} ${styles.cardBadgeMuted}`}>
                 {expiredRooms.length} expired
               </span>
             ) : (
-              <span className={styles.cardBadgeGreen}>100% active</span>
+              <span className={`${styles.cardBadge} ${styles.cardBadgeGreen}`}>
+                <span className={styles.badgeDot} aria-hidden="true" />
+                100% active
+              </span>
             )}
           </div>
         </div>
 
         {/* Card 3: Storage Used */}
         <div className={styles.summaryCard}>
-          <div>
-            <div className={styles.cardHeader}>
-              <div className={`${styles.cardIconBox} ${styles.iconBoxAmber}`}>
-                <HardDrive size={20} aria-hidden="true" />
-              </div>
-              <div className={styles.cardHeaderText}>
-                <span className={styles.cardTitle}>Storage Used</span>
-                <span
-                  className={styles.cardSubtitle}
-                  title={`Of ${formatAccountBytes(initial.storage_limit_bytes)} quota`}
-                >
-                  Of {formatAccountBytes(initial.storage_limit_bytes)} quota
-                </span>
-              </div>
+          <div className={styles.cardHeader}>
+            <div className={`${styles.cardIconBox} ${styles.iconBoxAmber}`}>
+              <HardDrive size={20} aria-hidden="true" />
             </div>
-            <div className={styles.cardBody}>
-              <span className={styles.cardMetricValue}>
-                {formatAccountBytes(initial.storage_used_bytes)}
+            <div className={styles.cardHeaderText}>
+              <span className={styles.cardTitle}>Storage Used</span>
+              <span
+                className={styles.cardSubtitle}
+                title={`Of ${formatAccountBytes(initial.storage_limit_bytes)} quota`}
+              >
+                Of {formatAccountBytes(initial.storage_limit_bytes)} quota
               </span>
-              <span className={styles.cardBadgeOrange}>{storagePercent}% used</span>
             </div>
           </div>
-          <div
-            className={styles.cardProgressTrack}
-            role="progressbar"
-            aria-label="Storage used"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={storagePercent}
-          >
-            <span style={{ width: `${storagePercent}%` }} />
+          <div className={styles.cardBody}>
+            <span className={styles.cardMetricValue}>
+              {formatAccountBytes(initial.storage_used_bytes)}
+            </span>
+            <span className={`${styles.cardBadge} ${styles.cardBadgeOrange}`}>
+              {storagePercent}% used
+            </span>
           </div>
-          {initial.reserved_bytes > 0 && (
-            <p className={styles.storageNote}>
-              +{formatAccountBytes(initial.reserved_bytes)} uploading
-            </p>
-          )}
         </div>
 
         {/* Card 4: Storage Left / Capacity */}
         <div className={styles.summaryCard}>
-          <div>
-            <div className={styles.cardHeader}>
-              <div className={`${styles.cardIconBox} ${styles.iconBoxSky}`}>
-                <Cloud size={20} aria-hidden="true" />
-              </div>
-              <div className={styles.cardHeaderText}>
-                <span className={styles.cardTitle}>Storage Left</span>
-                <span className={styles.cardSubtitle} title="Remaining file allowance">
-                  Available space
-                </span>
-              </div>
+          <div className={styles.cardHeader}>
+            <div className={`${styles.cardIconBox} ${styles.iconBoxSky}`}>
+              <Cloud size={20} aria-hidden="true" />
             </div>
-            <div className={styles.cardBody}>
-              <span className={styles.cardMetricValue}>
-                {formatAccountBytes(remainingBytes)}
+            <div className={styles.cardHeaderText}>
+              <span className={styles.cardTitle}>Storage Left</span>
+              <span className={styles.cardSubtitle} title="Available upload capacity">
+                Available space
               </span>
-              <span className={styles.cardBadgeSky}>{freePercent}% free</span>
             </div>
           </div>
-          <div
-            className={`${styles.cardProgressTrack} ${styles.cardProgressTrackSky}`}
-            role="progressbar"
-            aria-label="Storage available"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={freePercent}
-          >
-            <span style={{ width: `${freePercent}%` }} />
+          <div className={styles.cardBody}>
+            <span className={styles.cardMetricValue}>
+              {formatAccountBytes(remainingBytes)}
+            </span>
+            <span className={`${styles.cardBadge} ${styles.cardBadgeSky}`}>
+              {freePercent}% free
+            </span>
           </div>
         </div>
       </section>

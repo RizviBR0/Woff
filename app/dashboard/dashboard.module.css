@@ -108,9 +108,9 @@
 .cardBody {
   margin-top: 14px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 .cardMetricValue {
@@ -124,61 +124,117 @@
 .cardBadge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2.5px 8px;
-  border-radius: 20px;
-  font-size: 11px;
+  justify-content: center;
+  gap: 5px;
+  padding: 3.5px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
   font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+.badgeDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 .cardBadgeGreen {
-  background: rgba(16, 185, 129, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3.5px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  background: rgba(16, 185, 129, 0.12);
   color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+:global(.dark) .cardBadgeGreen {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
 }
 .cardBadgeOrange {
-  background: rgba(255, 90, 0, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3.5px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  background: rgba(255, 90, 0, 0.12);
   color: #ff5a00;
-  border: 1px solid rgba(255, 90, 0, 0.2);
+  border: 1px solid rgba(255, 90, 0, 0.25);
+}
+:global(.dark) .cardBadgeOrange {
+  background: rgba(255, 90, 0, 0.15);
+  color: #ff7d3b;
+  border: 1px solid rgba(255, 125, 59, 0.3);
 }
 .cardBadgeSky {
-  background: rgba(14, 165, 233, 0.1);
-  color: #0ea5e9;
-  border: 1px solid rgba(14, 165, 233, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3.5px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  background: rgba(14, 165, 233, 0.12);
+  color: #0284c7;
+  border: 1px solid rgba(14, 165, 233, 0.25);
+}
+:global(.dark) .cardBadgeSky {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
 }
 .cardBadgeMuted {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3.5px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
   background: hsl(var(--muted));
   color: hsl(var(--muted-foreground));
   border: 1px solid hsl(var(--border));
 }
 .cardBadgePro {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3.5px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
   background: rgba(255, 90, 0, 0.12);
   color: #ff5a00;
-  border: 1px solid rgba(255, 90, 0, 0.25);
+  border: 1px solid rgba(255, 90, 0, 0.3);
 }
-.cardProgressTrack {
-  width: 100%;
-  height: 5px;
-  margin-top: 12px;
-  overflow: hidden;
-  border-radius: 20px;
-  background: hsl(var(--muted));
-}
-.cardProgressTrack > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #f59e0b, #ff5a00);
-  transition: width 0.3s ease;
-}
-.cardProgressTrackSky > span {
-  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
-}
-.storageNote {
-  margin-top: 8px;
-  color: hsl(var(--muted-foreground));
-  font-size: 11px;
-  line-height: 1.4;
+:global(.dark) .cardBadgePro {
+  background: rgba(255, 90, 0, 0.16);
+  color: #ff7d3b;
+  border: 1px solid rgba(255, 125, 59, 0.35);
 }
 .templateBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--card)); }
 .templateBar > span { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 500; }
