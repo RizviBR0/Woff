@@ -8,9 +8,13 @@ import {
   Users,
   Zap,
   Share2,
+  Upload,
   Loader2,
   Link2,
   Copy,
+  Check,
+  Hash,
+  ArrowRight,
   ArrowLeftRight,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -43,6 +47,7 @@ export default function HeroSection() {
   const [isPasting, setIsPasting] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const roomAddressRef = useRef<HTMLInputElement>(null);
   const qrScannerRef = useRef<any>(null);
   const router = useRouter();
   const joiningRef = useRef(false);
@@ -76,7 +81,7 @@ export default function HeroSection() {
       if (slugFromUrl) {
         showRoomAddress(slugFromUrl);
         setTimeout(() => {
-          inputRefs.current[3]?.focus();
+          (isLegacyRoomSlug(slugFromUrl) ? inputRefs.current[3] : roomAddressRef.current)?.focus();
         }, 100);
         return;
       }
@@ -153,6 +158,7 @@ export default function HeroSection() {
     } else if (e.key === "ArrowRight" && index < 3) {
       inputRefs.current[index + 1]?.focus();
     } else if (e.key === "Enter") {
+      e.preventDefault();
       const domCode = inputRefs.current.map((el) => el?.value || "").join("");
       handleJoinRoom(domCode);
     }
@@ -444,23 +450,9 @@ export default function HeroSection() {
                 disabled={isCreating}
               >
                 {isCreating ? (
-                  <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                  <Loader2 className="h-[18px] w-[18px] shrink-0 animate-spin" />
                 ) : (
-                  <svg
-                    viewBox="0 0 24 24"
-                    height="18"
-                    width="18"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="shrink-0"
-                  >
-                    <g fill="none">
-                      <path d="m12.594 23.258l-.012.002l-.071.035l-.02.004l-.014-.004l-.071-.036q-.016-.004-.024.006l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427q-.004-.016-.016-.018m.264-.113l-.014.002l-.184.093l-.01.01l-.003.011l.018.43l.005.012l.008.008l.201.092q.019.005.029-.008l.004-.014l-.034-.614q-.005-.019-.02-.022m-.715.002a.02.02 0 0 0-.027.006l-.006.014l-.034.614q.001.018.017.024l.015-.002l.201-.093l.01-.008l.003-.011l.018-.43l-.003-.012l-.01-.01z" />
-                      <path
-                        d="M9.107 5.448c.598-1.75 3.016-1.803 3.725-.159l.06.16l.807 2.36a4 4 0 0 0 2.276 2.411l.217.081l2.36.806c1.75.598 1.803 3.016.16 3.725l-.16.06l-2.36.807a4 4 0 0 0-2.412 2.276l-.081.216l-.806 2.361c-.598 1.75-3.016 1.803-3.724.16l-.062-.16l-.806-2.36a4 4 0 0 0-2.276-2.412l-.216-.081l-2.36-.806c-1.751-.598-1.804-3.016-.16-3.724l.16-.062l2.36-.806A4 4 0 0 0 8.22 8.025l.081-.216zM11 6.094l-.806 2.36a6 6 0 0 1-3.49 3.649l-.25.091l-2.36.806l2.36.806a6 6 0 0 1 3.649 3.49l.091.25l.806 2.36l.806-2.36a6 6 0 0 1 3.49-3.649l.25-.09l2.36-.807l-2.36-.806a6 6 0 0 1-3.649-3.49l-.09-.25zM19 2a1 1 0 0 1 .898.56l.048.117l.35 1.026l1.027.35a1 1 0 0 1 .118 1.845l-.118.048l-1.026.35l-.35 1.027a1 1 0 0 1-1.845.117l-.048-.117l-.35-1.026l-1.027-.35a1 1 0 0 1-.118-1.845l.118-.048l1.026-.35l.35-1.027A1 1 0 0 1 19 2"
-                        fill="currentColor"
-                      />
-                    </g>
-                  </svg>
+                  <Upload className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
                 )}
                 {isCreating ? "Creating..." : "Start sharing"}
               </Button>
@@ -470,7 +462,7 @@ export default function HeroSection() {
                 onClick={() => {
                   const el = document.getElementById("join-room-section");
                   el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  setTimeout(() => inputRefs.current[0]?.focus(), 400);
+                  setTimeout(() => (joinByName ? roomAddressRef.current : inputRefs.current[0])?.focus(), 400);
                 }}
                 className="h-12 px-7 text-[15px] font-semibold rounded-xl border-zinc-200 dark:border-white/10 bg-white/60 dark:bg-white/5 text-zinc-800 dark:text-white backdrop-blur-sm transition hover:bg-zinc-100 dark:hover:bg-white/10 hover:border-zinc-300 dark:hover:border-white/20 flex items-center gap-2.5"
               >
@@ -515,142 +507,168 @@ export default function HeroSection() {
             </div>
           </div>
 
-          {/* ─── Right Column: Product Mockup Panel ─── */}
+          {/* Join an existing room */}
           <div
-            className="hero-card-enter w-full flex justify-center md:justify-end"
+            className="hero-card-enter flex w-full min-w-0 justify-center md:justify-end"
             id="join-room-section"
           >
-            <div className="relative w-full max-w-[420px] md:max-w-[340px] lg:max-w-[420px]">
-              {/* Controlled glow behind card */}
-              <div className="absolute -inset-6 rounded-[36px] bg-[#ff5a00]/8 dark:bg-[#ff5a00]/12 blur-3xl" />
+            <div className="relative w-full min-w-0 max-w-[440px] md:max-w-[360px] lg:max-w-[440px]">
+              <div aria-hidden="true" className="pointer-events-none absolute -left-10 bottom-12 h-64 w-52 rounded-full bg-orange-400/20 blur-[64px] dark:bg-orange-500/[0.16]" />
+              <div aria-hidden="true" className="pointer-events-none absolute -right-8 top-8 h-40 w-40 rounded-full bg-white/65 blur-[60px] dark:bg-orange-100/[0.08]" />
 
-              <div className="relative rounded-[24px] border border-white/60 dark:border-white/[0.1] bg-white/40 dark:bg-white/[0.04] p-6 sm:p-8 md:p-5 lg:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.5)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.05),0_0_60px_rgba(255,90,0,0.05)] backdrop-blur-2xl transition-colors duration-300">
-                {/* Panel heading */}
-                <div className="flex items-center justify-center gap-2.5 pb-5 mb-5 border-b border-zinc-200/60 dark:border-white/[0.06]">
-                  <Users size={16} className="text-[#ff5a00]" />
-                  <h3 className="text-[15px] font-semibold tracking-tight text-zinc-800 dark:text-white/80">
-                    Join an existing space
-                  </h3>
+              <div className="hero-join-glass relative overflow-hidden rounded-3xl border p-5 sm:p-7 md:p-5 lg:p-7">
+                <div aria-hidden="true" className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/40" />
+                <div aria-hidden="true" className="pointer-events-none absolute bottom-24 left-0 top-8 w-px bg-gradient-to-b from-white/5 via-white/60 to-transparent dark:via-orange-100/25" />
+                <div className="mb-6 flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-orange-500/15 bg-orange-500/[0.08] text-orange-600 dark:text-orange-400">
+                    <Users size={20} strokeWidth={1.8} />
+                  </span>
+                  <div>
+                    <h3 id="join-room-heading" className="text-[17px] font-semibold tracking-tight text-zinc-900 sm:text-lg dark:text-zinc-100">
+                      Join an existing space
+                    </h3>
+                    <p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Enter a room code or invitation link.</p>
+                  </div>
                 </div>
 
-                {/* Room link label — appears when code is filled */}
-                <div className="h-6 mb-3 flex items-center justify-center">
-                  {(joinByName ? namedRoom : hasFullCode) ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCopyLink}
-                      className="h-auto p-1 flex items-center gap-1.5 text-xs text-[#ff5a00] dark:text-[#ff7d3b] hover:text-[#ff5a00] dark:hover:text-[#ff7d3b] font-medium transition hover:opacity-80 bg-transparent hover:bg-transparent"
-                    >
-                      <span className="min-w-0 truncate font-mono">
-                        {shareHost}/{joinByName ? namedRoom : roomCode}
-                      </span>
-                      <Copy size={12} />
-                      {linkCopied && (
-                        <span className="text-emerald-500 text-[10px] ml-1">
-                          Copied!
-                        </span>
-                      )}
-                    </Button>
-                  ) : (
-                    <span className="text-xs text-zinc-400 dark:text-white/30 font-medium">
-                      {joinByName ? "Room name or link" : "Enter room code"}
-                    </span>
-                  )}
-                </div>
-
-                {/* PIN Code Inputs — pre-filled look */}
-                {joinByName ? (
-                  <input
-                    type="text"
-                    value={roomAddress}
-                    onChange={(event) => setRoomAddress(event.target.value)}
-                    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void handleJoinRoom(); } }}
-                    autoComplete="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    maxLength={2048}
-                    disabled={isJoining || isScanning || isPasting}
-                    placeholder="your-name or a room link"
-                    aria-label="Room name or link"
-                    className="h-14 w-full min-w-0 rounded-xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 outline-none transition-all focus:border-[#ff5a00] focus:ring-2 focus:ring-[#ff5a00]/20 disabled:opacity-50 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white"
-                  />
-                ) : <div className="mx-auto grid w-full grid-cols-4 gap-3">
-                  {pinDigits.map((digit, item) => (
-                    <input
-                      key={item}
-                      ref={(el) => {
-                        inputRefs.current[item] = el;
-                      }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
+                <div role="group" aria-label="Join method" className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-white/[0.04]">
+                  {[
+                    { byName: false, label: "4-digit code", icon: Hash },
+                    { byName: true, label: "Name or link", icon: Link2 },
+                  ].map(({ byName, label, icon: Icon }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-pressed={joinByName === byName}
+                      aria-controls="join-room-fields"
                       disabled={isJoining || isScanning || isPasting}
-                      onChange={(e) => handlePinChange(item, e.target.value)}
-                      onKeyDown={(e) => handlePinKeyDown(item, e)}
-                      onPaste={handlePinPaste}
-                      placeholder="·"
-                      className="w-full aspect-square rounded-xl border border-zinc-200 dark:border-white/[0.08] bg-zinc-50 dark:bg-white/[0.03] text-center text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white outline-none transition-all duration-200 focus:border-[#ff5a00] focus:ring-2 focus:ring-[#ff5a00]/20 disabled:opacity-50 placeholder:text-zinc-300 dark:placeholder:text-white/15"
-                      aria-label={`Digit ${item + 1}`}
-                    />
+                      onClick={() => setJoinByName(byName)}
+                      className={`flex h-10 items-center justify-center gap-2 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 disabled:opacity-50 ${joinByName === byName ? "bg-white text-zinc-900 shadow-sm ring-1 ring-black/[0.04] dark:bg-[#29292d] dark:text-white dark:ring-white/[0.06]" : "bg-transparent text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
+                    >
+                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                      {label}
+                    </button>
                   ))}
-                </div>}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setJoinByName((value) => !value)}
-                  disabled={isJoining || isScanning || isPasting}
-                  className="mt-3 h-8 w-full text-xs font-normal text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
-                >
-                  {joinByName ? "Use a 4-digit code" : "Use a room name or link"}
-                </Button>
+                </div>
 
-                {/* Quick actions: Scan QR / Paste Link */}
-                <div className="mt-5 flex items-center justify-center gap-4 text-[13px] text-zinc-500 dark:text-zinc-400">
+                <form aria-labelledby="join-room-heading" onSubmit={(event) => { event.preventDefault(); if (canJoin) void handleJoinRoom(); }}>
+                  <div id="join-room-fields">
+                    <div className="mb-2.5 flex items-center justify-between">
+                      <label htmlFor={joinByName ? "join-room-address" : "join-room-digit-0"} className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        {joinByName ? "Room name or invitation link" : "Room code"}
+                      </label>
+                      {!joinByName && <span className="text-[11px] text-zinc-400 dark:text-zinc-500">4 digits</span>}
+                    </div>
+
+                    {joinByName ? (
+                      <div className="relative">
+                        <Link2 className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden="true" />
+                        <input
+                          ref={roomAddressRef}
+                          id="join-room-address"
+                          type="text"
+                          value={roomAddress}
+                          onChange={(event) => setRoomAddress(event.target.value)}
+                          autoComplete="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          maxLength={2048}
+                          disabled={isJoining || isScanning || isPasting}
+                          placeholder="your-room or paste a link"
+                          aria-label="Room name or link"
+                          aria-describedby="join-room-help"
+                          className="h-[72px] w-full min-w-0 rounded-xl border border-zinc-200 bg-zinc-50/80 pl-11 pr-4 text-base text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.025] dark:text-white dark:placeholder:text-zinc-500 dark:focus:bg-white/[0.04]"
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
+                        {pinDigits.map((digit, item) => (
+                          <input
+                            key={item}
+                            id={`join-room-digit-${item}`}
+                            ref={(el) => { inputRefs.current[item] = el; }}
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            maxLength={1}
+                            value={digit}
+                            disabled={isJoining || isScanning || isPasting}
+                            onChange={(e) => handlePinChange(item, e.target.value)}
+                            onKeyDown={(e) => handlePinKeyDown(item, e)}
+                            onPaste={handlePinPaste}
+                            onFocus={(event) => event.currentTarget.select()}
+                            placeholder="–"
+                            className={`h-[72px] w-full min-w-0 rounded-xl border bg-zinc-50/80 text-center font-mono text-[28px] font-medium text-zinc-900 outline-none transition-colors placeholder:text-zinc-300 focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10 disabled:opacity-50 dark:bg-white/[0.025] dark:text-white dark:placeholder:text-zinc-600 dark:focus:bg-white/[0.04] ${digit ? "border-zinc-300 dark:border-white/20" : "border-zinc-200 dark:border-white/10"}`}
+                            aria-label={`Digit ${item + 1}`}
+                            aria-describedby="join-room-help"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div id="join-room-help" className="mb-5 mt-3 flex min-h-6 min-w-0 items-center">
+                    {(joinByName ? namedRoom : hasFullCode) ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCopyLink}
+                        aria-label="Copy room link"
+                        className="h-6 min-w-0 max-w-full gap-1.5 bg-transparent px-0 text-[11px] font-normal text-zinc-500 hover:bg-transparent hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
+                      >
+                        <span className="min-w-0 truncate font-mono">
+                          {shareHost}/{joinByName ? namedRoom : roomCode}
+                        </span>
+                        {linkCopied ? <Check size={12} className="shrink-0 text-emerald-500" /> : <Copy size={12} className="shrink-0" />}
+                        <span className="sr-only" aria-live="polite">{linkCopied ? "Copied" : ""}</span>
+                      </Button>
+                    ) : (
+                      <span className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                        {joinByName ? "Use the name or link shared with you." : "Enter the code shared by the room owner."}
+                      </span>
+                    )}
+                  </div>
+
                   <Button
-                    variant="ghost"
-                    size="sm"
+                    type="submit"
+                    variant="primary"
+                    disabled={isJoining || isScanning || isPasting || !canJoin}
+                    className="hero-join-submit h-12 w-full disabled:opacity-100"
+                  >
+                    {isJoining ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {isJoining ? "Joining..." : "Join Room"}
+                    {!isJoining && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+                  </Button>
+                </form>
+
+                <div className="my-5 flex items-center gap-3" aria-hidden="true">
+                  <span className="h-px flex-1 bg-zinc-200/80 dark:bg-white/[0.07]" />
+                  <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">or join with</span>
+                  <span className="h-px flex-1 bg-zinc-200/80 dark:bg-white/[0.07]" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={handleQRScan}
                     disabled={isJoining || isScanning || isPasting}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 font-normal h-auto"
+                    className="h-11 gap-2 rounded-xl border-zinc-200 bg-transparent px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
                   >
-                    <ScanLine size={15} />
+                    {isScanning ? <Loader2 size={16} className="shrink-0 animate-spin" /> : <ScanLine size={16} className="shrink-0" />}
                     Scan QR
                   </Button>
-
-                  <span className="h-5 w-px bg-zinc-200 dark:bg-white/10" />
-
                   <Button
-                    variant="ghost"
-                    size="sm"
+                    type="button"
+                    variant="outline"
                     onClick={handlePaste}
                     disabled={isJoining || isScanning || isPasting}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 font-normal h-auto"
+                    className="h-11 gap-2 rounded-xl border-zinc-200 bg-transparent px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
                   >
-                    <Clipboard size={15} />
+                    {isPasting ? <Loader2 size={16} className="shrink-0 animate-spin" /> : <Clipboard size={16} className="shrink-0" />}
                     Paste Link
                   </Button>
                 </div>
-
-                {/* Join Room — always active-looking */}
-                <Button
-                  onClick={() => handleJoinRoom()}
-                  disabled={
-                    isJoining || isScanning || isPasting || !canJoin
-                  }
-                  className={`mt-5 w-full h-[52px] flex items-center justify-center gap-2.5 rounded-xl text-[15px] font-semibold transition-all duration-200 ${
-                    canJoin
-                      ? "border border-zinc-300 dark:border-white/15 bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white hover:bg-zinc-200 dark:hover:bg-white/15 hover:border-zinc-400 dark:hover:border-white/25 shadow-sm"
-                      : "border border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-white/[0.04] text-zinc-400 dark:text-white/30 cursor-default"
-                  }`}
-                >
-                  {isJoining && (
-                    <Loader2 className="h-4.5 w-4.5 animate-spin" />
-                  )}
-                  {isJoining ? "Joining..." : "Join Room"}
-                </Button>
               </div>
             </div>
           </div>

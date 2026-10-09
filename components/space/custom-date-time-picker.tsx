@@ -221,40 +221,40 @@ export function CustomDateTimePicker({
   };
 
   return (
-    <div className="space-y-3.5 rounded-2xl border border-zinc-200/90 dark:border-white/[0.08] bg-zinc-50/70 dark:bg-[#121215]/80 p-3.5 sm:p-4 shadow-sm backdrop-blur-sm">
+    <div className="space-y-3 rounded-2xl border border-zinc-200/80 bg-zinc-50/60 p-3 sm:p-4 dark:border-white/[0.07] dark:bg-white/[0.02]">
       {/* Quick shortcuts */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-        <span className="flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mr-1 shrink-0">
-          Quick:
-        </span>
+      <div className="grid grid-cols-3 gap-1.5">
         <button
           type="button"
+          disabled={isBusy}
           onClick={() => handleShortcut(1, 18)}
-          className="shrink-0 rounded-lg border border-border/70 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground transition hover:border-orange-500/40 hover:bg-orange-500/5 hover:text-orange-600 dark:hover:text-orange-400"
+          className="min-h-9 rounded-lg border border-border/70 bg-transparent px-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-orange-500/40 hover:bg-orange-500/5 hover:text-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 disabled:opacity-50 sm:text-[11px] dark:hover:text-orange-400"
         >
           Tomorrow 6 PM
         </button>
         <button
           type="button"
+          disabled={isBusy}
           onClick={() => handleShortcut(3, 18)}
-          className="shrink-0 rounded-lg border border-border/70 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground transition hover:border-orange-500/40 hover:bg-orange-500/5 hover:text-orange-600 dark:hover:text-orange-400"
+          className="min-h-9 rounded-lg border border-border/70 bg-transparent px-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-orange-500/40 hover:bg-orange-500/5 hover:text-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 disabled:opacity-50 sm:text-[11px] dark:hover:text-orange-400"
         >
           In 3 days
         </button>
         <button
           type="button"
+          disabled={isBusy}
           onClick={() => handleShortcut(7, 18)}
-          className="shrink-0 rounded-lg border border-border/70 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground transition hover:border-orange-500/40 hover:bg-orange-500/5 hover:text-orange-600 dark:hover:text-orange-400"
+          className="min-h-9 rounded-lg border border-border/70 bg-transparent px-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-orange-500/40 hover:bg-orange-500/5 hover:text-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 disabled:opacity-50 sm:text-[11px] dark:hover:text-orange-400"
         >
           In 1 week
         </button>
       </div>
 
       {/* Calendar Header: Month navigation */}
-      <div className="flex items-center justify-between border-t border-border/50 pt-2.5">
+      <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-2">
-          <CalendarIcon className="h-4 w-4 text-orange-500" />
-          <span className="text-[13px] font-bold text-foreground tracking-tight">{monthName}</span>
+          <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+          <span aria-live="polite" className="text-[13px] font-semibold tracking-tight text-foreground">{monthName}</span>
         </div>
         <div className="flex items-center gap-1">
           <Button
@@ -264,7 +264,7 @@ export function CustomDateTimePicker({
             onClick={handlePrevMonth}
             disabled={isCurrentMonth || isBusy}
             aria-label="Previous month"
-            className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
+            className="h-8 w-8 rounded-lg bg-transparent text-muted-foreground hover:text-foreground disabled:opacity-30"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -275,7 +275,7 @@ export function CustomDateTimePicker({
             onClick={handleNextMonth}
             disabled={isBusy}
             aria-label="Next month"
-            className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
+            className="h-8 w-8 rounded-lg bg-transparent text-muted-foreground hover:text-foreground"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -283,7 +283,7 @@ export function CustomDateTimePicker({
       </div>
 
       {/* Day of Week Labels */}
-      <div className="grid grid-cols-7 gap-1 text-center font-mono text-[10.5px] font-semibold text-muted-foreground/80">
+      <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-muted-foreground">
         {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((dayName) => (
           <div key={dayName} className="py-0.5">
             {dayName}
@@ -292,7 +292,7 @@ export function CustomDateTimePicker({
       </div>
 
       {/* Calendar Day Grid */}
-      <div className="grid grid-cols-7 gap-1">
+      <div role="group" aria-label="Choose a closing date" className="grid grid-cols-7 gap-1">
         {days.map((cell, idx) => {
           if (!cell.isCurrentMonth) {
             return (
@@ -325,17 +325,20 @@ export function CustomDateTimePicker({
               key={`day-${cell.day}`}
               type="button"
               disabled={isBusy}
+              aria-label={new Date(viewYear, viewMonth, cell.day).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+              aria-pressed={isSelected}
+              aria-current={isToday ? "date" : undefined}
               onClick={() => {
                 setSelectedYear(viewYear);
                 setSelectedMonth(viewMonth);
                 setSelectedDay(cell.day);
               }}
-              className={`relative flex h-8 w-full items-center justify-center rounded-xl text-xs font-medium transition-all ${
+              className={`relative flex h-8 w-full items-center justify-center rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 disabled:opacity-50 ${
                 isSelected
-                  ? "bg-gradient-to-br from-[#ff5a00] to-[#ff7d3b] text-white font-bold shadow-[0_2px_8px_rgba(255,90,0,0.35)] scale-105"
+                  ? "bg-[#ff5a00] font-semibold text-white shadow-sm"
                   : isToday
-                  ? "border border-orange-500/50 text-orange-600 dark:text-orange-400 font-bold hover:bg-orange-500/10"
-                  : "text-foreground hover:bg-zinc-200/80 dark:hover:bg-white/10"
+                  ? "bg-orange-500/[0.08] font-semibold text-orange-600 hover:bg-orange-500/15 dark:text-orange-400"
+                  : "bg-transparent text-foreground hover:bg-zinc-200/80 dark:hover:bg-white/10"
               }`}
             >
               <span>{cell.day}</span>
@@ -351,8 +354,8 @@ export function CustomDateTimePicker({
       <div className="border-t border-border/50 pt-3">
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Clock className="h-3.5 w-3.5 text-orange-500" />
-            <span>Time of day:</span>
+            <Clock className="h-3.5 w-3.5" />
+            <span>Local time</span>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -362,7 +365,7 @@ export function CustomDateTimePicker({
               disabled={isBusy}
               onChange={(e) => setHour12(Number(e.target.value))}
               aria-label="Hour"
-              className="h-8 rounded-lg border border-border/80 bg-background px-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer"
+              className="h-9 cursor-pointer rounded-lg border border-border/80 bg-transparent px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/60"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
                 <option key={h} value={h} className="bg-popover text-popover-foreground">
@@ -379,7 +382,7 @@ export function CustomDateTimePicker({
               disabled={isBusy}
               onChange={(e) => setMinute(Number(e.target.value))}
               aria-label="Minute"
-              className="h-8 rounded-lg border border-border/80 bg-background px-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer"
+              className="h-9 cursor-pointer rounded-lg border border-border/80 bg-transparent px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-orange-500/60"
             >
               {[0, 15, 30, 45, 59].map((m) => (
                 <option key={m} value={m} className="bg-popover text-popover-foreground">
@@ -389,15 +392,16 @@ export function CustomDateTimePicker({
             </select>
 
             {/* AM / PM Segmented Toggle */}
-            <div className="flex rounded-lg border border-border/80 bg-muted/40 p-0.5 text-xs font-semibold">
+            <div role="group" aria-label="Time period" className="flex h-9 rounded-lg bg-muted/60 p-1 text-xs font-medium">
               <button
                 type="button"
                 disabled={isBusy}
+                aria-pressed={ampm === "AM"}
                 onClick={() => setAmPm("AM")}
-                className={`rounded-md px-2 py-0.5 transition-all text-[11px] ${
+                className={`rounded-md px-2 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 ${
                   ampm === "AM"
                     ? "bg-white dark:bg-[#252529] text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    : "bg-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 AM
@@ -405,11 +409,12 @@ export function CustomDateTimePicker({
               <button
                 type="button"
                 disabled={isBusy}
+                aria-pressed={ampm === "PM"}
                 onClick={() => setAmPm("PM")}
-                className={`rounded-md px-2 py-0.5 transition-all text-[11px] ${
+                className={`rounded-md px-2 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 ${
                   ampm === "PM"
                     ? "bg-white dark:bg-[#252529] text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    : "bg-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 PM
@@ -419,59 +424,62 @@ export function CustomDateTimePicker({
         </div>
 
         {/* Quick time shortcut chips */}
-        <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-0.5 text-[11px]">
-          <span className="text-[10px] text-muted-foreground shrink-0 font-medium">Presets:</span>
+        <div className="mt-2 grid grid-cols-3 gap-1 text-[10px]">
           <button
             type="button"
+            disabled={isBusy}
             onClick={() => {
               setHour12(12);
               setMinute(0);
               setAmPm("PM");
             }}
-            className="rounded-md border border-border/70 bg-background/60 px-2 py-0.5 text-muted-foreground hover:text-foreground transition"
+            className="min-h-8 rounded-lg bg-transparent px-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 disabled:opacity-50"
           >
-            Noon (12 PM)
+            Noon
           </button>
           <button
             type="button"
+            disabled={isBusy}
             onClick={() => {
               setHour12(6);
               setMinute(0);
               setAmPm("PM");
             }}
-            className="rounded-md border border-border/70 bg-background/60 px-2 py-0.5 text-muted-foreground hover:text-foreground transition"
+            className="min-h-8 rounded-lg bg-transparent px-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 disabled:opacity-50"
           >
             6 PM
           </button>
           <button
             type="button"
+            disabled={isBusy}
             onClick={() => {
               setHour12(11);
               setMinute(59);
               setAmPm("PM");
             }}
-            className="rounded-md border border-border/70 bg-background/60 px-2 py-0.5 text-muted-foreground hover:text-foreground transition"
+            className="min-h-8 rounded-lg bg-transparent px-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60 disabled:opacity-50"
           >
-            End of day (11:59 PM)
+            End of day
           </button>
         </div>
       </div>
 
       {/* Human Summary Banner */}
       <div
-        className={`flex flex-col gap-1 rounded-xl p-3 text-xs transition-all ${
+        aria-live="polite"
+        className={`flex flex-col gap-1 rounded-xl p-3 text-xs ${
           isPast
             ? "border border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400"
-            : "border border-orange-500/25 bg-orange-500/8 text-foreground"
+            : "bg-orange-500/[0.07] text-foreground"
         }`}
       >
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-semibold flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-orange-500" />
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <span className="flex items-start gap-1.5 text-[11px] font-medium leading-relaxed">
+            <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-500" />
             {isPast ? "Past date/time selected" : summaryText}
           </span>
           {!isPast && (
-            <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-bold text-orange-600 dark:text-orange-400 font-mono">
+            <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400">
               {relativeText}
             </span>
           )}
@@ -484,7 +492,7 @@ export function CustomDateTimePicker({
         type="button"
         disabled={isPast || isBusy}
         onClick={() => void onApply(computedDate.toISOString())}
-        className="w-full h-9 rounded-xl bg-gradient-to-r from-[#ff5a00] to-[#ff7d3b] hover:from-[#f05300] hover:to-[#ff7028] text-white font-semibold text-xs shadow-md transition-all active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none"
+        className="h-10 w-full rounded-xl bg-[#ff5a00] text-xs font-semibold text-white hover:bg-[#e85100]"
       >
         {isBusy ? "Saving limit..." : "Apply this time limit"}
       </Button>

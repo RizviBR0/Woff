@@ -131,28 +131,34 @@ export function SpaceModals({
             event.preventDefault();
             shareDialogRef.current?.focus({ preventScroll: true });
           }}
-          className="w-[calc(100%-2rem)] min-w-0 max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto border border-orange-500/20 bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-xl shadow-2xl rounded-2xl">
-          <DialogHeader className="text-left">
-            <DialogTitle className="flex items-center gap-2.5 text-xl font-semibold">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500">
-                <Share className="h-5 w-5" />
+          className="flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] min-w-0 max-w-[500px] flex-col gap-0 overflow-hidden rounded-3xl border border-zinc-200 bg-white p-0 shadow-[0_32px_120px_-24px_rgba(0,0,0,0.4)] outline-none dark:border-white/10 dark:bg-[#141416] [&>button:last-child]:right-5 [&>button:last-child]:top-5 [&>button:last-child]:flex [&>button:last-child]:h-8 [&>button:last-child]:w-8 [&>button:last-child]:items-center [&>button:last-child]:justify-center [&>button:last-child]:rounded-full [&>button:last-child]:bg-transparent [&>button:last-child]:hover:bg-muted">
+          <DialogHeader className="shrink-0 border-b border-zinc-100 px-5 py-5 pr-14 text-left sm:px-6 sm:pr-16 dark:border-white/[0.06]">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-orange-500/15 bg-orange-500/[0.08] text-orange-600 dark:text-orange-400">
+                <Share className="h-5 w-5" strokeWidth={1.8} />
               </span>
-              Share room
-            </DialogTitle>
-            <DialogDescription className="sr-only">Invite someone by link or code and manage room access.</DialogDescription>
+              <div>
+                <DialogTitle className="text-xl font-semibold tracking-tight">Share room</DialogTitle>
+                <DialogDescription className="mt-1 text-xs leading-relaxed">Bring someone into your space.</DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="min-w-0 space-y-5">
-            <div className="flex items-center gap-4 rounded-xl border border-border/70 p-3">
-              <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg bg-white p-1.5">
-                {qrCodeUrl ? (
-                  <Image src={qrCodeUrl} alt="Scan to join this room" width={88} height={88} className="h-[88px] w-[88px]" unoptimized />
-                ) : <Loader2 className="h-5 w-5 animate-spin text-orange-500" />}
+          <div className="min-h-0 min-w-0 space-y-5 overflow-y-auto overscroll-contain p-5 sm:p-6">
+            <div className="flex items-center gap-3 rounded-2xl border border-orange-500/15 bg-orange-50/50 p-3.5 sm:gap-4 sm:p-4 dark:bg-orange-500/[0.035]">
+              <div className="shrink-0 text-center">
+                <div className="flex h-[88px] w-[88px] items-center justify-center rounded-xl border border-black/[0.06] bg-white p-2 sm:h-[112px] sm:w-[112px]">
+                  {qrCodeUrl ? (
+                    <Image src={qrCodeUrl} alt="Scan to join this room" width={96} height={96} className="h-full w-full" unoptimized />
+                  ) : <Loader2 className="h-5 w-5 animate-spin text-orange-500" />}
+                </div>
+                <p className="mt-2 text-[10px] font-medium text-muted-foreground">Scan to join</p>
               </div>
-              <div className="min-w-0 flex-1 space-y-2">
-                <label htmlFor="space-share-link" className="text-xs font-medium text-muted-foreground">Invitation link</label>
-                <Input id="space-share-link" readOnly value={shareUrl} onFocus={(event) => event.currentTarget.select()} className="h-8 w-full min-w-0 truncate rounded-lg bg-muted/30 font-mono text-[11px]" />
-                <Button type="button" size="sm" onClick={handleCopyLink} className={`h-8 gap-1.5 rounded-lg text-xs ${copied ? "bg-emerald-600 hover:bg-emerald-700" : "bg-orange-500 hover:bg-orange-600"} text-white`}>
+              <div className="min-w-0 flex-1">
+                <label htmlFor="space-share-link" className="text-sm font-semibold">Invitation link</label>
+                <p className="mb-2.5 mt-0.5 text-[11px] leading-relaxed text-muted-foreground">A direct way into this room.</p>
+                <Input id="space-share-link" readOnly value={shareUrl} onFocus={(event) => event.currentTarget.select()} className="h-9 w-full min-w-0 truncate rounded-lg border-zinc-200/80 bg-white/80 px-2.5 font-mono text-[11px] shadow-none focus-visible:ring-orange-500/40 dark:border-white/10 dark:bg-black/15" />
+                <Button type="button" size="sm" onClick={handleCopyLink} className={`mt-2 h-9 w-full gap-2 rounded-lg text-xs font-semibold transition-colors ${copied ? "bg-emerald-600 hover:bg-emerald-700" : "bg-[#ff5a00] hover:bg-[#e85100]"} text-white`} aria-live="polite">
                   {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                   {copied ? "Copied" : "Copy link"}
                 </Button>
