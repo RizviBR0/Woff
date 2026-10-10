@@ -6,64 +6,34 @@ import { Check, CircleHelp, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BillingButton } from "@/components/account/billing-button";
 import type { CheckoutStatus } from "@/lib/billing/checkout-state";
+import { pollCheckoutStatus } from "@/lib/billing/poll-checkout-status";
 
 export function CheckoutResult({ initialStatus }: { initialStatus: CheckoutStatus }) {
   const [status, setStatus] = useState(initialStatus);
-  const [checking, setChecking] = useState(initialStatus.state !== "active" && initialStatus.state !== "inactive");
+  const [checking, setChecking] = useState(initialStatus.state === "processing");
   const [error, setError] = useState("");
   const [signedOut, setSignedOut] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (["active", "inactive"].includes(initialStatus.state) && attempt === 0) return;
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    const deadline = Date.now() + 60_000;
+    if (initialStatus.state !== "processing" && attempt === 0) return;
     setChecking(true);
     setError("");
     setSignedOut(false);
-    async function check() {
-      if (controller.signal.aborted) return;
-      if (Date.now() >= deadline) { setChecking(false); return; }
-      if (document.visibilityState === "hidden") {
-        timer = setTimeout(check, 4_000);
-        return;
-      }
-      try {
-        const response = await fetch("/api/billing/status", {
-          cache: "no-store",
-          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]),
-        });
-        if (response.status === 401) {
-          setSignedOut(true);
-          setChecking(false);
-          return;
-        }
-        if (!response.ok) throw new Error("We couldn’t check your account just now. You can try again below.");
-        const result: CheckoutStatus = await response.json();
-        if (!["active", "processing", "attention", "inactive"].includes(result.state))
-          throw new Error("We couldn’t read your subscription status. Please try again.");
-        if (controller.signal.aborted) return;
-        setStatus(result);
-        setError("");
-        if (["active", "inactive"].includes(result.state)) { setChecking(false); return; }
-      } catch (cause) {
-        if (controller.signal.aborted) return;
-        setError(cause instanceof Error && cause.name !== "TimeoutError"
-          ? cause.message : "The account check timed out. Please try again.");
+    return pollCheckoutStatus({
+      onStatus: setStatus,
+      onFinish: (result) => {
         setChecking(false);
-        return;
-      }
-      timer = setTimeout(check, 4_000);
-    }
-    timer = setTimeout(check, attempt ? 0 : 2_000);
-    return () => { controller.abort(); clearTimeout(timer); };
+        if (result.kind === "signed-out") setSignedOut(true);
+        if (result.kind === "error") setError(result.message);
+      },
+    });
   }, [attempt, initialStatus.state]);
 
   const active = status.state === "active";
   const inactive = status.state === "inactive";
   const attention = status.state === "attention";
-  const title = signedOut ? "Check the right account." : active ? "You’re ready for your next handoff." : inactive ? "Your Pro access has ended." : attention ? "Your billing needs a look." : checking ? "One last check." : "Still waiting for confirmation.";
+  const title = signedOut ? "Check the right account." : active ? "You’re ready for your next handoff." : inactive ? "Your Pro access has ended." : attention ? "Your billing needs a look." : checking ? "Checking your payment." : "Payment confirmation is pending.";
   const description = signedOut
     ? "Sign in with the account you used for checkout to see its subscription."
     : active
@@ -72,7 +42,9 @@ export function CheckoutResult({ initialStatus }: { initialStatus: CheckoutStatu
         ? "You can keep using Free. View plans or manage your billing below."
         : attention
           ? "Your subscription needs attention. Open billing to review the payment or subscription status. If you just made a payment, its confirmation may still be on the way."
-          : "We’re waiting for verified payment confirmation. Returning from checkout alone doesn’t activate Pro. You can leave this page; your account will update when confirmation arrives.";
+          : checking
+            ? "We’re checking for your payment confirmation. This usually takes a few seconds."
+            : "Your payment hasn’t been confirmed on this account yet. You can check again or return to your account; it will update when confirmation arrives.";
 
   return (
     <section className="mx-auto max-w-xl rounded-2xl border bg-card px-6 py-9 shadow-sm sm:p-10">
@@ -94,7 +66,7 @@ export function CheckoutResult({ initialStatus }: { initialStatus: CheckoutStatu
         ) : inactive ? (
           <Button asChild variant="primary" className="w-full"><Link href="/pricing">View plans</Link></Button>
         ) : (
-          <Button type="button" variant="outline" disabled={checking} onClick={() => setAttempt((value) => value + 1)} className="h-12 w-full gap-2 rounded-xl">
+          <Button type="button" variant="outline" disabled={checking} aria-busy={checking} onClick={() => setAttempt((value) => value + 1)} className="h-12 w-full gap-2 rounded-xl">
             {checking ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" /> : <RefreshCw className="h-4 w-4" />}{checking ? "Checking your account…" : "Check again"}
           </Button>
         )}

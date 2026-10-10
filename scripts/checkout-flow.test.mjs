@@ -203,3 +203,162 @@ test("payment-status API uses trusted account state, requires verification, and 
     if (expected) assert.equal((await response.json()).state, expected);
   }
 });
+
+function pollingFixture(fetchStatus, visible = true) {
+  let now = 0;
+  let nextId = 0;
+  const timers = new Map();
+  const statuses = [];
+  const finished = [];
+  const requests = [];
+  class ClockDate extends Date { static now() { return now; } }
+  const polling = load("../lib/billing/poll-checkout-status.ts", {}, {
+    Date: ClockDate,
+    AbortController,
+    setTimeout: (callback, delay) => {
+      const id = ++nextId;
+      timers.set(id, { at: now + delay, callback });
+      return id;
+    },
+    clearTimeout: id => timers.delete(id),
+    fetch: (url, init) => {
+      requests.push({ url, init });
+      return fetchStatus(requests.length);
+    },
+  });
+  const start = () => polling.pollCheckoutStatus({
+    onStatus: status => statuses.push(status),
+    onFinish: result => finished.push(result),
+    isVisible: () => visible,
+  });
+  const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+  const advance = async ms => {
+    await settle();
+    const target = now + ms;
+    while (true) {
+      const next = [...timers].sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next || next[1].at > target) break;
+      now = next[1].at;
+      timers.delete(next[0]);
+      next[1].callback();
+      await settle();
+    }
+    now = target;
+    await settle();
+  };
+  return { start, advance, settle, statuses, finished, requests, timers, timeout: polling.CHECKOUT_CHECK_TIMEOUT_MS };
+}
+
+const statusReply = (state = "processing") => ({
+  ok: true, status: 200,
+  json: async () => ({ state, hasSubscription: state !== "processing", paidThrough: null }),
+});
+
+test("confirmation polling ends at its deadline when the account remains unconfirmed", async () => {
+  const f = pollingFixture(() => statusReply());
+  f.start();
+  await f.advance(f.timeout);
+  assert.equal(f.finished.length, 1);
+  assert.equal(f.finished[0].kind, "pending");
+  assert.equal(f.timers.size, 0);
+  const count = f.requests.length;
+  await f.advance(60_000);
+  assert.equal(f.requests.length, count);
+});
+
+test("active, ended and billing-attention responses immediately end loading", async () => {
+  for (const state of ["active", "inactive", "attention"]) {
+    const f = pollingFixture(() => statusReply(state));
+    f.start();
+    await f.settle();
+    assert.equal(f.statuses[0].state, state);
+    assert.equal(f.finished[0].kind, "complete");
+    assert.equal(f.timers.size, 0);
+    await f.advance(30_000);
+    assert.equal(f.requests.length, 1);
+  }
+});
+
+test("a stalled request is aborted and finishes even when fetch ignores cancellation", async () => {
+  let resolve;
+  const f = pollingFixture(() => new Promise(done => { resolve = done; }));
+  f.start();
+  await f.advance(8_000);
+  assert.equal(f.finished[0].kind, "error");
+  assert.match(f.finished[0].message, /timed out/);
+  assert.equal(f.requests[0].init.signal.aborted, true);
+  resolve(statusReply("active"));
+  await f.settle();
+  assert.equal(f.statuses.length, 0);
+  assert.equal(f.finished.length, 1);
+  assert.equal(f.timers.size, 0);
+});
+
+test("a stalled response body cannot leave the account check loading", async () => {
+  const f = pollingFixture(() => ({ ok: true, status: 200, json: () => new Promise(() => {}) }));
+  f.start();
+  await f.advance(8_000);
+  assert.equal(f.finished[0].kind, "error");
+  assert.equal(f.requests[0].init.signal.aborted, true);
+  assert.equal(f.timers.size, 0);
+});
+
+test("the overall deadline also aborts a request that started near the end of polling", async () => {
+  const f = pollingFixture(count => count < 5 ? statusReply() : new Promise(() => {}));
+  f.start();
+  await f.advance(f.timeout);
+  assert.equal(f.finished[0].kind, "pending");
+  assert.equal(f.requests.length, 5);
+  assert.equal(f.requests.at(-1).init.signal.aborted, true);
+  assert.equal(f.timers.size, 0);
+});
+
+test("a hidden page still reaches the overall deadline without making requests", async () => {
+  const f = pollingFixture(() => assert.fail("Hidden page must not poll"), false);
+  f.start();
+  await f.advance(f.timeout);
+  assert.equal(f.finished[0].kind, "pending");
+  assert.equal(f.requests.length, 0);
+  assert.equal(f.timers.size, 0);
+});
+
+test("a fresh retry can confirm payment after a previous request timed out", async () => {
+  const f = pollingFixture(count => count === 1 ? new Promise(() => {}) : statusReply("active"));
+  f.start();
+  await f.advance(8_000);
+  assert.equal(f.finished[0].kind, "error");
+  f.start();
+  await f.settle();
+  assert.equal(f.statuses[0].state, "active");
+  assert.equal(f.finished[1].kind, "complete");
+  assert.equal(f.timers.size, 0);
+});
+
+test("sign-out, service failures and malformed responses release the loading state", async () => {
+  for (const [reply, expected] of [
+    [{ ok: false, status: 401 }, "signed-out"],
+    [{ ok: false, status: 503 }, "error"],
+    [{ ok: true, status: 200, json: async () => ({ state: "active" }) }, "error"],
+    [{ ok: true, status: 200, json: async () => ({ state: "active", hasSubscription: true, paidThrough: "invalid" }) }, "error"],
+  ]) {
+    const f = pollingFixture(() => reply);
+    f.start();
+    await f.settle();
+    assert.equal(f.finished[0].kind, expected);
+    assert.equal(f.statuses.length, 0);
+    assert.equal(f.timers.size, 0);
+  }
+});
+
+test("unmount cancels polling and ignores any later account response", async () => {
+  let resolve;
+  const f = pollingFixture(() => new Promise(done => { resolve = done; }));
+  const cancel = f.start();
+  cancel();
+  resolve(statusReply("active"));
+  await f.advance(60_000);
+  assert.equal(f.finished.length, 0);
+  assert.equal(f.statuses.length, 0);
+  assert.equal(f.requests[0].init.signal.aborted, true);
+  assert.equal(f.timers.size, 0);
+});

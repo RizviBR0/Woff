@@ -7,6 +7,7 @@ import {
   useCallback,
   useMemo,
   useRef,
+  useId,
 } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -27,12 +28,14 @@ import {
   KeyRound,
   Trash2,
   Clock3,
+  ChevronDown,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import { type Space, recoverSpace, createRoomInvitation, setRoomAccess, rotateRoomCode, recordRoomEvent, rotateRoomRecoveryKey } from "@/lib/actions";
 import { roomSharePath } from "@/lib/room-links";
+import { roomDisplayName, roomPageTitle } from "@/lib/room-title";
 import { isLegacyRoomSlug } from "@/lib/room-slug";
 import { updateRoomIdentity } from "@/lib/dashboard-actions";
 import { rememberSpaceOwnership, rememberSpaceInvitation, migrateRoomBrowserState, readSpaceInvitation, readSpaceRecoveryKey, writeBrowserValue, removeBrowserValue } from "@/lib/space-recovery";
@@ -84,6 +87,12 @@ export function SpaceContainer({
   const router = useRouter();
   const clientNow = useClientNow(30_000);
   const [space, setSpace] = useState(initialSpace);
+  const roomDetailsId = useId();
+  const roomName = roomDisplayName(space);
+  const pageTitle = roomPageTitle(space);
+  useEffect(() => {
+    document.title = pageTitle;
+  }, [pageTitle]);
   const currentSpaceRef = useRef(space);
   currentSpaceRef.current = space;
   useEffect(() => { setSpace(initialSpace); }, [initialSpace]);
@@ -629,7 +638,7 @@ export function SpaceContainer({
         size="icon"
         onClick={() => setMobileSidebarOpen(true)}
         aria-label="Open sidebar"
-        className="md:hidden fixed top-3 left-3 z-40 h-9 w-9 rounded-xl bg-zinc-50/90 dark:bg-[#1a1a1a]/90 backdrop-blur-md border border-zinc-200 dark:border-white/10 flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-white/5 transition-colors shadow-sm"
+        className="md:hidden fixed top-2 left-3 z-40 h-10 w-10 rounded-lg bg-zinc-50/90 dark:bg-[#1a1a1a]/90 backdrop-blur-md border border-zinc-200 dark:border-white/10 flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-white/5 transition-colors shadow-sm"
       >
         <Menu className="h-4 w-4" />
       </Button>
@@ -661,63 +670,78 @@ export function SpaceContainer({
       {/* Main content area */}
       <div className="min-h-screen min-w-0 flex-1 transition-all duration-300">
         <main
-          className="transition-all duration-300"
+          className="flex min-h-svh flex-col transition-all duration-300"
           style={{ marginLeft: isDesktop ? sidebarWidth : 0 }}
         >
-          <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 backdrop-blur-xl">
-            <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 pl-14 pr-3 sm:pr-4 md:px-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2">
+          <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border/60 bg-background/85 backdrop-blur-xl">
+            <div className="mx-auto flex h-full max-w-4xl items-center justify-between gap-3 pl-16 pr-3 sm:gap-5 sm:pr-4 md:px-4">
+              <Popover>
+                <h1 className="min-w-0 flex-1">
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`Room details: ${roomName}`}
+                      className="group -ml-2 inline-flex h-10 max-w-full items-center gap-1.5 rounded-lg px-2 text-left text-[15px] font-semibold tracking-tight transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted/60 sm:text-base"
+                    >
+                      <span dir="auto" className="min-w-0 truncate">{roomName}</span>
+                      <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </button>
+                  </PopoverTrigger>
+                </h1>
+                <PopoverContent
+                  align="start"
+                  sideOffset={8}
+                  collisionPadding={12}
+                  aria-labelledby={roomDetailsId}
+                  className="w-80 max-w-[calc(100vw-1.5rem)] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto rounded-xl border-border/70 p-4 shadow-xl"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 id={roomDetailsId} className="text-xs font-medium text-muted-foreground">Room details</h2>
+                    {isPro && <Badge className="rounded-md border-orange-500/20 bg-orange-500/10 px-1.5 py-0 text-[9px] font-semibold tracking-wide text-orange-600 hover:bg-orange-500/10 dark:text-orange-400">PRO</Badge>}
+                  </div>
+                  <p dir="auto" className="mt-2 text-base font-semibold leading-relaxed [overflow-wrap:anywhere]">{roomName}</p>
+                  <div className="mt-4 flex items-center justify-between gap-3 text-xs">
+                    <span className="text-muted-foreground">{customRoomUrl ? "Room address" : "Room code"}</span>
+                    <span className={`inline-flex items-center gap-1.5 ${codeOpen ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${codeOpen ? "bg-emerald-500" : "bg-zinc-400"}`} />
+                      {codeOpen ? "Code open" : "Code closed"}
+                    </span>
+                  </div>
                   <Button
-                    variant="ghost"
-                    size="sm"
+                    variant="outline"
                     type="button"
                     onClick={handleCopy}
-                    className="group -ml-1 flex h-auto min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 font-normal hover:bg-muted"
-                    aria-label={`Copy room code ${space.slug}`}
-                    title="Copy room code"
+                    aria-label={`Copy room ${customRoomUrl ? "address" : "code"} ${space.slug}`}
+                    className="mt-2 h-auto min-h-11 w-full justify-between gap-3 rounded-lg bg-muted/25 px-3 py-2 text-left"
                   >
-                    <span className={`truncate font-mono text-sm font-bold ${customRoomUrl ? "" : "tracking-[0.2em]"}`}>
-                      {space.slug}
+                    <span dir="ltr" className={`min-w-0 whitespace-normal font-mono text-sm [overflow-wrap:anywhere] ${customRoomUrl ? "" : "tracking-widest"}`}>{space.slug}</span>
+                    <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-normal text-muted-foreground" aria-live="polite">
+                      {copied ? <Check aria-hidden="true" className="h-3.5 w-3.5 text-emerald-500" /> : <Copy aria-hidden="true" className="h-3.5 w-3.5" />}
+                      {copied ? "Copied" : "Copy"}
                     </span>
-                    {copied ? (
-                      <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-60 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100" />
-                    )}
                   </Button>
-                  {isPro && (
-                    <Badge className="shrink-0 rounded-full bg-purple-600 px-1.5 py-0.5 text-[9px] font-black text-white hover:bg-purple-600 border-0">
-                      PRO
-                    </Badge>
-                  )}
-                </div>
-                <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[10px] text-muted-foreground">
-                  <span className="truncate">{currentDisplayName}</span>
-                  <Badge variant="outline" className={`inline-flex shrink-0 items-center gap-1 px-1.5 py-0.2 text-[10px] font-normal ${codeOpen ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}><span className={`h-1.5 w-1.5 rounded-full ${codeOpen ? "bg-emerald-500" : "bg-zinc-400"}`} />{codeOpen ? "Code open" : "Code closed"}</Badge>
-                </div>
-              </div>
-              <div className="flex min-w-0 items-center gap-2">
-                {expiryLabel && <Badge variant="outline" title={space.expires_at ? (clientNow === null ? "Room time limit" : new Date(space.expires_at).toLocaleString()) : "Previous inactivity limit"} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-orange-500/20 bg-orange-500/5 px-2 py-1 text-[10px] font-medium text-orange-600 dark:text-orange-400 hover:bg-orange-500/5"><Clock3 className="h-3 w-3" />{expiryLabel}</Badge>}
-                <span
-                  className="hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:flex"
-                  aria-live="polite"
-                >
-                  {connectionStatus === "connected" ? (
-                    <Wifi className="h-3.5 w-3.5 text-emerald-500" />
-                  ) : (
-                    <WifiOff className="h-3.5 w-3.5 text-amber-500" />
-                  )}
-                  {connectionStatus === "connected"
-                    ? `${onlineCount} online`
-                    : connectionStatus === "connecting"
-                      ? "Connecting"
-                      : "Offline"}
+                  <dl className="mt-4 space-y-2 border-t border-border/60 pt-3 text-xs">
+                    {expiryLabel && <div className="flex items-start justify-between gap-4">
+                      <dt className="shrink-0 text-muted-foreground">Time limit</dt>
+                      <dd className="text-right leading-relaxed">{space.expires_at && clientNow !== null ? new Date(space.expires_at).toLocaleString() : expiryLabel}</dd>
+                    </div>}
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="shrink-0 text-muted-foreground">You are</dt>
+                      <dd dir="auto" className="text-right [overflow-wrap:anywhere]">{currentDisplayName}</dd>
+                    </div>
+                  </dl>
+                </PopoverContent>
+              </Popover>
+              <div className="flex shrink-0 items-center gap-3">
+                {expiryLabel && <span className="hidden items-center gap-1.5 whitespace-nowrap text-xs text-orange-600 sm:inline-flex dark:text-orange-400"><Clock3 aria-hidden="true" className="h-3.5 w-3.5" />{expiryLabel}</span>}
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground" role="status">
+                    {connectionStatus === "connected" ? <Wifi className="h-3 w-3 text-emerald-500" /> : <WifiOff className="h-3 w-3 text-amber-500" />}
+                    {connectionStatus === "connected" ? `${onlineCount} online` : connectionStatus === "connecting" ? "Connecting" : "Offline"}
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 w-8 gap-0 p-0 sm:w-auto sm:gap-1.5 sm:px-3"
+                  className="h-10 w-10 gap-0 rounded-lg border-border/70 bg-muted/25 p-0 shadow-sm sm:h-8 sm:w-auto sm:gap-2 sm:px-3"
                   onClick={handleShare}
                   aria-label="Share room"
                 >
@@ -728,10 +752,10 @@ export function SpaceContainer({
             </div>
           </header>
 
-          <div className="container mx-auto px-4">
-            {(space.welcome_text || !canPost || space.name) && <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-orange-500/20 bg-orange-500/5 p-5"><h1 className="break-words font-bold">{space.name || `Room ${space.slug}`}</h1>{space.welcome_text && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{space.welcome_text}</p>}{!canPost && <p className="mt-3 text-xs text-muted-foreground">{roomExpired ? "This room has closed." : "Read-only room"}</p>}</div>}
+          <div className="container mx-auto flex flex-1 flex-col px-4">
+            {(space.welcome_text || !canPost) && <section aria-label="Room information" className="mx-auto mt-6 w-full max-w-2xl rounded-xl border border-border/60 bg-muted/25 px-4 py-3">{space.welcome_text && <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{space.welcome_text}</p>}{!canPost && <p className={`${space.welcome_text ? "mt-2 " : ""}text-xs text-muted-foreground`}>{roomExpired ? "This room has closed." : "Read-only room"}</p>}</section>}
             {canPost && (!hasPosted || keepInitialComposerDuringUpload) ? (
-              <div className="flex min-h-screen items-center justify-center">
+              <div className="flex flex-1 items-center justify-center py-10 sm:py-12">
                 <div className="w-full max-w-4xl">
                   <Composer
                     spaceId={space.id}

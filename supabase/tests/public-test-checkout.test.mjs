@@ -100,7 +100,27 @@ try {
     await assert.rejects(bill(event('wrong-global-mode', 0, leases[0].reservation_id, { mode: false })), /mode mismatch/);
     assert.equal(Number((await db.query('select count(*) from woff_private.billing_events')).rows[0].count), 0);
     assert.equal((await bill(params)).is_pro, true);
-    assert.equal((await bill(event('second-test', 1, leases[1].reservation_id))).is_pro, true);
+    assert.equal(await committed(), 799 * MiB);
+  });
+  await check('shared provider customers can pay for distinct verified accounts; subscriptions remain unique', async () => {
+    const second = event('second-test', 1, leases[1].reservation_id);
+    second[4] = '1000';
+    assert.equal((await bill(second)).is_pro, true);
+    const firstAccount = await rpc(users[0], 'select public.get_sender_account() result');
+    const secondAccount = await rpc(users[1], 'select public.get_sender_account() result');
+    assert.equal(firstAccount.customer_id, secondAccount.customer_id);
+    assert.notEqual(firstAccount.subscription_id, secondAccount.subscription_id);
+    const otherAccount = await as(users[0], async c =>
+      (await c.query('select user_id from public.sender_entitlements where user_id=$1', [users[1]])).rows);
+    assert.equal(otherAccount.length, 0);
+    const duplicateSubscription = event('duplicate-subscription-owner', 2, leases[2].reservation_id);
+    duplicateSubscription[4] = '1000';
+    duplicateSubscription[5] = firstAccount.subscription_id;
+    await assert.rejects(bill(duplicateSubscription), /sender_entitlements_subscription_id_key/);
+    assert.equal((await rpc(users[2], 'select public.get_sender_account() result')).is_pro, false);
+    assert.equal((await db.query('select consumed_at from woff_private.sender_checkout_reservations where id=$1',
+      [leases[2].reservation_id])).rows[0].consumed_at, null);
+    assert.equal(Number((await db.query('select count(*) from woff_private.billing_events')).rows[0].count), 2);
     assert.equal(await committed(), 799 * MiB);
   });
   const rooms = [];

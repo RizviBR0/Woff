@@ -1,10 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { SpaceContainer } from "@/components/space-container";
 import { displayNameForDevice } from "@/lib/display-name";
 import { requireAnonymousUser } from "@/lib/supabase";
 import { isValidRoomSlug, normalizeRoomSlug } from "@/lib/room-slug";
+import { roomPageTitle } from "@/lib/room-title";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +15,9 @@ interface SpacePageProps {
   searchParams: Promise<{ join?: string }>;
 }
 
-async function getSpaceAndEntries(slug: string) {
+// Share the authorized room result between the page and its metadata within
+// this request, so opening a room only runs once.
+const getSpaceAndEntries = cache(async (slug: string) => {
   if (!isValidRoomSlug(slug)) return null;
 
   const { supabase, user } = await requireAnonymousUser();
@@ -45,14 +49,16 @@ async function getSpaceAndEntries(slug: string) {
     space: opened.space,
     entries: opened.entries || [],
   };
-}
+});
 
 export async function generateMetadata({
   params,
 }: SpacePageProps): Promise<Metadata> {
   const { slug } = await params;
+  const canonicalSlug = normalizeRoomSlug(slug);
+  const data = await getSpaceAndEntries(canonicalSlug);
   return {
-    title: { absolute: `Space ${slug} – Woff` },
+    title: { absolute: roomPageTitle(data?.space || { slug: canonicalSlug }) },
     description: "A temporary Woff sharing space. Download files you want to keep; Woff is not cloud storage.",
     referrer: "no-referrer",
     robots: { index: false, follow: false, nocache: true },

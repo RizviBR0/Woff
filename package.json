@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx --ignore-pattern .next --ignore-pattern internal",
-    "test:unit": "node --experimental-strip-types --test scripts/launch.test.mjs scripts/performance.test.mjs scripts/billing.test.mjs scripts/auth-flow.test.mjs scripts/checkout-flow.test.mjs scripts/room-browser-state.test.mjs scripts/room-expiry.test.mjs scripts/room-slug.test.mjs scripts/room-identity-action.test.mjs",
+    "test:unit": "node --experimental-strip-types --test scripts/launch.test.mjs scripts/performance.test.mjs scripts/billing.test.mjs scripts/auth-flow.test.mjs scripts/checkout-flow.test.mjs scripts/room-browser-state.test.mjs scripts/room-expiry.test.mjs scripts/room-slug.test.mjs scripts/room-identity-action.test.mjs scripts/room-page.test.mjs",
     "test:db": "node supabase/tests/launch-safety.test.mjs && node supabase/tests/pro-room-identity.test.mjs",
     "extension:build": "node extension/scripts/build.mjs",
     "extension:check": "node --check extension/src/background.js && node --check extension/src/panel.js && node --check extension/scripts/build.mjs"
