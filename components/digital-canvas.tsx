@@ -50,6 +50,12 @@ const STROKE_SIZES = [
   { label: "Bold", value: 12, dotSize: "h-4 w-4" },
 ];
 
+const IMAGE_FILE_EXT_PATTERN = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
+
+function isImageFile(file: File): boolean {
+  return file.type.startsWith("image/") || (!file.type && IMAGE_FILE_EXT_PATTERN.test(file.name));
+}
+
 export function DrawingCanvas({
   isOpen,
   onClose,
@@ -110,13 +116,17 @@ export function DrawingCanvas({
 
   // Load an image file onto the canvas as an interactive moveable/resizable element
   const handleLoadImage = useCallback(
-    (file: File) => {
-      if (!file.type.startsWith("image/")) {
+    async (file: File) => {
+      if (!isImageFile(file)) {
         toast.error("Please provide an image file (PNG, JPG, WebP)");
         return;
       }
-      addImage(file);
-      toast.success("Image placed on canvas. Drag handles to resize or draw on top.");
+      const loaded = await addImage(file);
+      if (loaded) {
+        toast.success("Image placed on canvas. Drag handles to resize or draw on top.");
+      } else {
+        toast.error("Could not decode that image file");
+      }
     },
     [addImage],
   );
@@ -141,12 +151,14 @@ export function DrawingCanvas({
       }
     };
 
-    if (!isOpen) {
-      loadedUrlRef.current = null;
-      revokeInitialBlob();
-      setIsLoadingImage(false);
-      setImageLoadError(null);
-      setShowColorPicker(false);
+    if (!isOpen || !mounted) {
+      if (!isOpen) {
+        loadedUrlRef.current = null;
+        revokeInitialBlob();
+        setIsLoadingImage(false);
+        setImageLoadError(null);
+        setShowColorPicker(false);
+      }
       return;
     }
 
@@ -262,7 +274,7 @@ export function DrawingCanvas({
       active = false;
       controller.abort();
     };
-  }, [isOpen, initialImageUrl]);
+  }, [isOpen, mounted, initialImageUrl]);
 
   // Ensure any tracked initial blob URL is revoked on unmount
   useEffect(() => {
@@ -316,21 +328,24 @@ export function DrawingCanvas({
 
   // Track container resize to update canvas resolution and DPR
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !mounted) return;
+    const container = containerRef.current;
+    if (!container) return;
+
     const updateSize = () => {
-      const container = containerRef.current;
-      if (!container) return;
-      const width = Math.max(1, container.clientWidth);
-      const height = Math.max(1, container.clientHeight);
+      const el = containerRef.current;
+      if (!el) return;
+      const width = Math.max(1, el.clientWidth);
+      const height = Math.max(1, el.clientHeight);
       updateDimensions(width, height);
     };
 
     const observer = new ResizeObserver(updateSize);
-    if (containerRef.current) observer.observe(containerRef.current);
+    observer.observe(container);
     updateSize();
 
     return () => observer.disconnect();
-  }, [isOpen, updateDimensions]);
+  }, [isOpen, mounted, updateDimensions]);
 
   // Capture-phase event listeners to intercept paste & drop so they NEVER leak to the background room
   useEffect(() => {
@@ -342,13 +357,13 @@ export function DrawingCanvas({
 
       const items = Array.from(e.clipboardData?.items || []);
       const item = items.find((it) => it.type.startsWith("image/"));
-      if (!item) return;
+      const file =
+        item?.getAsFile() ||
+        Array.from(e.clipboardData?.files || []).find((f) => isImageFile(f));
+      if (!file) return;
 
       e.preventDefault();
-      const file = item.getAsFile();
-      if (file) {
-        handleLoadImage(file);
-      }
+      void handleLoadImage(file);
     };
 
     const handleDragEnter = (e: DragEvent) => {
@@ -385,9 +400,9 @@ export function DrawingCanvas({
       setIsDraggingOver(false);
 
       const files = Array.from(e.dataTransfer?.files || []);
-      const imgFile = files.find((f) => f.type.startsWith("image/"));
+      const imgFile = files.find((f) => isImageFile(f));
       if (imgFile) {
-        handleLoadImage(imgFile);
+        void handleLoadImage(imgFile);
       }
     };
 
@@ -556,7 +571,7 @@ export function DrawingCanvas({
 
         <canvas
           ref={canvasRef}
-          className={`absolute inset-0 touch-none ${cursorClass}`}
+          className={`absolute inset-0 block h-full w-full touch-none ${cursorClass}`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -584,7 +599,7 @@ export function DrawingCanvas({
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleLoadImage(file);
+            if (file) void handleLoadImage(file);
             e.target.value = "";
           }}
         />

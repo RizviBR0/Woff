@@ -358,12 +358,20 @@ export function useCanvasDrawing({
       customWidthRatio?: number,
       autoSelect = true,
       skipHistory = false,
-    ) => {
+    ): Promise<boolean> => {
       const processElement = (img: HTMLImageElement, src: string) => {
         if (!skipHistory) {
           pushHistory();
         }
-        const { width, height } = dimensionsRef.current;
+        const canvas = canvasRef.current;
+        const width =
+          dimensionsRef.current.width > 1
+            ? dimensionsRef.current.width
+            : Math.max(1, canvas?.clientWidth || window.innerWidth);
+        const height =
+          dimensionsRef.current.height > 1
+            ? dimensionsRef.current.height
+            : Math.max(1, canvas?.clientHeight || window.innerHeight);
         const naturalW = img.naturalWidth || 400;
         const naturalH = img.naturalHeight || 300;
         const aspect = naturalW / naturalH;
@@ -396,9 +404,14 @@ export function useCanvasDrawing({
           aspectRatio: aspect,
         };
 
-        setImages((prev) => [...prev, newImage]);
+        const nextImages = [...imagesRef.current, newImage];
+        imagesRef.current = nextImages;
+        setImages(nextImages);
         if (autoSelect) {
-          setSelectedIds(new Set([id]));
+          const nextSelection = new Set([id]);
+          selectedIdsRef.current = nextSelection;
+          modeRef.current = "select";
+          setSelectedIds(nextSelection);
           setModeState("select");
         }
         scheduleRedraw();
@@ -406,20 +419,26 @@ export function useCanvasDrawing({
 
       if (fileOrImg instanceof HTMLImageElement) {
         processElement(fileOrImg, fileOrImg.src);
-      } else {
+        return Promise.resolve(true);
+      }
+
+      return new Promise<boolean>((resolve) => {
         const url = URL.createObjectURL(fileOrImg);
         managedBlobUrlsRef.current.add(url);
         const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => processElement(img, url);
+        img.onload = () => {
+          processElement(img, url);
+          resolve(true);
+        };
         img.onerror = () => {
           URL.revokeObjectURL(url);
           managedBlobUrlsRef.current.delete(url);
+          resolve(false);
         };
         img.src = url;
-      }
+      });
     },
-    [pushHistory, scheduleRedraw],
+    [canvasRef, pushHistory, scheduleRedraw],
   );
 
   // Hit test helper for corner resize handles
