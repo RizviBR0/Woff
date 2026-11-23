@@ -1,7 +1,8 @@
 import { MetadataRoute } from "next";
 import { getPublishedBlogPosts } from "@/lib/blog";
+import { SITE_URL } from "@/lib/site-url";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://woff.space";
+export const revalidate = 3600;
 
 const staticRoutes = [
   {
@@ -70,13 +71,13 @@ const staticRoutes = [
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticPages: MetadataRoute.Sitemap = staticRoutes.map((route) => ({
-    url: `${siteUrl}${route.path}`,
+    url: `${SITE_URL}${route.path}`,
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }));
   const articles: MetadataRoute.Sitemap = getPublishedBlogPosts().map(
     (post) => ({
-      url: `${siteUrl}/blog/${post.slug}`,
+      url: `${SITE_URL}/blog/${post.slug}`,
       lastModified: new Date(`${post.updatedDate || post.date}T00:00:00Z`),
       changeFrequency: "monthly",
       priority: 0.7,

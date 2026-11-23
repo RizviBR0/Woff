@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle,
   Check,
   Copy,
   KeyRound,
@@ -24,11 +23,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { deleteSpace, recoverSpace, recordRoomEvent, type Space } from "@/lib/actions";
-import { rememberSpaceOwnership, removeBrowserValue } from "@/lib/space-recovery";
+import {
+  readBrowserValue,
+  rememberSpaceOwnership,
+  removeBrowserValue,
+} from "@/lib/space-recovery";
 
 interface SpaceModalsProps {
   space: Space;
-  isCreator: boolean;
   shareModalOpen: boolean;
   setShareModalOpen: (open: boolean) => void;
   qrCodeUrl: string;
@@ -46,7 +48,6 @@ interface SpaceModalsProps {
 
 export function SpaceModals({
   space,
-  isCreator,
   shareModalOpen,
   setShareModalOpen,
   qrCodeUrl,
@@ -63,6 +64,7 @@ export function SpaceModals({
 }: SpaceModalsProps) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState("");
   const [isRecovering, setIsRecovering] = useState(false);
@@ -73,13 +75,25 @@ export function SpaceModals({
 
   useEffect(() => { setCopied(false); }, [shareUrl]);
 
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       toast.success("Link copied to clipboard");
       void recordRoomEvent(space.id, "share_initiated");
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => {
+        setCopied(false);
+        copiedTimerRef.current = null;
+      }, 2000);
     } catch {
       toast.error("Failed to copy link");
     }
@@ -89,8 +103,21 @@ export function SpaceModals({
     setIsDeleting(true);
     try {
       await deleteSpace(space.id);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("last_created_space");
+      if (readBrowserValue("last_created_space") === space.slug) {
+        removeBrowserValue("last_created_space");
+      }
+      if (readBrowserValue("last_room") === space.slug) {
+        removeBrowserValue("last_room");
+      }
+      for (const prefix of [
+        "woff_recovery_",
+        "woff_recovery_room_",
+        "woff_recovery_owner_",
+        "woff_invite_",
+        "woff_invite_room_",
+        "woff_invite_version_",
+      ]) {
+        removeBrowserValue(`${prefix}${space.slug}`);
       }
       toast.success("Space deleted");
       router.push("/");
@@ -218,7 +245,12 @@ export function SpaceModals({
       </Dialog>
 
       {/* Delete Space Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting) setDeleteDialogOpen(open);
+        }}
+      >
         <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3">

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import JSZip from 'jszip';
-import { addArchiveFiles, generateArchive } from '../lib/archive.ts';
+import { addArchiveFiles, addArchiveText, generateArchive, sanitizeArchivePath } from '../lib/archive.ts';
 import { downloadFileFromUrl } from '../lib/download.ts';
+import { parseJwtPayload, hasActiveSessionToken } from '../lib/jwt.ts';
 
 for (const [mode, expected] of [
   ['development', 'no-store, must-revalidate'],
@@ -83,4 +84,39 @@ test('individual private downloads dispatch an attachment URL without buffering 
     await downloadFileFromUrl('/api/files/space/object', 'বাংলা report.pdf');
     assert.equal(new URL(anchor.href).searchParams.get('download'), 'বাংলা report.pdf');
   } finally { Object.assign(globalThis, original); }
+});
+
+test('archive paths strip traversal segments and dangerous schemes are rejected', async () => {
+  assert.equal(sanitizeArchivePath('../../etc/passwd'), 'etc/passwd');
+  assert.equal(sanitizeArchivePath('C:\\..\\Windows\\system.ini'), 'Windows/system.ini');
+  assert.equal(sanitizeArchivePath('../..'), 'file');
+  const zip = new JSZip();
+  addArchiveText(zip, '../notes/../../secret.txt', 'ok');
+  assert.deepEqual(Object.keys(zip.files).filter((key) => !zip.files[key].dir), ['notes/secret.txt']);
+  await assert.rejects(
+    addArchiveFiles(zip, [{ url: 'javascript:alert(1)', name: 'bad.txt' }]),
+    /unsupported/,
+  );
+  const originalWindow = globalThis.window;
+  globalThis.window = { location: { href: 'https://woff.test/1234', origin: 'https://woff.test' } };
+  try {
+    await assert.rejects(
+      downloadFileFromUrl('javascript:alert(1)', 'bad.txt'),
+      /Unsupported download URL/,
+    );
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('JWT helper decodes unpadded Base64URL payloads and validates expiry', () => {
+  const encode = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+  const futureExp = Math.floor(Date.now() / 1000) + 3600;
+  const pastExp = Math.floor(Date.now() / 1000) - 60;
+  const activeToken = `${encode({ alg: 'HS256' })}.${encode({ sub: 'u1', exp: futureExp })}.sig`;
+  const expiredToken = `${encode({ alg: 'HS256' })}.${encode({ sub: 'u1', exp: pastExp })}.sig`;
+  assert.equal(parseJwtPayload(activeToken)?.sub, 'u1');
+  assert.equal(hasActiveSessionToken(activeToken), 'u1');
+  assert.equal(hasActiveSessionToken(expiredToken), null);
+  assert.equal(parseJwtPayload('not-a-jwt'), null);
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { isVerifiedSender } from "@/lib/account-helpers";
 
@@ -8,16 +8,16 @@ import { isVerifiedSender } from "@/lib/account-helpers";
 export function useVerifiedSender() {
   const [signedIn, setSignedIn] = useState(false);
   const pathname = usePathname();
+  const checkSessionRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let active = true;
     let revision = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let unsubscribe = () => {};
-    let checkSession = () => {};
 
     const checkVisibleSession = () => {
-      if (document.visibilityState === "visible") checkSession();
+      if (document.visibilityState === "visible") checkSessionRef.current();
     };
 
     // Keep the browser auth SDK out of the navbar's initial marketing bundle.
@@ -36,7 +36,7 @@ export function useVerifiedSender() {
           }
         };
 
-        checkSession = () => {
+        const checkSession = () => {
           // Invalidate an older request before its response can restore a logout.
           revision += 1;
           clearTimeout(timer);
@@ -45,11 +45,15 @@ export function useVerifiedSender() {
             if (active) void verifySession();
           }, 0);
         };
+        checkSessionRef.current = checkSession;
 
         const { data } = supabaseBrowser.auth.onAuthStateChange(
           (event, session) => {
             if (!active) return;
-            if (event === "SIGNED_OUT" || !isVerifiedSender(session?.user ?? null)) {
+            if (
+              event === "SIGNED_OUT" ||
+              !isVerifiedSender(session?.user ?? null)
+            ) {
               revision += 1;
               clearTimeout(timer);
               setSignedIn(false);
@@ -75,11 +79,16 @@ export function useVerifiedSender() {
       active = false;
       revision += 1;
       clearTimeout(timer);
+      checkSessionRef.current = () => {};
       unsubscribe();
       window.removeEventListener("focus", checkVisibleSession);
       window.removeEventListener("pageshow", checkVisibleSession);
       document.removeEventListener("visibilitychange", checkVisibleSession);
     };
+  }, []);
+
+  useEffect(() => {
+    checkSessionRef.current();
   }, [pathname]);
 
   return signedIn;

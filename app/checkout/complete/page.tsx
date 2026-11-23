@@ -26,7 +26,12 @@ export default async function CheckoutCompletePage() {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600 dark:text-orange-400">Woff Pro / Payment status</p>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight">{available && !verified ? "Let’s check your account." : "We couldn’t check just yet."}</h1>
             <p className="mt-5 text-sm leading-7 text-muted-foreground">{available && !verified ? "Sign in with the account you used for checkout. We’ll check its verified subscription status." : "Your account is temporarily unavailable. Try again in a moment. If you already paid, don’t start another purchase."}</p>
-            <Button asChild className="mt-7 h-12 w-full rounded-xl"><Link href={available && !verified ? "/sign-in?next=%2Fcheckout%2Fcomplete" : "/checkout/complete"}>{available && !verified ? "Sign in to check" : "Try again"}</Link></Button>
+            {available && !verified ? (
+              <Button asChild className="mt-7 h-12 w-full rounded-xl"><Link href="/sign-in?next=%2Fcheckout%2Fcomplete">Sign in to check</Link></Button>
+            ) : (
+              /* eslint-disable-next-line @next/next/no-html-link-for-pages -- full reload required to retry server-side status check */
+              <Button asChild className="mt-7 h-12 w-full rounded-xl"><a href="/checkout/complete">Try again</a></Button>
+            )}
             <p className="mt-5 text-center text-sm text-muted-foreground"><Link href="/contact" className="underline underline-offset-4">Need help with a payment?</Link></p>
           </section>
         )}

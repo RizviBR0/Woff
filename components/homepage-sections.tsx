@@ -23,7 +23,7 @@ export function HomepageSections() {
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.02)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:42px_42px]" />
 
         {/* Ambient background glows */}
-        <div className="pointer-events-none absolute left-0 top-1/2 h-[420px] w-[420px] -translate-y-1/2 rounded-full bg-[#ff5a00]/8 dark:bg-[#ff5a00]/20 blur-[130px]" />
+        <div className="pointer-events-none absolute left-0 top-1/2 h-[420px] w-[420px] -translate-y-1/2 rounded-full bg-[#ff5a00]/10 dark:bg-[#ff5a00]/20 blur-[130px]" />
         <div className="pointer-events-none absolute right-10 top-10 h-[280px] w-[420px] rounded-full bg-[#ff5a00]/5 dark:bg-[#ff5a00]/10 blur-[120px]" />
 
         <div className="relative mx-auto max-w-7xl">
@@ -35,7 +35,7 @@ export function HomepageSections() {
 
             <div className="relative z-10">
               {/* Pulsing Pill Badge */}
-              <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md">
+              <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
                 Get In Touch
               </div>

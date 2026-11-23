@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import NextImage from "next/image";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Edit3, Eye, Play } from "lucide-react";
+import { Edit3, Eye, ImageOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,17 +11,16 @@ import {
   cancelUploadIntents,
 } from "@/lib/actions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
-import type { Entry, UploadedFileItem } from "./entry-types";
+import {
+  isSafeLegacyMediaUrl,
+  parseLegacyPhotosText,
+  type Entry,
+  type UploadedFileItem,
+} from "./entry-types";
 
 const GlobalImageViewer = dynamic(
   () =>
     import("../global-image-viewer").then((module) => module.GlobalImageViewer),
-  { ssr: false },
-);
-
-const GlobalVideoViewer = dynamic(
-  () =>
-    import("../global-video-viewer").then((module) => module.GlobalVideoViewer),
   { ssr: false },
 );
 
@@ -52,28 +50,57 @@ function ShimmerImage({
   onClick?: () => void;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    setErrored(false);
+    if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) {
+      setLoaded(true);
+    } else {
+      setLoaded(false);
+    }
+  }, [src]);
 
   return (
     <div
       className={`relative overflow-hidden ${containerClassName}`}
       onClick={onClick}
     >
-      {!loaded && (
+      {!loaded && !errored && (
         <div className="absolute inset-0 z-0 bg-muted/60 backdrop-blur-sm overflow-hidden animate-in fade-in duration-150">
           <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 dark:via-white/10 to-transparent pointer-events-none" />
         </div>
       )}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt={alt}
-        onLoad={() => setLoaded(true)}
-        className={`${className} transition-all duration-300 ${
-          loaded ? "opacity-100 blur-0 scale-100" : "opacity-0 blur-sm scale-[0.98]"
-        }`}
-      />
+      {errored ? (
+        <div className="flex min-h-[120px] w-full flex-col items-center justify-center gap-1.5 bg-muted/40 p-4 text-xs text-muted-foreground">
+          <ImageOff className="h-5 w-5 opacity-70" aria-hidden="true" />
+          <span>Image unavailable</span>
+        </div>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          ref={imgRef}
+          src={src}
+          alt={alt}
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            setLoaded(false);
+            setErrored(true);
+          }}
+          className={`${className} transition-all duration-300 ${
+            loaded ? "opacity-100 blur-0 scale-100" : "opacity-0 blur-sm scale-[0.98]"
+          }`}
+        />
+      )}
     </div>
   );
+}
+
+function isSafePreviewUrl(url: unknown): url is string {
+  if (typeof url !== "string") return false;
+  if (url.startsWith("blob:")) return true;
+  return isSafeLegacyMediaUrl(url);
 }
 
 export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntryCardProps) {
@@ -81,7 +108,6 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [markupImage, setMarkupImage] = useState<string | null>(null);
-  const [video, setVideo] = useState<{ src: string; title: string } | null>(null);
 
   // Extract media items
   const items: UploadedFileItem[] = (() => {
@@ -89,14 +115,17 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
     return [];
   })();
 
-  const previewUrls: string[] = entry.meta?.previewUrls || [];
+  const previewUrls: string[] = Array.isArray(entry.meta?.previewUrls)
+    ? entry.meta.previewUrls.filter(isSafePreviewUrl)
+    : [];
 
-  // Parse legacy drawing or photo text
+  // Parse legacy drawing or photo text safely (only data:image/ or /api/files/)
   const drawingDataUrl = (() => {
     if (entry.text?.startsWith("DRAWING:")) {
-      return entry.text.replace("DRAWING:", "");
+      const candidate = entry.text.slice("DRAWING:".length).trim();
+      return isSafeLegacyMediaUrl(candidate) ? candidate : null;
     }
-    if (entry.meta?.previewUrl && entry.meta?.type === "drawing") {
+    if (entry.meta?.type === "drawing" && isSafePreviewUrl(entry.meta?.previewUrl)) {
       return entry.meta.previewUrl;
     }
     return null;
@@ -104,12 +133,20 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
 
   const singlePhotoUrl = (() => {
     if (entry.text?.startsWith("PHOTO:")) {
-      return entry.text.replace("PHOTO:", "");
+      const candidate = entry.text.slice("PHOTO:".length).trim();
+      return isSafeLegacyMediaUrl(candidate) ? candidate : null;
     }
-    if (entry.meta?.url && typeof entry.meta.url === "string") {
+    if (isSafePreviewUrl(entry.meta?.url)) {
       return entry.meta.url;
     }
     return null;
+  })();
+
+  const legacyPhotosUrls = (() => {
+    if (entry.text?.startsWith("PHOTOS:")) {
+      return parseLegacyPhotosText(entry.text.slice("PHOTOS:".length));
+    }
+    return [];
   })();
 
   const handleOpenGallery = (images: string[], index = 0) => {
@@ -119,7 +156,7 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
   };
 
   const handleSaveMarkup = async (blob: Blob) => {
-    if (!onNewEntry) {
+    if (!canWrite || !onNewEntry) {
       throw new Error("This room cannot receive the edited image right now");
     }
     const file = new File([blob], `markup-${Date.now()}.png`, {
@@ -135,31 +172,36 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
       typeof createImageBitmap === "function"
         ? await createImageBitmap(file).catch(() => null)
         : null;
-
-    const [intents, authResult] = await Promise.all([
-      createUploadIntents(entry.space_id, [
-        { name: file.name, size: file.size, type: file.type },
-      ]),
-      supabaseBrowser.auth.getSession(),
-    ]);
-
-    const session = authResult.data.session;
-    if (!session) {
-      bitmap?.close();
-      throw new Error("Your anonymous session expired. Refresh and retry.");
-    }
-
-    const parsedUrl = new URL(projectUrl);
-    const projectId = parsedUrl.hostname.endsWith(".supabase.co")
-      ? parsedUrl.hostname.split(".")[0]
-      : null;
-    const storageOrigin = projectId
-      ? `https://${projectId}.storage.supabase.co`
-      : parsedUrl.origin;
-    const intent = intents[0];
-    const { Upload } = await import("tus-js-client");
+    let reservedPath: string | null = null;
 
     try {
+      const [intents, authResult] = await Promise.all([
+        createUploadIntents(entry.space_id, [
+          { name: file.name, size: file.size, type: file.type },
+        ]),
+        supabaseBrowser.auth.getSession(),
+      ]);
+
+      const intent = intents[0];
+      if (!intent) {
+        throw new Error("Unable to reserve upload");
+      }
+      reservedPath = intent.path;
+
+      const session = authResult.data.session;
+      if (!session) {
+        throw new Error("Your anonymous session expired. Refresh and retry.");
+      }
+
+      const parsedUrl = new URL(projectUrl);
+      const projectId = parsedUrl.hostname.endsWith(".supabase.co")
+        ? parsedUrl.hostname.split(".")[0]
+        : null;
+      const storageOrigin = projectId
+        ? `https://${projectId}.storage.supabase.co`
+        : parsedUrl.origin;
+      const { Upload } = await import("tus-js-client");
+
       await new Promise<void>((resolve, reject) => {
         const upload = new Upload(file, {
           endpoint: `${storageOrigin}/storage/v1/upload/resumable`,
@@ -197,10 +239,13 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
         ],
         "drawing",
       );
+      reservedPath = null;
       onNewEntry(created as Entry);
       toast.success("Annotated image sent");
     } catch (error) {
-      await cancelUploadIntents(entry.space_id, [intent.path]).catch(() => undefined);
+      if (reservedPath) {
+        await cancelUploadIntents(entry.space_id, [reservedPath]).catch(() => undefined);
+      }
       throw error;
     } finally {
       bitmap?.close();
@@ -219,7 +264,7 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
             className="w-full h-auto object-contain max-h-[500px] cursor-pointer"
             onClick={() => handleOpenGallery([src])}
           />
-          <div className="absolute top-2 right-2 opacity-0 group-hover/drawing:opacity-100 transition-opacity flex gap-1 z-10">
+          <div className="absolute top-2 right-2 opacity-90 sm:opacity-0 sm:group-hover/drawing:opacity-100 sm:focus-within:opacity-100 transition-opacity flex gap-1 z-10">
             <Button
               size="icon"
               variant="secondary"
@@ -254,7 +299,7 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
             className="w-full h-auto object-cover max-h-[500px] cursor-pointer"
             onClick={() => handleOpenGallery([singlePhotoUrl])}
           />
-          <div className="absolute top-2 right-2 opacity-0 group-hover/photo:opacity-100 transition-opacity flex gap-1 z-10">
+          <div className="absolute top-2 right-2 opacity-90 sm:opacity-0 sm:group-hover/photo:opacity-100 sm:focus-within:opacity-100 transition-opacity flex gap-1 z-10">
             <Button
               size="icon"
               variant="secondary"
@@ -279,13 +324,14 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
       );
     }
 
-    // Uploaded photo items or previews
+    // Uploaded photo items, legacy PHOTOS:, or previews
     const allImages = (() => {
       const itemUrls = items
         .map((i) => i.url)
-        .filter((url): url is string => Boolean(url));
+        .filter((url): url is string => isSafePreviewUrl(url));
       if (itemUrls.length > 0) return itemUrls;
-      return previewUrls.filter((url): url is string => Boolean(url));
+      if (legacyPhotosUrls.length > 0) return legacyPhotosUrls;
+      return previewUrls;
     })();
 
     if (allImages.length === 0) {
@@ -302,7 +348,7 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
             className="w-full h-auto object-cover max-h-[500px] cursor-pointer"
             onClick={() => handleOpenGallery([src])}
           />
-          <div className="absolute top-2 right-2 opacity-0 group-hover/photo:opacity-100 transition-opacity flex gap-1 z-10">
+          <div className="absolute top-2 right-2 opacity-90 sm:opacity-0 sm:group-hover/photo:opacity-100 sm:focus-within:opacity-100 transition-opacity flex gap-1 z-10">
             <Button
               size="icon"
               variant="secondary"
@@ -355,7 +401,7 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
                   containerClassName="w-full h-full"
                   className="w-full h-full object-cover group-hover/item:scale-105"
                 />
-                <div className="absolute top-1.5 right-1.5 opacity-0 group-hover/item:opacity-100 transition-opacity flex gap-1 z-10">
+                <div className="absolute top-1.5 right-1.5 opacity-90 sm:opacity-0 sm:group-hover/item:opacity-100 sm:focus-within:opacity-100 transition-opacity flex gap-1 z-10">
                   <Button
                     size="icon"
                     variant="secondary"
@@ -405,10 +451,14 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
           initialIndex={galleryIndex}
           isOpen={showGallery}
           onClose={() => setShowGallery(false)}
-          onEdit={(imageUrl) => {
-            setShowGallery(false);
-            setMarkupImage(imageUrl);
-          }}
+          onEdit={
+            canWrite && onNewEntry
+              ? (imageUrl) => {
+                  setShowGallery(false);
+                  setMarkupImage(imageUrl);
+                }
+              : undefined
+          }
         />
       )}
 
@@ -418,15 +468,6 @@ export function MediaEntryCard({ entry, onNewEntry, canWrite = true }: MediaEntr
           isOpen={Boolean(markupImage)}
           onClose={() => setMarkupImage(null)}
           onSend={handleSaveMarkup}
-        />
-      )}
-
-      {video && (
-        <GlobalVideoViewer
-          src={video.src}
-          title={video.title}
-          isOpen={Boolean(video)}
-          onClose={() => setVideo(null)}
         />
       )}
     </>

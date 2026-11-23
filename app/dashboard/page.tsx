@@ -18,9 +18,16 @@ export default async function DashboardPage() {
       <span className={styles.emptyIcon}><LayoutDashboard size={26} aria-hidden="true" /></span>
       <h1>{needsSignIn ? "Your rooms, in one place" : "Dashboard unavailable"}</h1>
       <p>{needsSignIn ? "Sign in to see and manage your rooms." : "We couldn’t load your rooms. Please try again."}</p>
-      <Link href={needsSignIn ? "/sign-in?next=%2Fdashboard" : "/dashboard"} className={`cta-button-glow ${styles.createButton}`}>
-        {needsSignIn ? "Sign in" : "Try again"}
-      </Link>
+      {needsSignIn ? (
+        <Link href="/sign-in?next=%2Fdashboard" className={`cta-button-glow ${styles.createButton}`}>
+          Sign in
+        </Link>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-html-link-for-pages -- full reload required to retry server-side dashboard load */
+        <a href="/dashboard" className={`cta-button-glow ${styles.createButton}`}>
+          Try again
+        </a>
+      )}
       <Link href="/" className={styles.quietLink}>Keep sharing as a guest</Link>
     </section></DashboardShell>;
   }

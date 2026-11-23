@@ -82,10 +82,24 @@ export function migrateRoomBrowserState(previous: Space, current: Space) {
   for (const key of ["last_room", "last_created_space"]) {
     if (readBrowserValue(key) === previous.slug) writeBrowserValue(key, current.slug);
   }
-  for (const prefix of [
-    "woff_invite_", "woff_invite_room_", "woff_invite_version_",
-    "woff_recovery_", "woff_recovery_room_", "woff_recovery_owner_",
-  ]) {
-    removeBrowserValue(`${prefix}${previous.slug}`);
+  const inviteRoomId = readBrowserValue(`woff_invite_room_${previous.slug}`);
+  if (!inviteRoomId || inviteRoomId === previous.id) {
+    for (const prefix of [
+      "woff_invite_",
+      "woff_invite_room_",
+      "woff_invite_version_",
+    ]) {
+      removeBrowserValue(`${prefix}${previous.slug}`);
+    }
+  }
+  const recoveryRoomId = readBrowserValue(`woff_recovery_room_${previous.slug}`);
+  if (!recoveryRoomId || recoveryRoomId === previous.id) {
+    for (const prefix of [
+      "woff_recovery_",
+      "woff_recovery_room_",
+      "woff_recovery_owner_",
+    ]) {
+      removeBrowserValue(`${prefix}${previous.slug}`);
+    }
   }
 }

@@ -13,10 +13,12 @@ export const metadata: Metadata = { title: { absolute: "Room invitation – Woff
 
 export default async function InvitationPage({ params, searchParams }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ note?: string }>;
+  searchParams: Promise<{ note?: string | string[] }>;
 }) {
   const { token } = await params;
-  const { note: noteSlug } = await searchParams;
+  const { note: rawNoteSlug } = await searchParams;
+  if (Array.isArray(rawNoteSlug)) notFound();
+  const noteSlug = rawNoteSlug;
   if (!/^[a-f0-9]{64}$/.test(token)) notFound();
   if (noteSlug !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(noteSlug)) notFound();
   const { supabase, user } = await requireAnonymousUser();

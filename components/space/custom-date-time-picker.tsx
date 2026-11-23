@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useClientNow } from "@/lib/hooks/use-client-now";
 
 interface CustomDateTimePickerProps {
   initialDate?: string | null;
@@ -49,9 +50,10 @@ export function CustomDateTimePicker({
     if (m < 23) return 15;
     if (m < 38) return 30;
     if (m < 53) return 45;
-    return 0;
+    return 59;
   });
   const [ampm, setAmPm] = useState<"AM" | "PM">(() => (defaultDate.getHours() >= 12 ? "PM" : "AM"));
+  const clientNow = useClientNow(15_000);
 
   // Calculate today
   const today = useMemo(() => new Date(), []);
@@ -161,7 +163,7 @@ export function CustomDateTimePicker({
 
   // Validation & relative duration
   const { isPast, summaryText, relativeText } = useMemo(() => {
-    const now = Date.now();
+    const now = clientNow ?? Date.now();
     const diffMs = computedDate.getTime() - now;
     const past = diffMs <= 0;
 
@@ -204,7 +206,7 @@ export function CustomDateTimePicker({
       summaryText: `${dateStr} at ${timeStr}`,
       relativeText: rel,
     };
-  }, [computedDate]);
+  }, [computedDate, clientNow]);
 
   // Quick shortcut helper
   const handleShortcut = (daysToAdd: number, targetHour: number = 18) => {
@@ -491,7 +493,10 @@ export function CustomDateTimePicker({
       <Button
         type="button"
         disabled={isPast || isBusy}
-        onClick={() => void onApply(computedDate.toISOString())}
+        onClick={() => {
+          if (computedDate.getTime() <= Date.now()) return;
+          void onApply(computedDate.toISOString());
+        }}
         className="h-10 w-full rounded-xl bg-[#ff5a00] text-xs font-semibold text-white hover:bg-[#e85100]"
       >
         {isBusy ? "Saving limit..." : "Apply this time limit"}

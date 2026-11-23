@@ -268,6 +268,20 @@ export function Composer({
   }, [text, adjustHeight]);
 
   useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        setNoteCreationStage(null);
+        isCreatingNoteRef.current = false;
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      isCreatingNoteRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const activeUploads = activeUploadsRef.current;
     const cancelTransfers = cancelTransfersRef.current;
     return () => {
@@ -480,7 +494,7 @@ export function Composer({
         if (retainedIntents) {
           const { data, error } = await supabaseBrowser.from("upload_intents").select("path").in("path", retainedIntents.map((item) => item.path)).gt("expires_at", new Date(Date.now() + 60_000).toISOString());
           if (error || data?.length !== retainedIntents.length) {
-            await cancelUploadIntents(spaceId, retainedIntents.map((intent) => intent.path));
+            await cancelUploadIntents(spaceId, retainedIntents.map((intent) => intent.path)).catch(() => undefined);
             uploaded = new Array(files.length);
             retainedIntents = undefined;
           }
@@ -496,6 +510,10 @@ export function Composer({
           ),
           supabaseBrowser.auth.getSession(),
         ]);
+        if (controller.signal.aborted) {
+          await cancelUploadIntents(spaceId, intents.map((intent) => intent.path)).catch(() => undefined);
+          return;
+        }
         retainedBatchRef.current = { id: batchId, intents, uploaded };
         uploaded.forEach((item, index) => { if (item) uploadedByIndex[index] = files[index].size; });
         reportProgress();
@@ -554,10 +572,11 @@ export function Composer({
           error: message,
         });
         onUpdateEntry(batchId, {
-          isLoading: true,
+          isLoading: false,
           isError: true,
           uploadProgress: 0,
         });
+        onUploadStateChange?.(false);
         toast.error(message);
       } finally {
         if (batchControllerRef.current === controller) batchControllerRef.current = null;
@@ -693,25 +712,36 @@ export function Composer({
 
   const saveDrawing = useCallback(
     async (blob: Blob) => {
-      if (isSavingDrawingRef.current || batch?.status === "uploading") {
+      if (
+        isSavingDrawingRef.current ||
+        batchControllerRef.current ||
+        batch?.status === "uploading"
+      ) {
         throw new Error("Wait for the current upload or cancel it");
       }
+      const file = new File([blob], `drawing-${Date.now()}.png`, {
+        type: "image/png",
+      });
+      validateFiles([file]);
       isSavingDrawingRef.current = true;
       try {
-        const file = new File([blob], `drawing-${Date.now()}.png`, { type: "image/png" });
         const upload = runUpload([file], "drawing");
         void upload.catch((error) => {
-          toast.error(error instanceof Error ? error.message : "Unable to send drawing");
+          toast.error(
+            error instanceof Error ? error.message : "Unable to send drawing",
+          );
         });
         // runUpload creates the visible timeline placeholder synchronously before
         // its first network wait. Yield once so the canvas closes only after that
         // handoff is visible to the user.
-        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        );
       } finally {
         isSavingDrawingRef.current = false;
       }
     },
-    [batch?.status, runUpload],
+    [batch?.status, runUpload, validateFiles],
   );
 
   useEffect(() => {
@@ -942,6 +972,7 @@ export function Composer({
               <div className="flex items-center gap-1">
                 {batch.status === "failed" && (
                   <button
+                    type="button"
                     onClick={retryUpload}
                     className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-medium hover:bg-background"
                   >
@@ -950,6 +981,7 @@ export function Composer({
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => void cancelUpload()}
                   className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-medium text-muted-foreground hover:bg-background"
                 >
@@ -1006,6 +1038,7 @@ export function Composer({
           onMouseUp={(e) => updateSelectionToolbar({ x: e.clientX, y: e.clientY })}
           onKeyUp={() => updateSelectionToolbar()}
           onSelect={() => updateSelectionToolbar()}
+          onBlur={() => setSelectionToolbar(null)}
           onScroll={() => setSelectionToolbar(null)}
           onKeyDown={(event) => {
             if (event.key === "Tab") {
@@ -1055,6 +1088,7 @@ export function Composer({
         >
           <div className="flex items-center gap-1">
             <button
+              type="button"
               onClick={() => photoInputRef.current?.click()}
               className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
               aria-label="Upload photos"
@@ -1063,6 +1097,7 @@ export function Composer({
               <span className="hidden sm:inline">Photos</span>
             </button>
             <button
+              type="button"
               onClick={() => { warmUploadLibrary(); fileInputRef.current?.click(); }}
               className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
               aria-label="Upload files"
@@ -1071,6 +1106,7 @@ export function Composer({
               <span className="hidden sm:inline">Files</span>
             </button>
             <button
+              type="button"
               onClick={() => setDrawingOpen(true)}
               disabled={Boolean(noteCreationStage)}
               className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
@@ -1094,6 +1130,7 @@ export function Composer({
               <span className="hidden md:inline">Code</span>
             </button>
             <button
+              type="button"
               onClick={() => void createNote()}
               disabled={Boolean(noteCreationStage) || isPosting}
               className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 disabled:cursor-wait disabled:opacity-60 dark:text-zinc-400 dark:hover:text-orange-400"
@@ -1110,6 +1147,7 @@ export function Composer({
             </button>
           </div>
           <button
+            type="button"
             onClick={() => void sendText()}
             disabled={!text.trim() || isPosting || Boolean(noteCreationStage)}
             className="cta-button-glow flex h-9 items-center gap-2 rounded-xl px-3.5 text-xs font-semibold text-white shadow-[0_4px_12px_rgba(255,90,0,0.2)] transition hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"

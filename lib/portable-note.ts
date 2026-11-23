@@ -66,14 +66,20 @@ export async function portableNoteHtml(
   let totalBytes = 0;
   for (const image of Array.from(document.querySelectorAll("img"))) {
     signal?.throwIfAborted();
-    const source = image.getAttribute("src") || "";
+    const source = (image.getAttribute("src") || "").trim();
+    if (!source) continue;
     if (source.startsWith("data:image/")) {
       totalBytes += source.length;
       if (totalBytes > 64 * 1024 * 1024)
         throw new Error("Note images are too large. Export them individually.");
       continue;
     }
-    const url = new URL(source, window.location.origin);
+    let url: URL;
+    try {
+      url = new URL(source, window.location.origin);
+    } catch {
+      throw new Error("An image cannot be exported.");
+    }
     if (!["https:", "http:"].includes(url.protocol))
       throw new Error("An image cannot be exported.");
     const response = await fetch(url, {
@@ -109,6 +115,23 @@ export async function printPortableNote(
     "position:fixed;width:1px;height:1px;left:-10000px;top:0;border:0";
   frame.setAttribute("sandbox", "allow-same-origin allow-modals");
   document.body.appendChild(frame);
+  let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    if (cleanupTimer !== null) {
+      clearTimeout(cleanupTimer);
+      cleanupTimer = null;
+    }
+    try {
+      frame.srcdoc = "";
+    } catch {
+      // Ignore detached frame error
+    }
+    frame.remove();
+  };
+
   try {
     const loaded = new Promise<void>((resolve) => {
       frame.onload = () => resolve();
@@ -121,14 +144,14 @@ export async function printPortableNote(
       ),
     );
     if (!frame.contentWindow) throw new Error("Unable to open print preview");
-    frame.contentWindow.addEventListener("afterprint", () => frame.remove(), {
+    frame.contentWindow.addEventListener("afterprint", cleanup, {
       once: true,
     });
     frame.contentWindow.focus();
     frame.contentWindow.print();
-    window.setTimeout(() => frame.remove(), 300_000);
+    cleanupTimer = setTimeout(cleanup, 300_000);
   } catch (error) {
-    frame.remove();
+    cleanup();
     throw error;
   }
 }

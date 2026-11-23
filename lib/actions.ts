@@ -1,6 +1,6 @@
 "use server";
 
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "crypto";
+import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import sanitizeHtml from "sanitize-html";
 import { marked } from "marked";
@@ -18,10 +18,15 @@ const noteId = customAlphabet(
   "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz",
   6,
 );
+const NOTE_SLUG_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+const SPOOFED_ENTRY_PREFIX = /^(NOTE:|PHOTO:|PHOTOS:|DRAWING:)/;
+const SAFE_DATA_IMAGE_URL =
+  /^data:image\/(png|jpeg|jpg|gif|webp|avif);base64,[A-Za-z0-9+/=]+$/i;
 const MAX_TEXT_LENGTH = 50_000;
 const MAX_META_BYTES = 250_000;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const MAX_FILES_PER_ENTRY = 20;
+const MAX_MARKDOWN_IMPORT_BYTES = 500_000;
 
 export interface Space {
   id: string;
@@ -120,18 +125,21 @@ function sanitizeNoteHtml(value: string): string {
     allowedTags: allowedHtmlTags,
     allowedAttributes: {
       a: ["href", "target", "rel"],
-      img: ["src", "alt", "title", "width", "height", "data-align"],
+      img: ["src", "alt", "title", "width", "height", "data-align", "class"],
       span: ["data-type", "data-checked"],
       div: ["data-type"],
       li: ["data-checked", "data-type"],
       ul: ["data-type"],
       ol: ["type", "start"],
       input: ["type", "checked", "disabled"],
-      p: ["style", "class"],
-      h1: ["style", "class"],
-      h2: ["style", "class"],
-      h3: ["style", "class"],
-      blockquote: ["style", "class"],
+      p: ["style"],
+      h1: ["style"],
+      h2: ["style"],
+      h3: ["style"],
+      blockquote: ["style"],
+    },
+    allowedClasses: {
+      img: ["note-image"],
     },
     allowedStyles: {
       "*": {
@@ -151,6 +159,40 @@ function sanitizeNoteHtml(value: string): string {
           rel: "noopener noreferrer nofollow",
         },
       }),
+      input: (_tagName, attribs) => {
+        if (attribs.type && attribs.type.toLowerCase() !== "checkbox") {
+          return { tagName: "span", attribs: {} };
+        }
+        const safeAttribs: Record<string, string> = { type: "checkbox" };
+        if ("checked" in attribs) safeAttribs.checked = "checked";
+        if ("disabled" in attribs) safeAttribs.disabled = "disabled";
+        return { tagName: "input", attribs: safeAttribs };
+      },
+      img: (_tagName, attribs) => {
+        const clean: Record<string, string> = {};
+        const src = (attribs.src || "").trim();
+        if (src) {
+          if (src.toLowerCase().startsWith("data:")) {
+            if (SAFE_DATA_IMAGE_URL.test(src)) clean.src = src;
+          } else {
+            clean.src = src;
+          }
+        }
+        if (attribs.alt !== undefined) clean.alt = attribs.alt.slice(0, 500);
+        if (attribs.title !== undefined) clean.title = attribs.title.slice(0, 500);
+        if (attribs.width && /^\d{1,5}$/.test(attribs.width.trim())) {
+          clean.width = attribs.width.trim();
+        }
+        if (attribs.height && /^\d{1,5}$/.test(attribs.height.trim())) {
+          clean.height = attribs.height.trim();
+        }
+        const align = attribs["data-align"]?.trim().toLowerCase();
+        if (align === "left" || align === "center" || align === "right") {
+          clean["data-align"] = align;
+        }
+        if (attribs.class === "note-image") clean.class = "note-image";
+        return { tagName: "img", attribs: clean };
+      },
     },
   });
 }
@@ -162,21 +204,8 @@ function safeFileName(value: string) {
   return `${randomUUID()}${extension}`;
 }
 
-function hashPasscode(passcode: string) {
-  const salt = randomBytes(16);
-  const hash = scryptSync(passcode, salt, 32);
-  return `${salt.toString("hex")}:${hash.toString("hex")}`;
-}
-
-function checkPasscode(passcode: string, stored: string) {
-  try {
-    const [saltHex, hashHex] = stored.split(":");
-    const expected = Buffer.from(hashHex, "hex");
-    const actual = scryptSync(passcode, Buffer.from(saltHex, "hex"), 32);
-    return expected.length === actual.length && timingSafeEqual(expected, actual);
-  } catch {
-    return false;
-  }
+function escapeLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, "\\$&");
 }
 
 async function assertRateLimit(
@@ -288,13 +317,6 @@ export async function rotateRoomRecoveryKey(spaceId: string): Promise<string> {
   return data.recovery_key;
 }
 
-export async function setRoomPairing(spaceId: string, minutes: number): Promise<string | null> {
-  const { supabase } = await requireAnonymousUser();
-  const { data, error } = await supabase.rpc("set_room_pairing", { p_space_id: spaceId, p_minutes: minutes });
-  if (error) throw new Error(error.message);
-  return data;
-}
-
 export async function setRoomAccess(
   spaceId: string,
   options: { codeEnabled: boolean; expiresAt?: string | null },
@@ -336,11 +358,18 @@ export async function cancelUploadIntents(spaceId: string, paths: string[]): Pro
 export async function recordRoomEvent(spaceId: string, event: "share_initiated" | "upload_failed"): Promise<void> {
   try {
     const { supabase } = await requireAnonymousUser();
-    after(async () => { await supabase.rpc("record_room_event", { p_space_id: spaceId, p_event: event }); });
+    after(async () => {
+      try {
+        await supabase.rpc("record_room_event", { p_space_id: spaceId, p_event: event });
+      } catch {
+        /* Metrics must not interrupt sharing. */
+      }
+    });
   } catch { /* Metrics must not interrupt sharing. */ }
 }
 
 export async function setNotePrivacy(noteSlug: string, isLocked: boolean, version: number): Promise<{ version: number; is_locked: boolean }> {
+  if (!NOTE_SLUG_PATTERN.test(noteSlug)) throw new Error("Invalid note");
   const { supabase } = await requireAnonymousUser();
   const { data, error } = await supabase.rpc("set_note_privacy", {
     p_slug: noteSlug, p_is_locked: isLocked, p_expected_version: version,
@@ -372,13 +401,20 @@ export async function createEntry(
   spaceId: string,
   kind: "text" | "image" | "pdf" | "file",
   text?: string,
-  meta?: Record<string, any>,
+  _meta?: Record<string, any>,
 ): Promise<Entry> {
+  if (kind !== "text") {
+    throw new Error("Files and media must be uploaded through upload intents");
+  }
   const { supabase, user } = await requireAnonymousUser();
   await assertRateLimit(supabase, "create_entry", 60);
-  const cleanText = text?.trim() || null;
+  const cleanText = typeof text === "string" ? text.trim() : "";
 
-  if (cleanText && cleanText.length > MAX_TEXT_LENGTH) {
+  if (!cleanText) {
+    throw new Error("A message cannot be empty");
+  }
+
+  if (cleanText.length > MAX_TEXT_LENGTH) {
     throw new Error(`Messages can be at most ${MAX_TEXT_LENGTH} characters`);
   }
 
@@ -386,18 +422,17 @@ export async function createEntry(
     throw new Error("Binary data must be uploaded as a file");
   }
 
-  const metaBytes = meta ? Buffer.byteLength(JSON.stringify(meta), "utf8") : 0;
-  if (metaBytes > MAX_META_BYTES) {
-    throw new Error("Entry metadata is too large");
+  if (SPOOFED_ENTRY_PREFIX.test(cleanText)) {
+    throw new Error("Messages cannot start with a reserved entry prefix");
   }
 
   const { data, error } = await supabase
     .from("entries")
     .insert({
       space_id: spaceId,
-      kind,
+      kind: "text",
       text: cleanText,
-      meta: meta || null,
+      meta: null,
       created_by_device_id: user.id,
     })
     .select()
@@ -416,7 +451,7 @@ export async function updateTextEntry(
 ): Promise<Entry> {
   const { supabase, user } = await requireAnonymousUser();
   await assertRateLimit(supabase, "update_entry", 60);
-  const cleanText = text.trim();
+  const cleanText = typeof text === "string" ? text.trim() : "";
 
   if (!cleanText) {
     throw new Error("A message cannot be empty");
@@ -426,6 +461,9 @@ export async function updateTextEntry(
   }
   if (isRawBinaryUpload(cleanText)) {
     throw new Error("Binary data must be uploaded as a file");
+  }
+  if (SPOOFED_ENTRY_PREFIX.test(cleanText)) {
+    throw new Error("Messages cannot start with a reserved entry prefix");
   }
 
   const { data: existing } = await supabase
@@ -439,7 +477,7 @@ export async function updateTextEntry(
   }
   if (
     existing.kind !== "text" ||
-    /^(NOTE:|PHOTO:|PHOTOS:|DRAWING:)/.test(existing.text || "")
+    SPOOFED_ENTRY_PREFIX.test(existing.text || "")
   ) {
     throw new Error("This entry cannot be edited as a text message");
   }
@@ -465,14 +503,6 @@ export async function updateTextEntry(
     throw new Error(error?.message || "Unable to edit this message");
   }
   return data as Entry;
-}
-
-export async function createUploadIntent(
-  spaceId: string,
-  file: UploadIntentInput,
-): Promise<UploadIntent> {
-  const [intent] = await createUploadIntents(spaceId, [file]);
-  return intent;
 }
 
 export async function createUploadIntents(
@@ -533,23 +563,49 @@ export async function createUploadedEntry(
   }
 
   const normalizedItems = items.map((item) => {
-    if (!item.path.startsWith(`${spaceId}/`)) {
+    const relativePath =
+      typeof item.path === "string" && item.path.startsWith(`${spaceId}/`)
+        ? item.path.slice(spaceId.length + 1)
+        : "";
+    if (
+      !relativePath ||
+      relativePath === "." ||
+      relativePath === ".." ||
+      /[\\/\0]/.test(relativePath)
+    ) {
       throw new Error("Invalid upload path");
     }
-    if (item.size <= 0 || item.size > MAX_UPLOAD_BYTES) {
+    if (
+      typeof item.size !== "number" ||
+      !Number.isFinite(item.size) ||
+      item.size <= 0 ||
+      item.size > MAX_UPLOAD_BYTES
+    ) {
       throw new Error("Invalid upload size");
     }
+    const cleanName =
+      typeof item.name === "string" && item.name.trim()
+        ? item.name.slice(0, 255)
+        : "file";
+    const width =
+      typeof item.width === "number" && Number.isFinite(item.width) && item.width > 0
+        ? Math.round(item.width)
+        : undefined;
+    const height =
+      typeof item.height === "number" && Number.isFinite(item.height) && item.height > 0
+        ? Math.round(item.height)
+        : undefined;
     return {
       path: item.path,
       url: `/api/files/${item.path
         .split("/")
         .map(encodeURIComponent)
         .join("/")}`,
-      name: item.name.slice(0, 255),
-      type: item.type || "application/octet-stream",
-      size: item.size,
-      width: item.width,
-      height: item.height,
+      name: cleanName,
+      type: typeof item.type === "string" && item.type ? item.type : "application/octet-stream",
+      size: Math.trunc(item.size),
+      width,
+      height,
     };
   });
 
@@ -574,14 +630,29 @@ export async function registerNoteAsset(
     height?: number;
   },
 ): Promise<void> {
+  if (!NOTE_SLUG_PATTERN.test(noteSlug)) throw new Error("Invalid note");
+  if (
+    typeof item.size !== "number" ||
+    !Number.isFinite(item.size) ||
+    item.size <= 0 ||
+    item.size > MAX_UPLOAD_BYTES
+  ) {
+    throw new Error("Invalid upload size");
+  }
   const { supabase } = await requireAnonymousUser();
   const { data, error } = await supabase.rpc("register_note_asset", {
     p_note_slug: noteSlug,
     p_path: item.path,
     p_mime: item.type || "application/octet-stream",
-    p_size: item.size,
-    p_width: item.width || null,
-    p_height: item.height || null,
+    p_size: Math.trunc(item.size),
+    p_width:
+      typeof item.width === "number" && Number.isFinite(item.width) && item.width > 0
+        ? Math.round(item.width)
+        : null,
+    p_height:
+      typeof item.height === "number" && Number.isFinite(item.height) && item.height > 0
+        ? Math.round(item.height)
+        : null,
   });
   if (error) throw new Error(`Unable to register note image: ${error.message}`);
   if (!data) throw new Error("The note image upload expired");
@@ -614,13 +685,23 @@ export async function saveNoteSnapshot(
   noteSlug: string,
   snapshot: { title: string; content: string; content_json: Record<string, unknown>; version: number },
 ): Promise<{ version: number; updated_at: string; error?: never } | { error: string; version?: never; updated_at?: never }> {
+  if (!NOTE_SLUG_PATTERN.test(noteSlug)) {
+    return { error: "Note not found" };
+  }
+  if (
+    typeof snapshot?.content !== "string" ||
+    !snapshot.content_json ||
+    typeof snapshot.content_json !== "object"
+  ) {
+    return { error: "Unable to save note. Please try again." };
+  }
   if (Buffer.byteLength(snapshot.content, "utf8") > 1_000_000 || Buffer.byteLength(JSON.stringify(snapshot.content_json), "utf8") > 2_000_000) {
     return { error: "Note is too large" };
   }
   const { supabase } = await requireAnonymousUser();
   const { data, error } = await supabase.rpc("save_note_snapshot", {
     p_slug: noteSlug,
-    p_title: snapshot.title.trim().slice(0, 120) || "Untitled Note",
+    p_title: (typeof snapshot.title === "string" ? snapshot.title : "").trim().slice(0, 120) || "Untitled Note",
     p_content_html: sanitizeNoteHtml(snapshot.content),
     p_content_json: snapshot.content_json,
     p_expected_version: snapshot.version,
@@ -628,6 +709,7 @@ export async function saveNoteSnapshot(
   if (error) {
     const expected = new Set([
       "Note is too large", "Note not found", "Note not found or expired",
+      "Room is expired or read-only",
       "Only the note creator can edit this note", "Authentication required",
       "This note changed elsewhere. Reload before saving again.",
       "Too many requests. Please wait and try again.",
@@ -636,101 +718,6 @@ export async function saveNoteSnapshot(
   }
   if (!data) return { error: "Unable to save note. Please try again." };
   return data;
-}
-
-export async function updateNote(
-  noteSlug: string,
-  updates: Partial<{
-    title: string;
-    content: string;
-    content_json: Record<string, unknown>;
-    visibility: "public" | "unlisted" | "private";
-    font_family: "system" | "serif" | "mono";
-    is_locked: boolean;
-    passcode: string;
-    version: number;
-  }>,
-): Promise<Note> {
-  const { supabase, user } = await requireAnonymousUser();
-  await assertRateLimit(supabase, "update_note", 120);
-  const { data: current, error: fetchError } = await supabase
-    .from("notes")
-    .select("*, entries!inner(space_id, created_by_device_id)")
-    .eq("slug", noteSlug)
-    .single();
-
-  if (fetchError || !current) throw new Error("Note not found");
-  if (current.created_by_user_id !== user.id) {
-    throw new Error("Only the note creator can edit this note");
-  }
-
-  const nextVersion = current.version + 1;
-  const updateRow: Record<string, unknown> = {
-    version: nextVersion,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (updates.title !== undefined) {
-    updateRow.title = updates.title.trim().slice(0, 120) || "Untitled Note";
-  }
-  if (updates.content !== undefined) {
-    if (updates.content.length > 1_000_000) throw new Error("Note is too large");
-    updateRow.content_html = sanitizeNoteHtml(updates.content);
-  }
-  if (updates.content_json !== undefined) updateRow.content_json = updates.content_json;
-  if (updates.visibility !== undefined) updateRow.visibility = updates.visibility;
-  if (updates.font_family !== undefined) updateRow.font_family = updates.font_family;
-  if (updates.is_locked !== undefined) {
-    updateRow.is_locked = updates.is_locked;
-    updateRow.passcode_hash =
-      updates.is_locked && updates.passcode
-        ? hashPasscode(updates.passcode.slice(0, 64))
-        : null;
-  }
-
-  const expectedVersion = updates.version ?? current.version;
-  const { data: updated, error } = await supabase
-    .from("notes")
-    .update(updateRow)
-    .eq("id", current.id)
-    .eq("version", expectedVersion)
-    .select()
-    .maybeSingle();
-
-  if (error) throw new Error(`Unable to save note: ${error.message}`);
-  if (!updated) {
-    throw new Error("This note changed elsewhere. Reload before saving again.");
-  }
-
-  const entryMeta = {
-    type: "note",
-    note_slug: noteSlug,
-    public_code: updated.public_code,
-    title: updated.title,
-    is_locked: updated.is_locked,
-  };
-  await supabase
-    .from("entries")
-    .update({ text: `NOTE:${noteSlug}`, meta: entryMeta })
-    .eq("id", updated.entry_id);
-
-  return {
-    id: updated.id,
-    slug: updated.slug,
-    title: updated.title,
-    content: updated.content_html,
-    content_json: updated.content_json,
-    public_code: updated.public_code,
-    visibility: updated.visibility,
-    font_family: updated.font_family,
-    space_id: (current.entries as any).space_id,
-    created_by_device_id: user.id,
-    created_at: updated.created_at,
-    updated_at: updated.updated_at,
-    is_locked: updated.is_locked,
-    is_owner: true,
-    version: updated.version,
-  };
 }
 
 export async function openOrCreateNoteForMarkdownFile({
@@ -742,14 +729,20 @@ export async function openOrCreateNoteForMarkdownFile({
   fileName: string;
   markdownContent: string;
 }): Promise<{ noteSlug: string }> {
-  const { supabase } = await requireAnonymousUser();
-  const cleanTitle = fileName.trim().slice(0, 120) || "Markdown Note";
+  const { supabase, user } = await requireAnonymousUser();
+  const cleanTitle = (typeof fileName === "string" ? fileName : "").trim().slice(0, 120) || "Markdown Note";
+  const rawMarkdown = typeof markdownContent === "string" ? markdownContent : "";
+  if (Buffer.byteLength(rawMarkdown, "utf8") > MAX_MARKDOWN_IMPORT_BYTES) {
+    throw new Error("Markdown file is too large to open as a note");
+  }
 
-  // Check if a note with this title already exists in this space
+  // Reuse an existing unlocked note with this title only if created by the current user
   const { data: existing } = await supabase
     .from("notes")
     .select("slug, id, title, entries!inner(space_id)")
     .eq("entries.space_id", spaceId)
+    .eq("created_by_user_id", user.id)
+    .eq("is_locked", false)
     .eq("title", cleanTitle)
     .limit(1)
     .maybeSingle();
@@ -758,26 +751,34 @@ export async function openOrCreateNoteForMarkdownFile({
     return { noteSlug: existing.slug };
   }
 
-  // Create new note entry in space
-  const { noteSlug } = await createNoteEntry(spaceId, cleanTitle);
-
-  // Convert markdown to sanitized HTML
-  const rawHtml = await marked.parse(markdownContent || "");
+  // Convert markdown to sanitized HTML before creating the note entry
+  const rawHtml = await marked.parse(rawMarkdown);
   const sanitizedHtml = sanitizeNoteHtml(typeof rawHtml === "string" ? rawHtml : "");
+  if (Buffer.byteLength(sanitizedHtml, "utf8") > 1_000_000) {
+    throw new Error("Markdown file is too large to open as a note");
+  }
 
-  // Update note content
-  await supabase
+  const { noteSlug, entryId } = await createNoteEntry(spaceId, cleanTitle);
+
+  const { error: updateError } = await supabase
     .from("notes")
     .update({
       content_html: sanitizedHtml,
       updated_at: new Date().toISOString(),
     })
-    .eq("slug", noteSlug);
+    .eq("slug", noteSlug)
+    .eq("created_by_user_id", user.id);
+
+  if (updateError) {
+    await supabase.from("entries").delete().eq("id", entryId);
+    throw new Error("Unable to populate note from Markdown file");
+  }
 
   return { noteSlug };
 }
 
 export async function getNote(noteSlug: string): Promise<Note | null> {
+  if (!NOTE_SLUG_PATTERN.test(noteSlug)) return null;
   const { supabase, user } = await requireAnonymousUser();
   const { data: openedNote, error: openError } = await supabase.rpc("open_note", {
     p_note_slug: noteSlug,
@@ -841,7 +842,7 @@ export async function getNote(noteSlug: string): Promise<Note | null> {
     const legacy = await supabase
       .from("entries")
       .select("id, space_id, created_by_device_id, created_at, text, meta, spaces!inner(slug)")
-      .like("text", `NOTE:${noteSlug}:%`)
+      .like("text", `NOTE:${escapeLikePattern(noteSlug)}:%`)
       .limit(1)
       .maybeSingle();
     entry = legacy.data as any;
@@ -923,116 +924,58 @@ export async function getNote(noteSlug: string): Promise<Note | null> {
   };
 }
 
-export async function verifyNotePasscode(
-  noteSlug: string,
-  passcode: string,
-): Promise<boolean> {
-  // The hash is never returned by getNote or the API. Owners can verify their
-  // own lock locally; participant unlocking is handled by a dedicated RPC in
-  // deployments that enable locked shared notes.
-  const { supabase, user } = await requireAnonymousUser();
-  const { data } = await supabase
-    .from("notes")
-    .select("passcode_hash, created_by_user_id")
-    .eq("slug", noteSlug)
-    .maybeSingle();
-  if (!data || data.created_by_user_id !== user.id || !data.passcode_hash) {
-    return false;
-  }
-  return checkPasscode(passcode, data.passcode_hash);
-}
-
-export async function updateNoteEntry(entryId: string, noteTitle: string) {
-  const { supabase, user } = await requireAnonymousUser();
-  const cleanTitle = noteTitle.trim().slice(0, 120) || "Untitled Note";
-  const { data: entry } = await supabase
-    .from("entries")
-    .select("id, meta, created_by_device_id")
-    .eq("id", entryId)
-    .single();
-
-  if (!entry || entry.created_by_device_id !== user.id) {
-    throw new Error("Only the note creator can rename this note");
-  }
-
-  const noteSlug = entry.meta?.note_slug;
-  if (!noteSlug) throw new Error("Invalid note entry");
-
-  const { error } = await supabase
-    .from("notes")
-    .update({ title: cleanTitle, updated_at: new Date().toISOString() })
-    .eq("slug", noteSlug)
-    .eq("created_by_user_id", user.id);
-  if (error) throw new Error(`Unable to rename note: ${error.message}`);
-
-  await supabase
-    .from("entries")
-    .update({ meta: { ...entry.meta, title: cleanTitle } })
-    .eq("id", entryId);
-}
-
-export async function validateRoomCode(roomCode: string): Promise<boolean> {
-  try {
-    return Boolean(await joinSpaceByCode(roomCode));
-  } catch {
-    return false;
-  }
-}
-
-export async function ensureDeviceId(): Promise<string> {
-  const { user } = await requireAnonymousUser();
-  return user.id;
-}
-
-export async function getPlanStatus(): Promise<{
-  isPro: boolean;
-  deviceId: string;
-}> {
-  const { supabase, user } = await requireAnonymousUser();
-  const { data } = await supabase
-    .from("spaces")
-    .select("is_pro")
-    .eq("creator_device_id", user.id)
-    .eq("is_pro", true)
-    .limit(1)
-    .maybeSingle();
-  return { isPro: Boolean(data?.is_pro), deviceId: user.id };
-}
-
 export async function deleteSpace(spaceId: string): Promise<void> {
   const { supabase, user } = await requireAnonymousUser();
-  const { data: space } = await supabase
-    .from("spaces")
-    .select("creator_device_id")
-    .eq("id", spaceId)
-    .single();
-
-  if (!space || space.creator_device_id !== user.id) {
-    throw new Error("Only the space creator can delete this space");
-  }
-
   // The database trigger queues the room prefix for service-role cleanup. This
   // works even when other participants own some of the Storage objects.
-  const { error } = await supabase.from("spaces").delete().eq("id", spaceId);
+  const { data, error } = await supabase
+    .from("spaces")
+    .delete()
+    .eq("id", spaceId)
+    .eq("creator_device_id", user.id)
+    .select("id")
+    .maybeSingle();
+
   if (error) throw new Error(`Unable to delete space: ${error.message}`);
+  if (!data) {
+    throw new Error("Only the space creator can delete this space");
+  }
+}
+
+export async function deleteSpaces(
+  spaceIds: string[],
+): Promise<{ deletedIds: string[] }> {
+  const uniqueIds = Array.from(new Set(spaceIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return { deletedIds: [] };
+
+  const { supabase, user } = await requireAnonymousUser();
+  const { data, error } = await supabase
+    .from("spaces")
+    .delete()
+    .in("id", uniqueIds)
+    .eq("creator_device_id", user.id)
+    .select("id");
+
+  if (error) throw new Error(`Unable to delete spaces: ${error.message}`);
+  return { deletedIds: (data ?? []).map((row) => row.id) };
 }
 
 export async function deleteEntry(entryId: string): Promise<void> {
   const { supabase, user } = await requireAnonymousUser();
-  const { data: entry } = await supabase
-    .from("entries")
-    .select("created_by_device_id")
-    .eq("id", entryId)
-    .single();
-
-  if (!entry || entry.created_by_device_id !== user.id) {
-    throw new Error("You can only delete messages you sent");
-  }
-
   // Cascading asset deletion queues physical cleanup without requiring browser
   // Storage read/sign permissions. Logical access ends in this transaction.
-  const { error } = await supabase.from("entries").delete().eq("id", entryId);
+  const { data, error } = await supabase
+    .from("entries")
+    .delete()
+    .eq("id", entryId)
+    .eq("created_by_device_id", user.id)
+    .select("id")
+    .maybeSingle();
+
   if (error) throw new Error(`Unable to delete entry: ${error.message}`);
+  if (!data) {
+    throw new Error("You can only delete messages you sent");
+  }
 }
 
 export async function reportEntry(entryId: string): Promise<void> {
@@ -1048,14 +991,4 @@ export async function reportEntry(entryId: string): Promise<void> {
     { onConflict: "entry_id,reported_by_user_id", ignoreDuplicates: true },
   );
   if (error) throw new Error(`Unable to submit report: ${error.message}`);
-}
-
-export async function getCurrentIdentity() {
-  const { user } = await requireAnonymousUser();
-  return { id: user.id, displayName: displayNameForDevice(user.id) };
-}
-
-export async function getLegacyDeviceCookie() {
-  const cookieStore = await cookies();
-  return cookieStore.get("device_id")?.value || null;
 }

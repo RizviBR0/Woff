@@ -5,6 +5,12 @@ import { canUseBoundedStorageRedirect } from "@/lib/storage-cache";
 
 export const dynamic = "force-dynamic";
 
+const PRIVATE_HEADERS = {
+  "Cache-Control": "private, no-store",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+} as const;
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ path: string[] }> },
@@ -12,34 +18,47 @@ export async function GET(
   const { path } = await context.params;
   if (
     !path?.length ||
-    path.some((part) => part === ".." || part.includes("\0"))
+    path.some(
+      (part) =>
+        !part ||
+        part === "." ||
+        part === ".." ||
+        part.includes("/") ||
+        part.includes("\\") ||
+        part.includes("\0"),
+    )
   ) {
-    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid path" },
+      { status: 400, headers: PRIVATE_HEADERS },
+    );
   }
   const objectPath = path.join("/");
   const { supabase } = await requireAnonymousUser();
   // RLS includes room expiry, revoked invitation grants and note privacy.
+  // Embed entry and space in one query to avoid a second database round trip.
   const { data: asset } = await supabase
     .from("assets")
-    .select("mime, entry:entries(space_id, expires_at)")
+    .select(
+      "mime, entry:entries!inner(space_id, expires_at, space:spaces!inner(expires_at, last_activity_at))",
+    )
     .eq("bucket_key", objectPath)
     .maybeSingle();
   const entry = asset?.entry as unknown as {
     space_id: string;
     expires_at?: string | null;
+    space?: {
+      expires_at?: string | null;
+      last_activity_at?: string | null;
+    } | null;
   } | null;
-  if (!asset || !entry || entry.space_id !== path[0]) {
+  const space = entry?.space ?? null;
+  if (!asset || !entry || !space || entry.space_id !== path[0]) {
     return NextResponse.json(
       { error: "Not found" },
-      { status: 404, headers: { "Cache-Control": "private, no-store" } },
+      { status: 404, headers: PRIVATE_HEADERS },
     );
   }
-  const { data: space } = await supabase
-    .from("spaces")
-    .select("expires_at, last_activity_at")
-    .eq("id", entry.space_id)
-    .maybeSingle();
-  if (!space) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const roomDeadline = space.expires_at ? Date.parse(space.expires_at) : Infinity;
   const deadline = Math.min(
     roomDeadline,
@@ -47,17 +66,21 @@ export async function GET(
   );
   const seconds = Math.min(60, Math.floor((deadline - Date.now()) / 1000));
   if (!Number.isFinite(seconds) || seconds < 1)
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Not found" },
+      { status: 404, headers: PRIVATE_HEADERS },
+    );
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey)
+  if (!supabaseUrl || !serviceKey)
     return NextResponse.json(
       { error: "File delivery is not configured." },
-      { status: 503, headers: { "Cache-Control": "private, no-store" } },
+      { status: 503, headers: PRIVATE_HEADERS },
     );
   // Browser roles cannot mint arbitrary-lived Storage links. User RLS above
   // authorizes this exact asset before the server issues a bounded capability.
   const storageAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl,
     serviceKey,
     {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -73,13 +96,21 @@ export async function GET(
   const boundedFilename = Array.from(filename).slice(0, 240).join("");
   if (download !== null)
     after(async () => {
-      await supabase.rpc("record_room_event", {
-        p_space_id: entry.space_id,
-        p_event: "download_initiated",
-      });
+      try {
+        await supabase.rpc("record_room_event", {
+          p_space_id: entry.space_id,
+          p_event: "download_initiated",
+        });
+      } catch {
+        // Metrics must not interrupt file delivery.
+      }
     });
   const { data: info, error: infoError } = await storageAdmin.storage.from("files").info(objectPath);
-  if (infoError || !info) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (infoError || !info)
+    return NextResponse.json(
+      { error: "Not found" },
+      { status: 404, headers: PRIVATE_HEADERS },
+    );
 
   if (!canUseBoundedStorageRedirect(info.cacheControl)) {
     // Legacy or externally uploaded files may have a long CDN/browser TTL.
@@ -93,18 +124,22 @@ export async function GET(
     let upstream: Response;
     try {
       upstream = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/authenticated/files/${path.map(encodeURIComponent).join("/")}`,
+        `${supabaseUrl}/storage/v1/object/authenticated/files/${path.map(encodeURIComponent).join("/")}`,
         { headers, cache: "no-store", redirect: "error", signal: request.signal },
       );
     } catch {
-      return NextResponse.json({ error: "File delivery is temporarily unavailable" },
-        { status: 503, headers: { "Cache-Control": "private, no-store" } });
+      return NextResponse.json(
+        { error: "File delivery is temporarily unavailable" },
+        { status: 503, headers: PRIVATE_HEADERS },
+      );
     }
     if (!upstream.ok && upstream.status !== 416)
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Not found" },
+        { status: 404, headers: PRIVATE_HEADERS },
+      );
     const responseHeaders = new Headers({
-      "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer",
-      "X-Content-Type-Options": "nosniff",
+      ...PRIVATE_HEADERS,
       "Content-Type": safeInline ? asset.mime : "application/octet-stream",
     });
     for (const header of ["content-length", "content-range", "accept-ranges"]) {
@@ -116,15 +151,13 @@ export async function GET(
     return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
   }
   const { data, error } = await storageAdmin.storage.from("files").createSignedUrl(objectPath, seconds);
-  if (error || !data?.signedUrl) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (error || !data?.signedUrl)
+    return NextResponse.json(
+      { error: "Not found" },
+      { status: 404, headers: PRIVATE_HEADERS },
+    );
   const signedUrl = new URL(data.signedUrl);
   if (download !== null || !safeInline) signedUrl.searchParams.set("download", boundedFilename);
   // Transfer bytes directly from Storage; avoid a second server hop and support Range downloads.
-  return NextResponse.redirect(signedUrl, {
-    headers: {
-      "Cache-Control": "private, no-store",
-      "Referrer-Policy": "no-referrer",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  return NextResponse.redirect(signedUrl, { headers: PRIVATE_HEADERS });
 }

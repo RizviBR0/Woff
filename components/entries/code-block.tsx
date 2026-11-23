@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Code2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,16 @@ const BADGE_COLORS: Record<string, { bg: string; text: string; dot: string }> = 
   Svelte: { bg: "bg-orange-500/10", text: "text-orange-400", dot: "bg-orange-400" },
 };
 
+const KEYWORDS_SRC =
+  "\\b(?:int|char|float|double|void|bool|boolean|string|number|any|auto|const|let|var|def|function|func|fn|class|struct|interface|type|enum|public|private|protected|static|return|if|else|elif|for|while|do|switch|case|break|continue|default|import|from|export|package|using|namespace|include|template|typename|null|nullptr|nil|None|True|False|true|false|new|delete|try|catch|finally|throw|async|await|SELECT|INSERT|UPDATE|DELETE|FROM|WHERE|JOIN|TABLE|val|guard)\\b";
+
+const COMMON_TAIL =
+  `|("(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|\`(?:\\\\.|[^\`\\\\])*\`)|(${KEYWORDS_SRC})|(#[0-9a-fA-F]{3,8}\\b|\\b\\d+(?:\\.\\d+)?\\b)|(\\b[a-zA-Z_$][a-zA-Z0-9_$]*\\b)|([{}()[\\];,.<>=!&|+*~/-]+)`;
+
+const TOKEN_REGEX_HASH = new RegExp(`(#[^\\n]*)${COMMON_TAIL}`, "g");
+const TOKEN_REGEX_SQL = new RegExp(`(\\/\\*[\\s\\S]*?\\*\\/|\\/\\*[\\s\\S]*$|--[^\\n]*)${COMMON_TAIL}`, "g");
+const TOKEN_REGEX_C = new RegExp(`(\\/\\*[\\s\\S]*?\\*\\/|\\/\\*[\\s\\S]*$|\\/\\/[^\\n]*)${COMMON_TAIL}`, "g");
+
 /**
  * Tokenizes and highlights a single line with multiline comment awareness.
  */
@@ -55,8 +65,11 @@ function highlightLineTokens(
   inBlockComment: boolean,
   language: string,
 ): { elements: React.ReactNode; inBlockComment: boolean } {
-  // If line continues a block comment
-  if (inBlockComment) {
+  const isHashCommentLang = /^(Python|Bash|Shell|Zsh|Ruby|YAML|Dockerfile|Makefile|TOML|Perl|R|PowerShell)$/i.test(language);
+  const isSqlLang = /^(SQL|PostgreSQL|MySQL|SQLite)$/i.test(language);
+
+  // If line continues a block comment (only applicable to languages supporting /* */)
+  if (inBlockComment && !isHashCommentLang) {
     const endIdx = line.indexOf("*/");
     if (endIdx === -1) {
       return {
@@ -101,20 +114,12 @@ function highlightLineTokens(
     }
   }
 
-  // Check if comments use # (Python, Bash, Ruby, YAML) or -- (SQL) or //
-  const isHashCommentLang = /^(Python|Bash|Shell|Ruby|YAML|Dockerfile)$/i.test(language);
-  const isSqlLang = /^(SQL|PostgreSQL|MySQL|SQLite)$/i.test(language);
-
-  const commentPattern = isHashCommentLang
-    ? "(#[^\\n]*)"
+  const tokenRegex = isHashCommentLang
+    ? TOKEN_REGEX_HASH
     : isSqlLang
-      ? "(--[^\\n]*)"
-      : "(\\/\\/[^\\n]*)";
-
-  const tokenRegex = new RegExp(
-    `(\\/\\*[\\s\\S]*?\\*\\/|\\/\\*[\\s\\S]*$|${commentPattern})|("(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|\`(?:\\\\.|[^\`\\\\])*\`)|(\\b(?:int|char|float|double|void|bool|boolean|string|number|any|auto|const|let|var|def|function|func|fn|class|struct|interface|type|enum|public|private|protected|static|return|if|else|elif|for|while|do|switch|case|break|continue|default|import|from|export|package|using|namespace|include|template|typename|null|nullptr|nil|None|True|False|true|false|new|delete|try|catch|finally|throw|async|await|SELECT|INSERT|UPDATE|DELETE|FROM|WHERE|JOIN|TABLE|val|guard)\b)|(#[0-9a-fA-F]{3,8}\\b|\\b\\d+(?:\\.\\d+)?\\b)|([a-zA-Z_$][a-zA-Z0-9_$]*(?=\\s*\\())|([{}()[\\];,.<>=!&|+*~/-]+)`,
-    "g",
-  );
+      ? TOKEN_REGEX_SQL
+      : TOKEN_REGEX_C;
+  tokenRegex.lastIndex = 0;
 
   let lastIndex = 0;
   let nextInBlockComment = false;
@@ -126,11 +131,15 @@ function highlightLineTokens(
       elements.push(line.slice(lastIndex, match.index));
     }
 
-    const [full, comment, , stringLit, keyword, numberLit, funcCall, symbol] = match;
+    const [full, comment, stringLit, keyword, numberLit, identifier, symbol] = match;
 
     if (comment) {
-      // Check if this was an unclosed block comment /* ...
-      if (comment.startsWith("/*") && !comment.endsWith("*/")) {
+      // Check if this was an unclosed block comment /* ... (including "/*/")
+      if (
+        !isHashCommentLang &&
+        comment.startsWith("/*") &&
+        (comment.length < 4 || !comment.endsWith("*/"))
+      ) {
         nextInBlockComment = true;
       }
       elements.push(
@@ -156,12 +165,18 @@ function highlightLineTokens(
           {numberLit}
         </span>,
       );
-    } else if (funcCall) {
-      elements.push(
-        <span key={match.index} className="text-sky-300">
-          {funcCall}
-        </span>,
-      );
+    } else if (identifier) {
+      // Check without backtracking whether this identifier is immediately called
+      const afterToken = line.slice(tokenRegex.lastIndex);
+      if (/^[ \t]*\(/.test(afterToken)) {
+        elements.push(
+          <span key={match.index} className="text-sky-300">
+            {identifier}
+          </span>,
+        );
+      } else {
+        elements.push(identifier);
+      }
     } else if (symbol) {
       elements.push(
         <span key={match.index} className="text-zinc-400">
@@ -187,6 +202,13 @@ function highlightLineTokens(
 
 export function CodeBlock({ code, language }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   // Preserve line indentation without indiscriminate trim()
   const cleanCode = useMemo(() => {
@@ -196,11 +218,13 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
 
   const lines = useMemo(() => cleanCode.split("\n"), [cleanCode]);
 
-  const badgeStyle = BADGE_COLORS[language] || {
-    bg: "bg-zinc-800",
-    text: "text-zinc-300",
-    dot: "bg-zinc-400",
-  };
+  const badgeStyle = Object.prototype.hasOwnProperty.call(BADGE_COLORS, language)
+    ? BADGE_COLORS[language]
+    : {
+        bg: "bg-zinc-800",
+        text: "text-zinc-300",
+        dot: "bg-zinc-400",
+      };
 
   const highlightedLines = useMemo(() => {
     let inBlock = false;
@@ -216,7 +240,8 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
       await navigator.clipboard.writeText(cleanCode);
       setCopied(true);
       toast.success("Code copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Failed to copy code");
     }

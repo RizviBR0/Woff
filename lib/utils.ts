@@ -22,19 +22,23 @@ export function roomExpiryTimestamp(room: {
 }
 
 export function getHoursUntilExpiry(value: string, isExpiryTimestamp = false): number {
-  const date = new Date(value);
-  const expiryDate = isExpiryTimestamp
-    ? date
-    : new Date(date.getTime() + 48 * 60 * 60 * 1000);
-  const now = new Date();
-  const diffMs = expiryDate.getTime() - now.getTime();
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return 0;
+  const expiryMs = isExpiryTimestamp
+    ? timestamp
+    : timestamp + 48 * 60 * 60 * 1000;
+  const diffMs = expiryMs - Date.now();
   return Math.max(0, Math.ceil(diffMs / (60 * 60 * 1000)));
 }
 
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
+  if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 export function extractRoomCode(input: string): string {

@@ -12,9 +12,12 @@ export const dynamic = "force-dynamic";
 export default async function ConfirmEmailPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token_hash?: string; type?: string; next?: string }>;
+  searchParams: Promise<{ token_hash?: string | string[]; type?: string | string[]; next?: string | string[] }>;
 }) {
   const params = await searchParams;
+  const tokenHash = typeof params.token_hash === "string" ? params.token_hash : "";
+  const type = typeof params.type === "string" ? params.type : "";
+  const next = typeof params.next === "string" ? params.next : undefined;
   return (
     <main className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="max-w-md rounded-[24px] border bg-card p-8 shadow-xl">
@@ -27,13 +30,13 @@ export default async function ConfirmEmailPage({
           <input
             type="hidden"
             name="token_hash"
-            value={params.token_hash || ""}
+            value={tokenHash}
           />
-          <input type="hidden" name="type" value={params.type || ""} />
+          <input type="hidden" name="type" value={type} />
           <input
             type="hidden"
             name="next"
-            value={safeReturnPath(params.next)}
+            value={safeReturnPath(next)}
           />
           <Button variant="primary" type="submit" className="w-full">Confirm and continue</Button>
         </form>

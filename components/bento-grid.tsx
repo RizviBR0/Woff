@@ -31,8 +31,8 @@ export default function BentoGrid() {
   return (
     <section className={styles.bentoSection} id="features">
       <div className={styles.header}>
-        <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mx-auto">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
+        <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mx-auto">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" aria-hidden="true" />
           Made for quick transfers
         </div>
 
@@ -52,7 +52,7 @@ export default function BentoGrid() {
       <div className={styles.grid}>
         {cards.map((card) => (
           <article key={card.title} className={`${styles.card} ${card.className}`}>
-            <div className={styles.visual}>{card.visual}</div>
+            <div className={styles.visual} aria-hidden="true">{card.visual}</div>
 
             <div className={styles.copy}>
               <h3>{card.title}</h3>
@@ -73,7 +73,7 @@ function ShieldVisual() {
         <span />
         <span />
       </div>
-      <svg viewBox="0 0 120 140" className={styles.shieldIcon}>
+      <svg viewBox="0 0 120 140" className={styles.shieldIcon} aria-hidden="true">
         <defs>
           <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#ff9e0011" />
@@ -158,7 +158,7 @@ function DropVisual() {
       {/* Image Card */}
       <div className={styles.imageCard}>
         <div className={styles.imageInner}>
-          <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <defs>
               <linearGradient id="imageBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="rgba(32, 215, 255, 0.25)" />
@@ -181,7 +181,7 @@ function DropVisual() {
 
 function FileTextIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="24" height="24" stroke="var(--orange)" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" width="24" height="24" stroke="var(--orange)" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
@@ -206,13 +206,13 @@ function OrbitVisual() {
 
 
 function QrIcon() {
-  return <svg viewBox="0 0 24 24"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm11 1h2v2h-2v-2zm4 0h1v5h-5v-1h4v-4z" /></svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm11 1h2v2h-2v-2zm4 0h1v5h-5v-1h4v-4z" /></svg>;
 }
 
 function PasteIcon() {
-  return <svg viewBox="0 0 24 24"><path d="M9 4h6l1 2h3v15H5V6h3l1-2zm0 2h6" /></svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l1 2h3v15H5V6h3l1-2zm0 2h6" /></svg>;
 }
 
 function ShareIcon() {
-  return <svg viewBox="0 0 24 24"><path d="M12 3v12m0-12l5 5m-5-5L7 8M5 13v7h14v-7" /></svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0-12l5 5m-5-5L7 8M5 13v7h14v-7" /></svg>;
 }

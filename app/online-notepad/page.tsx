@@ -2,7 +2,7 @@ import { OnlineNotepadClient } from "@/components/online-notepad-client";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Online Notepad With Shareable Link",
+  title: "Free Online Notepad — No Login Required",
   description:
     "Write and share quick notes alongside files in a Woff room. No sign-up required. Choose an optional time limit and save a copy outside Woff to keep your notes.",
   alternates: {

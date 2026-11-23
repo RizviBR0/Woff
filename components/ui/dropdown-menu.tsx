@@ -12,6 +12,12 @@ type PointerDownEvent = Parameters<
 type PointerDownOutsideEvent = Parameters<
   NonNullable<DropdownMenuPrimitive.DropdownMenuContentProps["onPointerDownOutside"]>
 >[0];
+type KeyDownEvent = Parameters<
+  NonNullable<DropdownMenuPrimitive.DropdownMenuContentProps["onKeyDown"]>
+>[0];
+type EscapeKeyDownEvent = Parameters<
+  NonNullable<DropdownMenuPrimitive.DropdownMenuContentProps["onEscapeKeyDown"]>
+>[0];
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 
@@ -66,7 +72,16 @@ const DropdownMenuContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
 >(
   (
-    { className, sideOffset = 4, onPointerDown, onPointerDownOutside, onCloseAutoFocus, ...props },
+    {
+      className,
+      sideOffset = 4,
+      onPointerDown,
+      onPointerDownOutside,
+      onKeyDown,
+      onEscapeKeyDown,
+      onCloseAutoFocus,
+      ...props
+    },
     ref,
   ) => {
     const isCloseFromMouse = React.useRef<boolean>(false);
@@ -87,9 +102,26 @@ const DropdownMenuContent = React.forwardRef<
       [onPointerDownOutside],
     );
 
+    const handleKeyDown = React.useCallback(
+      (e: KeyDownEvent) => {
+        isCloseFromMouse.current = false;
+        onKeyDown?.(e);
+      },
+      [onKeyDown],
+    );
+
+    const handleEscapeKeyDown = React.useCallback(
+      (e: EscapeKeyDownEvent) => {
+        isCloseFromMouse.current = false;
+        onEscapeKeyDown?.(e);
+      },
+      [onEscapeKeyDown],
+    );
+
     const handleCloseAutoFocus = React.useCallback(
       (e: Event) => {
         if (onCloseAutoFocus) {
+          isCloseFromMouse.current = false;
           return onCloseAutoFocus(e);
         }
 
@@ -114,6 +146,8 @@ const DropdownMenuContent = React.forwardRef<
           )}
           onPointerDown={handlePointerDown}
           onPointerDownOutside={handlePointerDownOutside}
+          onKeyDown={handleKeyDown}
+          onEscapeKeyDown={handleEscapeKeyDown}
           onCloseAutoFocus={handleCloseAutoFocus}
           {...props}
         />

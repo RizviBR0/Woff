@@ -13,7 +13,7 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }
 
 /**
@@ -22,6 +22,9 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
  */
 export async function downloadFileFromUrl(url: string, filename: string): Promise<void> {
   const target = new URL(url, window.location.href);
+  if (!["http:", "https:", "blob:", "data:"].includes(target.protocol)) {
+    throw new Error("Unsupported download URL");
+  }
   if (target.origin === window.location.origin && target.pathname.startsWith("/api/files/")) {
     target.searchParams.set("download", filename);
     const anchor = document.createElement("a");
@@ -32,7 +35,10 @@ export async function downloadFileFromUrl(url: string, filename: string): Promis
     anchor.remove();
     return;
   }
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    credentials:
+      target.origin === window.location.origin ? "same-origin" : "omit",
+  });
   if (!res.ok) {
     throw new Error(`Failed to fetch file: ${res.statusText}`);
   }

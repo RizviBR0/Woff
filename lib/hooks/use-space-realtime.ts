@@ -54,6 +54,9 @@ export function useSpaceRealtime({
   const [tabUnreadCount, setTabUnreadCount] = useState(0);
 
   const isNearBottomRef = useRef(true);
+  const entriesRef = useRef<Entry[]>(entries);
+  entriesRef.current = entries;
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const knownEntryIdsRef = useRef(
     new Set(dedupeEntries(initialEntries).map((e) => e.id)),
   );
@@ -65,6 +68,14 @@ export function useSpaceRealtime({
     onRoomUpdatedRef.current = onRoomUpdated;
     roomRef.current = space;
   });
+
+  useEffect(() => {
+    return () => {
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current);
+      }
+    };
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     window.scrollTo({
@@ -78,6 +89,7 @@ export function useSpaceRealtime({
     setEntriesState((prev) => {
       const next = typeof action === "function" ? action(prev) : action;
       const deduped = dedupeEntries(next);
+      entriesRef.current = deduped;
       for (const entry of deduped) {
         knownEntryIdsRef.current.add(entry.id);
       }
@@ -92,7 +104,9 @@ export function useSpaceRealtime({
         if (prev.some((e) => e.id === entry.id)) return prev;
         return [...prev, entry];
       });
-      setTimeout(() => {
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = setTimeout(() => {
+        scrollTimerRef.current = null;
         scrollToBottom();
       }, 100);
     },
@@ -184,12 +198,40 @@ export function useSpaceRealtime({
         return false;
       }
 
-      knownEntryIdsRef.current.add(newEntry.id);
+      const currentEntries = entriesRef.current;
+      if (currentEntries.some((e) => e.id === newEntry.id)) {
+        knownEntryIdsRef.current.add(newEntry.id);
+        return false;
+      }
 
-      let wasAppended = false;
+      const matchedPending =
+        currentDeviceId && newEntry.created_by_device_id === currentDeviceId
+          ? currentEntries.find(
+              (e) =>
+                e.isLoading &&
+                e.id.startsWith("temp-") &&
+                e.kind === newEntry.kind &&
+                e.text === newEntry.text,
+            )
+          : undefined;
+
+      knownEntryIdsRef.current.add(newEntry.id);
+      if (matchedPending) {
+        knownEntryIdsRef.current.delete(matchedPending.id);
+      }
+
       setEntries((prev) => {
         if (prev.some((e) => e.id === newEntry.id)) {
           return prev;
+        }
+
+        if (matchedPending) {
+          const pendingIdx = prev.findIndex((e) => e.id === matchedPending.id);
+          if (pendingIdx !== -1) {
+            const next = [...prev];
+            next[pendingIdx] = { ...newEntry, isLoading: false, isError: false };
+            return dedupeEntries(next);
+          }
         }
 
         if (
@@ -199,23 +241,23 @@ export function useSpaceRealtime({
           const pendingIdx = prev.findIndex(
             (e) =>
               e.isLoading &&
-              e.id.startsWith("temp-") && e.kind === newEntry.kind && e.text === newEntry.text,
+              e.id.startsWith("temp-") &&
+              e.kind === newEntry.kind &&
+              e.text === newEntry.text,
           );
           if (pendingIdx !== -1) {
             const pendingEntry = prev[pendingIdx];
             knownEntryIdsRef.current.delete(pendingEntry.id);
             const next = [...prev];
-            next[pendingIdx] = { ...newEntry, isLoading: false };
-            wasAppended = false;
+            next[pendingIdx] = { ...newEntry, isLoading: false, isError: false };
             return dedupeEntries(next);
           }
         }
 
-        wasAppended = true;
         return [...prev, newEntry];
       });
 
-      return wasAppended;
+      return !matchedPending;
     },
     [currentDeviceId, setEntries],
   );
@@ -316,7 +358,12 @@ export function useSpaceRealtime({
           const latest = new Map<string, Entry>((data.entries || []).map((entry: Entry) => [entry.id, entry]));
           changes.forEach((entry, id) => { if (entry) latest.set(id, entry); else latest.delete(id); });
           setEntries((current) => {
-            const pending = current.filter((entry) => entry.isLoading && (entry.id.startsWith("temp-") || entry.id.startsWith("placeholder-")));
+            const pending = current.filter(
+              (entry) =>
+                (entry.isLoading || entry.isError) &&
+                (entry.id.startsWith("temp-") ||
+                  entry.id.startsWith("placeholder-")),
+            );
             const next = [...latest.values(), ...pending].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
             knownEntryIdsRef.current = new Set(next.map((entry) => entry.id));
             return next;
@@ -348,7 +395,7 @@ export function useSpaceRealtime({
         const next = payload.new as Partial<Space>;
         const current = roomRef.current;
         // Ordinary activity on an unlimited room doesn't need a full snapshot.
-        if (["slug", "expires_at", "expiry_mode", "code_enabled", "pairing_expires_at", "access_version", "delivery_mode", "name", "welcome_text"]
+        if (["slug", "expires_at", "expiry_mode", "code_enabled", "pairing_expires_at", "access_version", "delivery_mode", "name", "welcome_text", "creator_device_id"]
           .some(key => next[key as keyof Space] !== current[key as keyof Space])) reconcileEntries();
       })
       .on(
@@ -437,7 +484,6 @@ export function useSpaceRealtime({
     };
   }, [
     space.id,
-    space.slug,
     currentDeviceId,
     addEntryIfNotExists,
     scrollToBottom,

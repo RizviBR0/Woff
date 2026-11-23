@@ -30,7 +30,6 @@ const baseBlogPosts: BlogPost[] = [
     author: { name: "Woff Team", avatarUrl: "/woff_team.png" },
     coverImageUrl: "/blog/how-to-share-notes-online-without-login.svg",
     coverAlt: "Share notes online without login - instant link generation and sharing interface",
-    featured: true,
     takeaways: [
       "Use a link-based note when speed matters more than long-term document management.",
       "Keep sensitive credentials and private personal data out of temporary shared spaces.",
@@ -470,7 +469,7 @@ const baseBlogPosts: BlogPost[] = [
       "8. Temporary collaboration",
       "This makes it useful beyond developers.",
       "## Pastebin vs Woff Space",
-      "| Feature | Pastebin | Woff Space |\n|---|---|---\n| Plain text sharing | Yes | Yes |\n| Code snippet sharing | Yes | Yes |\n| No login quick sharing | Limited depending on use | Yes |\n| Notes and mixed content | Basic | Stronger |\n| File and image sharing | Limited | Yes |\n| General workspace feel | No | Yes |\n| Best for | Text and code pastes | Notes, files, code, and quick spaces |",
+      "| Feature | Pastebin | Woff Space |\n|---|---|---|\n| Plain text sharing | Yes | Yes |\n| Code snippet sharing | Yes | Yes |\n| No login quick sharing | Limited depending on use | Yes |\n| Notes and mixed content | Basic | Stronger |\n| File and image sharing | Limited | Yes |\n| General workspace feel | No | Yes |\n| Best for | Text and code pastes | Notes, files, code, and quick spaces |",
       "## When Woff Space is better",
       "Use Woff Space when you need to share more than raw text.",
       "For example:",
@@ -1131,6 +1130,22 @@ const articleActions: Record<string, { href: string; label: string }> = {
   "best-free-online-notepad-tools-2026": { href: "/online-notepad", label: "Try the notepad" },
 };
 
+function appendCurrentLimits(blocks: string[]): string[] {
+  const limitsSection = [
+    "## Current sharing and retention limits",
+    "Share the enabled room code or a valid invitation link. Either can be forwarded. A note has one editing owner; private notes are creator-only. New rooms have no time limit unless the owner sets one. A chosen deadline is shown in the top bar and does not move with activity. Keep a local copy of anything you need later. See [help](/help) and [pricing](/pricing) for current limits and availability.",
+  ];
+  const lastIndex = blocks.length - 1;
+  if (
+    lastIndex >= 0 &&
+    (blocks[lastIndex].trim().startsWith("**CTA:**") ||
+      blocks[lastIndex].trim().startsWith("CTA:"))
+  ) {
+    return [...blocks.slice(0, lastIndex), ...limitsSection, blocks[lastIndex]];
+  }
+  return [...blocks, ...limitsSection];
+}
+
 export const blogPosts: BlogPost[] = [...baseBlogPosts, ...focusedHandoffPosts]
   .map((post) => ({
     ...post,
@@ -1142,10 +1157,7 @@ export const blogPosts: BlogPost[] = [...baseBlogPosts, ...focusedHandoffPosts]
     cta: guideRevisions[post.slug]?.cta || post.cta || articleActions[post.slug] || { href: "/new", label: "Start sharing" },
     content: guideRevisions[post.slug]?.content || (focusedHandoffPosts.includes(post)
       ? post.content
-      : [...post.content, ...(contentEnhancements[post.slug] || []),
-        "## Current sharing and retention limits",
-        "Share the enabled room code or a valid invitation link. Either can be forwarded. A note has one editing owner; private notes are creator-only. New rooms have no time limit unless the owner sets one. A chosen deadline is shown in the top bar and does not move with activity. Keep a local copy of anything you need later. See [help](/help) and [pricing](/pricing) for current limits and availability.",
-      ]),
+      : appendCurrentLimits([...post.content, ...(contentEnhancements[post.slug] || [])])),
   }))
   .sort((a, b) => b.date.localeCompare(a.date));
 

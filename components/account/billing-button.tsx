@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,15 @@ export function BillingButton({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState("");
+
+  useEffect(() => {
+    const resetOnBack = (event: PageTransitionEvent) => {
+      if (event.persisted) setBusy(false);
+    };
+    window.addEventListener("pageshow", resetOnBack);
+    return () => window.removeEventListener("pageshow", resetOnBack);
+  }, []);
+
   async function openBilling() {
     setBusy(true);
     setError("");
@@ -30,11 +39,15 @@ export function BillingButton({
         headers: { "Content-Type": "application/json" },
         signal: AbortSignal.timeout(40_000),
       });
-      const result = await response.json();
-      if (!response.ok || !result.url) {
-        setErrorCode(typeof result.code === "string" ? result.code : "");
+      const result = (await response.json().catch(() => null)) as {
+        url?: string;
+        error?: string;
+        code?: string;
+      } | null;
+      if (!response.ok || !result?.url) {
+        setErrorCode(typeof result?.code === "string" ? result.code : "");
         throw new Error(
-          result.error || "Billing is unavailable. Please try later.",
+          result?.error || "Billing is unavailable. Please try later.",
         );
       }
       const destination = new URL(result.url);

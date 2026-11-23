@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/toaster";
 import { Almarai, Inter } from "next/font/google";
 import { PrivacySafeAnalytics } from "@/components/privacy-safe-analytics";
+import { SITE_URL } from "@/lib/site-url";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -17,8 +18,6 @@ const almarai = Almarai({
   variable: "--font-almarai",
   display: "swap",
 });
-
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://woff.space";
 
 export const metadata: Metadata = {
   title: {
@@ -43,7 +42,7 @@ export const metadata: Metadata = {
   authors: [{ name: "Woff Team" }],
   creator: "Woff",
   publisher: "Woff",
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(SITE_URL),
 
   // Favicons & Icons
   icons: {
@@ -62,14 +61,13 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: siteUrl,
     siteName: "Woff Space",
     title: "Woff Space: Instant File Sharing Without Sign Up",
     description:
       "Send files with a link, room code, or QR code. No sign-up required. Choose a time limit or leave the room open. Keep your own copy.",
     images: [
       {
-        url: `${siteUrl}/og-image.png`,
+        url: `${SITE_URL}/og-image.png`,
         width: 1200,
         height: 630,
         alt: "Woff Space",
@@ -83,7 +81,7 @@ export const metadata: Metadata = {
     title: "Woff Space: Instant File Sharing Without Sign Up",
     description:
       "Send files with a link, room code, or QR code. No sign-up required. Choose a time limit or leave the room open. Keep your own copy.",
-    images: [`${siteUrl}/og-image.png`],
+    images: [`${SITE_URL}/og-image.png`],
     creator: "@woffspace",
   },
 
@@ -98,11 +96,6 @@ export const metadata: Metadata = {
       "max-image-preview": "large",
       "max-snippet": -1,
     },
-  },
-
-  // Alternate / Canonical
-  alternates: {
-    canonical: "/",
   },
 
   // App-specific
@@ -127,22 +120,6 @@ export default function RootLayout({
 }) {
   const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "WebApplication",
-    name: "Woff",
-    url: siteUrl,
-    description:
-      "Instant file sharing between devices or with other people. Share through a link, room code, or QR code, choose an optional time limit, and download a copy to keep.",
-    applicationCategory: "ProductivityApplication",
-    operatingSystem: "Any",
-    offers: {
-      "@type": "Offer",
-      price: "0",
-      priceCurrency: "USD",
-    },
-  };
-
   return (
     <html
       lang="en"
@@ -162,13 +139,14 @@ export default function RootLayout({
             />
           </>
         )}
-        {/* JSON-LD Structured Data */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
       </head>
       <body className={`${inter.className} font-sans antialiased`}>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg focus:ring-2 focus:ring-orange-500"
+        >
+          Skip to main content
+        </a>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useCanvasDrawing, type ToolMode } from "@/lib/hooks/use-canvas-drawing";
+import { useCanvasDrawing } from "@/lib/hooks/use-canvas-drawing";
 import { triggerBlobDownload } from "@/lib/download";
 
 interface DrawingCanvasProps {
@@ -61,10 +61,13 @@ export function DrawingCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
+  const initialBlobUrlRef = useRef<string | null>(null);
 
   const { resolvedTheme } = useTheme();
   const theme = (resolvedTheme === "dark" ? "dark" : "light") as "dark" | "light";
 
+  const [mounted, setMounted] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -73,12 +76,15 @@ export function DrawingCanvas({
   const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [imageLoadError, setImageLoadError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const {
     mode,
     setMode,
-    strokes,
-    images,
     selectedIds,
+    setSelectedIds,
     color,
     setColor,
     size,
@@ -98,8 +104,8 @@ export function DrawingCanvas({
     hasContent,
   } = useCanvasDrawing({
     canvasRef,
-    containerRef,
     theme,
+    enabled: isOpen,
   });
 
   // Load an image file onto the canvas as an interactive moveable/resizable element
@@ -128,14 +134,24 @@ export function DrawingCanvas({
 
   // Load initial image if provided (for image editing / markup mode)
   useEffect(() => {
+    const revokeInitialBlob = () => {
+      if (initialBlobUrlRef.current) {
+        URL.revokeObjectURL(initialBlobUrlRef.current);
+        initialBlobUrlRef.current = null;
+      }
+    };
+
     if (!isOpen) {
       loadedUrlRef.current = null;
+      revokeInitialBlob();
       setIsLoadingImage(false);
       setImageLoadError(null);
+      setShowColorPicker(false);
       return;
     }
 
     if (!initialImageUrl) {
+      revokeInitialBlob();
       setIsLoadingImage(false);
       setImageLoadError(null);
       return;
@@ -151,10 +167,11 @@ export function DrawingCanvas({
     setIsLoadingImage(true);
     setImageLoadError(null);
     clearRef.current();
+    revokeInitialBlob();
 
     const load = async () => {
       let objectUrl = initialImageUrl;
-      let shouldRevoke = false;
+      let createdBlobUrl: string | null = null;
 
       try {
         if (
@@ -168,22 +185,31 @@ export function DrawingCanvas({
               signal: controller.signal,
             });
             clearTimeout(timeoutId);
+            if (!active) return;
             if (res.ok) {
               const blob = await res.blob();
-              objectUrl = URL.createObjectURL(blob);
-              shouldRevoke = true;
+              if (!active) return;
+              createdBlobUrl = URL.createObjectURL(blob);
+              objectUrl = createdBlobUrl;
             } else {
-              // Fall back to direct URL
               objectUrl = initialImageUrl;
             }
           } catch {
             clearTimeout(timeoutId);
-            // If fetch failed or was aborted, fallback to direct image source
+            if (!active) return;
             objectUrl = initialImageUrl;
           }
         }
 
+        if (!active) {
+          if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
+          return;
+        }
+
         const img = new window.Image();
+        if (!objectUrl.startsWith("data:") && !objectUrl.startsWith("blob:")) {
+          img.crossOrigin = "anonymous";
+        }
         await new Promise<void>((resolve, reject) => {
           img.onload = () => resolve();
           img.onerror = () => reject(new Error("Unable to decode image"));
@@ -194,10 +220,11 @@ export function DrawingCanvas({
         });
 
         if (!active) {
-          if (shouldRevoke) URL.revokeObjectURL(objectUrl);
+          if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
           return;
         }
 
+        initialBlobUrlRef.current = createdBlobUrl;
         loadedUrlRef.current = initialImageUrl;
 
         const container = containerRef.current;
@@ -216,10 +243,11 @@ export function DrawingCanvas({
         }
         const widthRatio = Math.max(0.2, Math.min(0.92, initW / Math.max(1, viewW)));
 
-        addImageRef.current(img, { x: 0.5, y: 0.5 }, widthRatio, false);
+        addImageRef.current(img, { x: 0.5, y: 0.5 }, widthRatio, false, true);
         setModeRef.current("pen");
         setIsLoadingImage(false);
       } catch (err) {
+        if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
         if (!active) return;
         setIsLoadingImage(false);
         setImageLoadError(
@@ -235,6 +263,56 @@ export function DrawingCanvas({
       controller.abort();
     };
   }, [isOpen, initialImageUrl]);
+
+  // Ensure any tracked initial blob URL is revoked on unmount
+  useEffect(() => {
+    return () => {
+      if (initialBlobUrlRef.current) {
+        URL.revokeObjectURL(initialBlobUrlRef.current);
+        initialBlobUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  // Lock body scroll and handle Escape & color picker outside clicks while open
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (showColorPicker) {
+        e.preventDefault();
+        setShowColorPicker(false);
+      } else if (selectedIds.size > 0) {
+        e.preventDefault();
+        setSelectedIds(new Set());
+      } else if (!isSendingRef.current) {
+        e.preventDefault();
+        onClose();
+      }
+    };
+
+    const handlePointerDownOutside = (e: PointerEvent) => {
+      if (
+        showColorPicker &&
+        colorPickerRef.current &&
+        !colorPickerRef.current.contains(e.target as Node)
+      ) {
+        setShowColorPicker(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDownOutside);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDownOutside);
+    };
+  }, [isOpen, onClose, selectedIds.size, setSelectedIds, showColorPicker]);
 
   // Track container resize to update canvas resolution and DPR
   useEffect(() => {
@@ -363,7 +441,7 @@ export function DrawingCanvas({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const cursorClass =
     mode === "select"
@@ -374,6 +452,9 @@ export function DrawingCanvas({
 
   return createPortal(
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
       data-woff-canvas="true"
       className="fixed inset-0 z-[9999] flex h-dvh w-screen flex-col overflow-hidden bg-background select-none font-sans"
     >
@@ -555,13 +636,14 @@ export function DrawingCanvas({
           <span className="mx-0.5 h-5 w-[1px] bg-border/80 shrink-0" />
 
           {/* Color Picker Swatch & Popup */}
-          <div className="relative">
+          <div className="relative" ref={colorPickerRef}>
             <button
               type="button"
               onClick={() => setShowColorPicker((prev) => !prev)}
               className="flex h-8 w-8 items-center justify-center rounded-xl hover:bg-muted transition-transform active:scale-95"
               title="Pick color"
               aria-label="Pick color"
+              aria-expanded={showColorPicker}
             >
               <span
                 className="h-5 w-5 rounded-full border border-black/20 dark:border-white/30 shadow-inner"
@@ -581,6 +663,7 @@ export function DrawingCanvas({
                       setShowColorPicker(false);
                     }}
                     title={p.label}
+                    aria-label={`Color ${p.label}`}
                     className={`h-6 w-6 rounded-full border transition-transform hover:scale-110 ${
                       color === p.value
                         ? "scale-110 ring-2 ring-[#ff5a00] ring-offset-2 ring-offset-background"
@@ -606,6 +689,8 @@ export function DrawingCanvas({
                     : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 }`}
                 title={`${s.label} Stroke (${s.value}px)`}
+                aria-label={`${s.label} stroke (${s.value}px)`}
+                aria-pressed={size === s.value}
               >
                 <span
                   className={`rounded-full ${s.dotSize}`}
@@ -651,6 +736,11 @@ export function DrawingCanvas({
                 selectedIds.size > 0
                   ? `Delete ${selectedIds.size} selected (Del)`
                   : "Select items to delete"
+              }
+              aria-label={
+                selectedIds.size > 0
+                  ? `Delete ${selectedIds.size} selected items`
+                  : "Delete selected items"
               }
             >
               <Trash2 className="h-4 w-4" />

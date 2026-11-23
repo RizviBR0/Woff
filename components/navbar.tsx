@@ -10,7 +10,6 @@ import {
   X,
   BriefcaseBusiness,
   CreditCard,
-  ExternalLink,
   HelpCircle,
   FileText,
   Loader2,
@@ -24,28 +23,24 @@ const navLinks = [
     href: "/for-freelancers",
     icon: BriefcaseBusiness,
     description: "Files and instructions in one handoff",
-    external: false,
   },
   {
     name: "Pricing",
     href: "/pricing",
     icon: CreditCard,
     description: "Free sharing and the Pro pilot",
-    external: false,
   },
   {
     name: "Help",
     href: "/help",
     icon: HelpCircle,
     description: "Sharing, recovery, and limits",
-    external: false,
   },
   {
     name: "Blog",
     href: "/blog",
     icon: FileText,
     description: "Product updates, tips, and news",
-    external: false,
   },
 ];
 
@@ -86,7 +81,8 @@ export function Navbar() {
   return (
     <>
       {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-zinc-200/60 dark:border-white/[0.06] navbar-orange-border">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-zinc-200/60 dark:border-white/[0.06] navbar-orange-border">
+        <nav aria-label="Primary">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 relative">
             {/* Logo */}
@@ -99,22 +95,15 @@ export function Navbar() {
             {/* Desktop Navigation — centered flat links */}
             <div className="hidden xl:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
               <div className="flex items-center gap-1">
-                {navLinks.map((link) => {
-                  return (
-                    <Link
-                      key={link.name}
-                      href={link.href}
-                      target={link.external ? "_blank" : undefined}
-                      rel={link.external ? "noopener noreferrer" : undefined}
-                      className="group flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
-                    >
-                      <span>{link.name}</span>
-                      {link.external && (
-                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
-                    </Link>
-                  );
-                })}
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    className="group flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                  >
+                    <span>{link.name}</span>
+                  </Link>
+                ))}
               </div>
             </div>
 
@@ -140,15 +129,16 @@ export function Navbar() {
                   aria-controls="woff-mobile-navigation"
                 >
                   {isOpen ? (
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4" aria-hidden="true" />
                   ) : (
-                    <Menu className="h-4 w-4" />
+                    <Menu className="h-4 w-4" aria-hidden="true" />
                   )}
                 </Button>
               </div>
 
               {/* Create Space CTA button — appears on scroll */}
               <button
+                type="button"
                 onClick={handleCreateSpace}
                 disabled={isCreating || !showCta}
                 tabIndex={showCta ? 0 : -1}
@@ -160,7 +150,7 @@ export function Navbar() {
                 }`}
               >
                 {isCreating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : null}
                 {isCreating ? "Creating..." : "Start sharing"}
               </button>
@@ -178,18 +168,13 @@ export function Navbar() {
                   <Link
                     key={link.name}
                     href={link.href}
-                    target={link.external ? "_blank" : undefined}
-                    rel={link.external ? "noopener noreferrer" : undefined}
                     onClick={() => setIsOpen(false)}
                     className="group flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition-all duration-200"
                   >
-                    <IconComponent className="w-4 h-4" />
+                    <IconComponent className="w-4 h-4" aria-hidden="true" />
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span>{link.name}</span>
-                        {link.external && (
-                          <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        )}
                       </div>
                       <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-0.5">
                         {link.description}
@@ -204,12 +189,19 @@ export function Navbar() {
               {/* Mobile CTA */}
               <div className="px-3 pt-2">
                 <button
-                  onClick={handleCreateSpace}
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    void handleCreateSpace();
+                  }}
                   disabled={isCreating}
                   className="cta-button-glow w-full h-11 text-sm font-semibold rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {isCreating ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      <span>Creating...</span>
+                    </>
                   ) : (
                     "Start sharing"
                   )}
@@ -218,7 +210,8 @@ export function Navbar() {
             </div>
           </div>
         )}
-      </nav>
+        </nav>
+      </header>
 
       {/* Spacer to prevent content from hiding behind fixed navbar */}
       <div className="h-16" />

@@ -30,9 +30,6 @@ import {
   Download,
   FileDown,
   FileText,
-  Heading1,
-  Heading2,
-  Heading3,
   ImagePlus,
   Info,
   Italic,
@@ -61,7 +58,6 @@ import {
   Unlink,
   WrapText,
   AlertTriangle,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import TurndownService from "turndown";
@@ -333,31 +329,52 @@ turndownService.addRule("underline", {
   replacement: (content) => `<u>${content}</u>`,
 });
 
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 turndownService.addRule("extendedImage", {
   filter: "img",
   replacement: (_content, node) => {
     const element = node as HTMLImageElement;
     const alt = element.getAttribute("alt") || "";
-    const src = element.getAttribute("src") || "";
-    const width = element.getAttribute("width");
-    const align = element.getAttribute("data-align");
+    const src = (element.getAttribute("src") || "").trim();
+    if (!src) return "";
+    const rawWidth = (element.getAttribute("width") || "").trim();
+    const safeWidth = /^\d{1,5}$/.test(rawWidth) ? rawWidth : null;
+    const rawAlign = (element.getAttribute("data-align") || "").trim().toLowerCase();
+    const safeAlign: ImageAlignment | null =
+      rawAlign === "center" || rawAlign === "right" || rawAlign === "left"
+        ? rawAlign
+        : null;
 
-    if (!width && !align) {
-      return `![${alt}](${src})`;
+    if (!safeWidth && (!safeAlign || safeAlign === "left")) {
+      const escapedAlt = alt.replace(/([[\]])/g, "\\$1");
+      return `![${escapedAlt}](${src})`;
     }
-    const styleAttr = align ? ` style="text-align: ${align}"` : "";
-    const widthAttr = width ? ` width="${width}"` : "";
-    return `<img src="${src}" alt="${alt}"${widthAttr}${styleAttr} />`;
+    const alignAttr = safeAlign ? ` data-align="${safeAlign}"` : "";
+    const widthAttr = safeWidth ? ` width="${safeWidth}"` : "";
+    return `<img src="${escapeHtmlAttr(src)}" alt="${escapeHtmlAttr(alt)}"${widthAttr}${alignAttr} />`;
   },
 });
 
 export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProps) {
   const router = useRouter();
-  const note = initialNote!;
+  const note = initialNote ?? null;
+  const initialAccessVersion = invitation?.space.access_version ?? 0;
   const [roomSlug, setRoomSlug] = useState(note?.space_slug || "");
-  const [roomAccessVersion, setRoomAccessVersion] = useState(invitation?.space.access_version ?? 0);
-  const roomIdentityRef = useRef({ slug: note?.space_slug || "", accessVersion: invitation?.space.access_version ?? 0 });
+  const [roomAccessVersion, setRoomAccessVersion] = useState(initialAccessVersion);
+  const roomIdentityRef = useRef({
+    slug: note?.space_slug || "",
+    accessVersion: initialAccessVersion,
+  });
   const canEdit = Boolean(note?.can_edit ?? note?.is_owner);
+  const [isLocked, setIsLocked] = useState(Boolean(note?.is_locked));
+  const [updatedAt, setUpdatedAt] = useState(note?.updated_at || "");
   const [title, setTitle] = useState(note?.title || "Untitled Note");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [mode, setMode] = useState<"rich" | "raw">("rich");
@@ -367,6 +384,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
   const rawBaselineRef = useRef("");
   const [wordWrap, setWordWrap] = useState(true);
   const [copiedRaw, setCopiedRaw] = useState(false);
+  const copiedRawTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rawTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -377,6 +395,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
   const [shareGrantsRoomAccess, setShareGrantsRoomAccess] = useState(false);
   const [qrFailed, setQrFailed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [stats, setStats] = useState({ words: 0, characters: 0 });
@@ -413,10 +432,23 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
 
   useEffect(() => {
     const slug = note?.space_slug || "";
-    roomIdentityRef.current = { slug, accessVersion: 0 };
+    const version = invitation?.space.access_version ?? 0;
+    roomIdentityRef.current = { slug, accessVersion: version };
     setRoomSlug(slug);
-    setRoomAccessVersion(0);
-  }, [note?.space_id, note?.space_slug]);
+    setRoomAccessVersion(version);
+  }, [note?.space_id, note?.space_slug, invitation?.space.access_version]);
+
+  useEffect(() => {
+    setIsLocked(Boolean(note?.is_locked));
+    setUpdatedAt(note?.updated_at || "");
+  }, [note?.is_locked, note?.updated_at]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if (copiedRawTimerRef.current) clearTimeout(copiedRawTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const roomId = note?.space_id;
@@ -488,6 +520,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
 
   const editor = useEditor({
     immediatelyRender: false,
+    shouldRerenderOnTransaction: true,
     editable: canEdit,
     extensions: [
       StarterKit.configure({
@@ -551,8 +584,8 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
   const rawLines = useMemo(() => (rawContent || " ").split("\n"), [rawContent]);
 
   // Non-destructive mode switcher
-  const handleSwitchMode = (targetMode: "rich" | "raw") => {
-    if (targetMode === mode) return;
+  const handleSwitchMode = useCallback((targetMode: "rich" | "raw") => {
+    if (targetMode === modeRef.current) return;
 
     if (targetMode === "raw") {
       const currentHtml = editor?.getHTML() || "";
@@ -576,7 +609,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
           editor?.commands.setContent(html);
           dirtyRef.current = true;
           revisionRef.current += 1;
-          scheduleSave();
+          scheduleSaveRef.current();
         } catch {
           // preserve current state on parse failure
         }
@@ -584,7 +617,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
       modeRef.current = "rich";
       setMode("rich");
     }
-  };
+  }, [editor]);
 
   const handleRawContentChange = (newVal: string) => {
     if (!canEdit) return;
@@ -671,6 +704,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
             });
             if (updated.error) throw new Error(updated.error);
             versionRef.current = updated.version || versionRef.current + 1;
+            if (updated.updated_at) setUpdatedAt(updated.updated_at);
             if (saving.revision === revisionRef.current) {
               dirtyRef.current = false;
               setSaveState("saved");
@@ -714,6 +748,8 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
       void performSave();
     }, 1000);
   }, [canEdit, editor, performSave]);
+  const scheduleSaveRef = useRef(scheduleSave);
+  scheduleSaveRef.current = scheduleSave;
 
   // Draft recovery check on mount
   useEffect(() => {
@@ -727,7 +763,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
       });
     }
 
-    if (canEdit && editor) {
+    if (canEdit && editor && note) {
       try {
         const rawDraft = localStorage.getItem(draftKey);
         const draft: LocalDraft | null = rawDraft ? JSON.parse(rawDraft) : null;
@@ -754,7 +790,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
       pendingImagePreviews.forEach((url) => URL.revokeObjectURL(url));
       pendingImagePreviews.clear();
     };
-  }, [canEdit, draftKey, editor, note.content, note.title, note.updated_at, serializeDraft]);
+  }, [canEdit, draftKey, editor, note, serializeDraft]);
 
   // Keyboard shortcuts and window lifecycle
   useEffect(() => {
@@ -764,11 +800,30 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
 
       if (cmdOrCtrl && event.key.toLowerCase() === "s") {
         event.preventDefault();
-        toast.info("Saving note…");
-        void performSave();
+        if (!canEdit) return;
+        if (dirtyRef.current) {
+          toast.info("Saving note…");
+          void performSave();
+        } else {
+          toast.info("All changes saved");
+        }
       } else if (cmdOrCtrl && event.key.toLowerCase() === "p") {
         event.preventDefault();
         triggerPrintNote();
+      } else if (cmdOrCtrl && event.key === "/") {
+        event.preventDefault();
+        handleSwitchMode(modeRef.current === "rich" ? "raw" : "rich");
+      } else if (
+        cmdOrCtrl &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "k" &&
+        canEdit &&
+        modeRef.current === "rich" &&
+        editor
+      ) {
+        event.preventDefault();
+        setLinkValue(editor.getAttributes("link").href || "");
+        setLinkOpen(true);
       } else if (cmdOrCtrl && event.shiftKey && event.key.toLowerCase() === "f") {
         event.preventDefault();
         setIsFocusMode((prev) => !prev);
@@ -816,7 +871,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
       document.removeEventListener("visibilitychange", visibility);
       window.removeEventListener("pagehide", flush);
     };
-  }, [isFocusMode, performSave, scheduleSave, serializeDraft]);
+  }, [canEdit, editor, handleSwitchMode, isFocusMode, performSave, scheduleSave, serializeDraft]);
 
   useEffect(() => {
     if (invitation) rememberSpaceInvitation(invitation.space, invitation.token);
@@ -831,7 +886,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
     setShareError("");
     setQrFailed(false);
     setCopied(false);
-    if (note.is_locked) {
+    if (isLocked) {
       setShareError("This note is private. Choose Share Note with Room in Note options first.");
       return;
     }
@@ -865,7 +920,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
       }
     })();
     return () => { cancelled = true; };
-  }, [shareOpen, noteSlug, note.is_locked, roomSlug, roomAccessVersion]);
+  }, [shareOpen, noteSlug, isLocked, roomSlug, roomAccessVersion]);
 
   const updateTitle = (value: string) => {
     const clean = value.slice(0, 120);
@@ -885,7 +940,11 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
     if (ok) {
       setCopied(true);
       toast.success("Link copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => {
+        setCopied(false);
+        copiedTimerRef.current = null;
+      }, 2000);
     } else {
       toast.error("Failed to copy link");
     }
@@ -924,13 +983,13 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
     if (mutationRef.current) return;
     setPrivacyBusy(true);
     try {
-      const nextLocked = !note.is_locked;
+      const nextLocked = !isLocked;
       const saving = performSave();
       const mutation = saving.then(async () => {
         if (dirtyRef.current) throw new Error("Save your changes before changing privacy.");
         const updated = await setNotePrivacy(noteSlug, nextLocked, versionRef.current);
         versionRef.current = updated.version;
-        note.is_locked = updated.is_locked;
+        setIsLocked(Boolean(updated.is_locked));
       });
       mutationRef.current = mutation;
       await mutation;
@@ -954,6 +1013,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
       editor.commands.setContent(recoveryDraft.json || recoveryDraft.html || "");
     }
     if (typeof recoveryDraft.rawContent === "string") {
+      rawBaselineRef.current = "";
       rawContentRef.current = recoveryDraft.rawContent;
       setRawContent(recoveryDraft.rawContent);
       modeRef.current = "raw";
@@ -963,6 +1023,14 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
       setTitle(recoveryDraft.title);
       titleRef.current = recoveryDraft.title;
     }
+    const text =
+      typeof recoveryDraft.rawContent === "string"
+        ? recoveryDraft.rawContent
+        : editor.getText();
+    setStats({
+      words: text.trim() ? text.trim().split(/\s+/).length : 0,
+      characters: text.length,
+    });
     revisionRef.current += 1;
     dirtyRef.current = true;
     setSaveState("unsaved");
@@ -1004,6 +1072,12 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
         : turndownService.turndown(editor?.getHTML() || "");
     const ok = await copyTextToClipboard(mdContent);
     if (ok) {
+      setCopiedRaw(true);
+      if (copiedRawTimerRef.current) clearTimeout(copiedRawTimerRef.current);
+      copiedRawTimerRef.current = setTimeout(() => {
+        setCopiedRaw(false);
+        copiedRawTimerRef.current = null;
+      }, 2000);
       toast.success("Markdown copied to clipboard");
     } else {
       toast.error("Failed to copy");
@@ -1045,7 +1119,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
   // Inline Image Upload logic
   const uploadInlineImages = useCallback(
     async (files: File[]) => {
-      if (!editor || !canEdit || !files.length) return;
+      if (!editor || !canEdit || !note || !files.length) return;
       if (files.length > 20) {
         toast.error("Paste at most 20 images at once");
         return;
@@ -1057,6 +1131,11 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
       const invalid = files.find((file) => !file.type.startsWith("image/"));
       if (invalid) {
         toast.error("Only images can be pasted into a note");
+        return;
+      }
+      const empty = files.find((file) => file.size <= 0);
+      if (empty) {
+        toast.error(`${empty.name || "An image"} is empty`);
         return;
       }
       const tooLarge = files.find((file) => file.size > 50 * 1024 * 1024);
@@ -1234,22 +1313,40 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
             if (!pendingInsertion.length) return;
             const position = removePlaceholder(pendingInsertion[0]);
             pendingInsertion.slice(1).forEach(removePlaceholder);
-            editor
-              .chain()
-              .insertContentAt(
-                position,
-                pendingInsertion.map((item) => ({
-                  type: "image",
-                  attrs: {
-                    src: item.ready!.url,
-                    alt: item.file.name || "Pasted image",
-                    align: "left",
-                    width: item.ready!.width,
-                    height: item.ready!.height,
-                  },
-                })),
-              )
-              .run();
+            if (modeRef.current === "raw") {
+              const mdSnippets = pendingInsertion
+                .map((item) => {
+                  const alt = (item.file.name || "Pasted image").replace(/([[\]])/g, "\\$1");
+                  return `![${alt}](${item.ready!.url})`;
+                })
+                .join("\n\n");
+              const nextRaw = rawContentRef.current
+                ? `${rawContentRef.current}\n\n${mdSnippets}`
+                : mdSnippets;
+              rawContentRef.current = nextRaw;
+              setRawContent(nextRaw);
+              dirtyRef.current = true;
+              revisionRef.current += 1;
+              setSaveState(navigator.onLine ? "unsaved" : "offline");
+              scheduleSaveRef.current();
+            } else {
+              editor
+                .chain()
+                .insertContentAt(
+                  position,
+                  pendingInsertion.map((item) => ({
+                    type: "image",
+                    attrs: {
+                      src: item.ready!.url,
+                      alt: item.file.name || "Pasted image",
+                      align: "left",
+                      width: item.ready!.width,
+                      height: item.ready!.height,
+                    },
+                  })),
+                )
+                .run();
+            }
             pendingInsertion.forEach((item) => {
               item.status = "complete";
             });
@@ -1263,7 +1360,18 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
               }
             }),
           );
-          flushReady();
+          if (editor.isDestroyed) {
+            const unusedPaths = pending
+              .filter((item) => item.status === "pending" && item.intent)
+              .map((item) => item.intent!.path);
+            if (unusedPaths.length > 0) {
+              void cancelUploadIntents(note.space_id, unusedPaths).catch(
+                () => undefined,
+              );
+            }
+          } else {
+            flushReady();
+          }
         } catch (error) {
           allComplete = false;
           placeholders
@@ -1293,7 +1401,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
 
       await processQueue(0);
     },
-    [canEdit, editor, note.space_id, noteSlug],
+    [canEdit, editor, note, noteSlug],
   );
 
   useEffect(() => {
@@ -1399,16 +1507,34 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
         editor?.isActive({ textAlign: align }),
     );
 
-  const currentStyleLabel = useMemo(() => {
-    if (!editor) return "Normal text";
-    if (editor.isActive("heading", { level: 1 })) return "Heading 1";
-    if (editor.isActive("heading", { level: 2 })) return "Heading 2";
-    if (editor.isActive("heading", { level: 3 })) return "Heading 3";
-    return "Normal text";
-  }, [editor]);
+  const currentStyleLabel = !editor
+    ? "Normal text"
+    : editor.isActive("heading", { level: 1 })
+      ? "Heading 1"
+      : editor.isActive("heading", { level: 2 })
+        ? "Heading 2"
+        : editor.isActive("heading", { level: 3 })
+          ? "Heading 3"
+          : "Normal text";
+
+  if (!note) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-6 bg-background">
+        <div className="max-w-sm text-center">
+          <h1 className="text-xl font-semibold">Note unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This note could not be loaded or has expired.
+          </p>
+          <Button className="mt-5" variant="outline" onClick={() => router.push("/")}>
+            Back to home
+          </Button>
+        </div>
+      </main>
+    );
+  }
 
   // Locked Note Guard
-  if (note.is_locked && !note.is_owner) {
+  if (isLocked && !note.is_owner) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6 bg-background">
         <div className="max-w-sm text-center">
@@ -1730,7 +1856,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
                         onClick={() => setLockDialogOpen(true)}
                       >
                         <Lock className="h-4 w-4 text-muted-foreground" />
-                        <span>{note.is_locked ? "Share Note with Room" : "Make Note Private"}</span>
+                        <span>{isLocked ? "Share Note with Room" : "Make Note Private"}</span>
                       </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
@@ -2463,7 +2589,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
             <div className="flex justify-between border-b pb-2">
               <span>Last Updated</span>
               <span className="text-foreground">
-                {new Date(note.updated_at).toLocaleString()}
+                {updatedAt ? new Date(updatedAt).toLocaleString() : "—"}
               </span>
             </div>
             <div className="flex justify-between">
@@ -2487,10 +2613,10 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Lock className="h-4 w-4" />
-              <span>{note.is_locked ? "Share Note with Room" : "Make Note Private"}</span>
+              <span>{isLocked ? "Share Note with Room" : "Make Note Private"}</span>
             </DialogTitle>
             <DialogDescription>
-              {note.is_locked
+              {isLocked
                 ? "Room members will be able to read this note and its attached images."
                 : "Only you can read this note and its attached images. Room members will see a private note placeholder."}
             </DialogDescription>
@@ -2500,7 +2626,7 @@ export function NoteEditor({ noteSlug, initialNote, invitation }: NoteEditorProp
               Cancel
             </Button>
             <Button disabled={privacyBusy} onClick={() => void handleToggleLock()}>
-              {privacyBusy ? "Saving…" : note.is_locked ? "Share Note" : "Make Private"}
+              {privacyBusy ? "Saving…" : isLocked ? "Share Note" : "Make Private"}
             </Button>
           </DialogFooter>
         </DialogContent>

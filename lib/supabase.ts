@@ -3,6 +3,7 @@ import { cache } from "react";
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { hasActiveSessionToken } from "@/lib/jwt";
 
 function getSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -42,32 +43,13 @@ export async function createServerSupabaseClient() {
   });
 }
 
-function parseJwtPayload(token: string): { sub?: string; exp?: number } | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-    const base64Url = parts[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const json = Buffer.from(base64, "base64").toString("utf8");
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
 export const requireAnonymousUser = cache(async () => {
   const supabase = await createServerSupabaseClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  let userId: string | null = null;
-  if (session?.access_token) {
-    const payload = parseJwtPayload(session.access_token);
-    if (payload?.sub && (!payload.exp || payload.exp * 1000 > Date.now() + 30000)) {
-      userId = payload.sub;
-    }
-  }
+  let userId = hasActiveSessionToken(session?.access_token);
 
   if (!userId) {
     const { data, error: signInError } =

@@ -1,14 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import Image from "next/image";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   X,
   Download,
   ChevronLeft,
   ChevronRight,
-  DownloadIcon,
   Edit3,
   Loader2,
 } from "lucide-react";
@@ -42,29 +40,46 @@ export function GlobalImageViewer({
   const [imageError, setImageError] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  const safeIndex =
+    images.length > 0
+      ? Math.min(Math.max(0, currentIndex), images.length - 1)
+      : 0;
+  const currentUrl = images[safeIndex] ?? "";
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    setCurrentIndex(initialIndex);
+    const clamped =
+      images.length > 0
+        ? Math.min(Math.max(0, initialIndex), images.length - 1)
+        : 0;
+    setCurrentIndex(clamped);
     setImageLoading(true);
     setImageError(false);
-  }, [initialIndex, isOpen]);
+  }, [initialIndex, isOpen, images.length]);
 
-  // Analyze brightness
+  // Analyze brightness and sync cached image state
   useEffect(() => {
-    if (!isOpen || images.length === 0) return;
+    if (!isOpen || !currentUrl) return;
 
     let isMounted = true;
-    const currentUrl = images[currentIndex];
-    setImageLoading(true);
-    setImageError(false);
+    const el = imgRef.current;
+    if (el && el.complete && el.naturalWidth > 0) {
+      setImageLoading(false);
+      setImageError(false);
+    } else {
+      setImageLoading(true);
+      setImageError(false);
+    }
 
     const analyzeImageBrightness = (dataUrl: string): Promise<boolean> => {
       return new Promise((resolve) => {
         const img = new window.Image();
+        img.crossOrigin = "anonymous";
         img.onload = () => {
           try {
             const canvas = document.createElement("canvas");
@@ -93,8 +108,8 @@ export function GlobalImageViewer({
                 pixelCount++;
               }
             }
-            resolve(totalBrightness / pixelCount > 128);
-          } catch (error) {
+            resolve(pixelCount > 0 && totalBrightness / pixelCount > 128);
+          } catch {
             resolve(false);
           }
         };
@@ -110,20 +125,22 @@ export function GlobalImageViewer({
     return () => {
       isMounted = false;
     };
-  }, [currentIndex, images, isOpen]);
+  }, [safeIndex, currentUrl, isOpen]);
 
   const goToPrevious = useCallback(() => {
+    if (images.length === 0) return;
     setCurrentIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1));
   }, [images.length]);
 
   const goToNext = useCallback(() => {
+    if (images.length === 0) return;
     setCurrentIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
   }, [images.length]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
+    if (!isOpen) return;
 
+    const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
         case "Escape":
           onClose();
@@ -137,14 +154,13 @@ export function GlobalImageViewer({
       }
     };
 
-    if (isOpen) {
-      document.addEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "hidden";
-    }
-    
+    const previousOverflow = document.body.style.overflow;
+    document.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = previousOverflow;
     };
   }, [isOpen, onClose, goToPrevious, goToNext]);
 
@@ -163,7 +179,7 @@ export function GlobalImageViewer({
       toast.success("Download started", { id: toastId });
     } catch {
       toast.error("Failed to download image", { id: toastId });
-      window.open(dataUrl, "_blank");
+      window.open(dataUrl, "_blank", "noopener,noreferrer");
     } finally {
       setIsDownloading(false);
     }
@@ -173,18 +189,34 @@ export function GlobalImageViewer({
     if (isZipping) return;
     setIsZipping(true);
     const controller = new AbortController();
-    const toastId = toast.loading(`Preparing ZIP archive for ${images.length} photos...`, { action: { label: "Cancel", onClick: () => controller.abort() } });
+    const cancelAction = { label: "Cancel", onClick: () => controller.abort() };
+    const toastId = toast.loading(`Preparing ZIP archive for ${images.length} photos...`, { action: cancelAction });
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
 
-      await addArchiveFiles(zip, images.map((url, index) => ({ url, name: getDownloadFilename?.(index) || `photo-${index + 1}.${url.startsWith("data:image/jpeg") ? "jpg" : "png"}` })), { signal: controller.signal, onProgress: (done, total) => toast.loading(`Preparing ZIP: ${done}/${total} photos`, { id: toastId }) });
+      await addArchiveFiles(
+        zip,
+        images.map((url, index) => ({
+          url,
+          name: getDownloadFilename?.(index) || `photo-${index + 1}.${url.startsWith("data:image/jpeg") ? "jpg" : "png"}`,
+        })),
+        {
+          signal: controller.signal,
+          onProgress: (done, total) =>
+            toast.loading(`Preparing ZIP: ${done}/${total} photos`, { id: toastId, action: cancelAction }),
+        }
+      );
 
       const zipBlob = await generateArchive(zip, { signal: controller.signal });
       triggerBlobDownload(zipBlob, `photos-${Date.now()}.zip`);
       toast.success("ZIP download started", { id: toastId });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create ZIP archive", { id: toastId });
+      if (controller.signal.aborted) {
+        toast.message("ZIP cancelled", { id: toastId });
+      } else {
+        toast.error(error instanceof Error ? error.message : "Failed to create ZIP archive", { id: toastId });
+      }
     } finally {
       setIsZipping(false);
     }
@@ -193,17 +225,21 @@ export function GlobalImageViewer({
   if (!isOpen || !mounted || images.length === 0) return null;
 
   // Theming based on brightness
-  // If image is bright (white-ish), background is dark, buttons are dark (to contrast white image)
-  // Wait, if image is bright, buttons inside the image or overlapping the image need to be DARK.
-  // The background of the modal can be slightly transparent opposite.
   const modalBg = isBright ? "bg-gray-100/95" : "bg-black/95";
   const btnClasses = isBright
     ? "bg-black/80 hover:bg-black text-white border-black/40"
     : "bg-white/80 hover:bg-white text-black border-white/40";
   const textClasses = isBright ? "text-black" : "text-white";
+  const subtleTextClasses = isBright ? "text-black/70" : "text-white/70";
+  const surfaceClasses = isBright
+    ? "bg-black/5 border-black/10"
+    : "bg-white/10 border-white/15";
 
   return createPortal(
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Image viewer (${safeIndex + 1} of ${images.length})`}
       className={`fixed inset-0 z-[9999] ${modalBg} backdrop-blur-sm flex items-center justify-center transition-colors duration-300`}
       onClick={onClose}
     >
@@ -217,6 +253,7 @@ export function GlobalImageViewer({
             <Button
               variant="secondary"
               size="icon"
+              aria-label="Previous image"
               className={`absolute left-4 z-10 h-10 w-10 md:h-12 md:w-12 rounded-full shadow-2xl border backdrop-blur-md transition-all duration-300 hover:scale-105 ${btnClasses}`}
               onClick={goToPrevious}
             >
@@ -225,6 +262,7 @@ export function GlobalImageViewer({
             <Button
               variant="secondary"
               size="icon"
+              aria-label="Next image"
               className={`absolute right-4 z-10 h-10 w-10 md:h-12 md:w-12 rounded-full shadow-2xl border backdrop-blur-md transition-all duration-300 hover:scale-105 ${btnClasses}`}
               onClick={goToNext}
             >
@@ -242,7 +280,7 @@ export function GlobalImageViewer({
               className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border backdrop-blur-md transition-all duration-300 hover:scale-105 ${btnClasses}`}
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit(images[currentIndex], currentIndex);
+                onEdit(currentUrl, safeIndex);
               }}
               title="Edit image"
               aria-label="Edit image"
@@ -257,12 +295,13 @@ export function GlobalImageViewer({
             className={`h-10 w-10 md:h-11 md:w-11 rounded-full shadow-2xl border backdrop-blur-md transition-all duration-300 hover:scale-105 ${btnClasses}`}
             onClick={(e) => {
               e.stopPropagation();
-              const filename = getDownloadFilename 
-                ? getDownloadFilename(currentIndex) 
+              const filename = getDownloadFilename
+                ? getDownloadFilename(safeIndex)
                 : `image-${Date.now()}.png`;
-              downloadImage(images[currentIndex], filename);
+              downloadImage(currentUrl, filename);
             }}
             title={isDownloading ? "Downloading…" : "Download image"}
+            aria-label={isDownloading ? "Downloading image" : "Download image"}
           >
             {isDownloading ? (
               <Loader2 className="h-5 w-5 md:h-6 md:w-6 animate-spin" />
@@ -279,6 +318,7 @@ export function GlobalImageViewer({
               onClose();
             }}
             title="Close (Esc)"
+            aria-label="Close image viewer"
           >
             <X className="h-5 w-5 md:h-6 md:w-6" />
           </Button>
@@ -299,7 +339,7 @@ export function GlobalImageViewer({
               {isZipping ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                <DownloadIcon className="h-4 w-4 mr-2" />
+                <Download className="h-4 w-4 mr-2" />
               )}
               {isZipping ? "Creating ZIP…" : "Download All ZIP"}
             </Button>
@@ -312,21 +352,21 @@ export function GlobalImageViewer({
             <div className={`backdrop-blur-md border rounded-full px-4 py-1.5 font-medium text-sm shadow-xl ${
               isBright ? "bg-white/50 border-black/10 text-black" : "bg-black/50 border-white/10 text-white"
             }`}>
-              {currentIndex + 1} / {images.length}
+              {safeIndex + 1} / {images.length}
             </div>
           </div>
         )}
 
         {/* Main image container */}
         <div className="relative flex items-center justify-center max-w-[95vw] max-h-[88vh] min-h-[160px] min-w-[160px]">
-          {imageLoading && (
-            <div className="relative flex flex-col items-center justify-center w-[85vw] sm:w-[580px] h-[50vh] sm:h-[480px] max-w-[92vw] max-h-[85vh] rounded-2xl bg-white/5 dark:bg-white/[0.04] backdrop-blur-xl border border-white/10 overflow-hidden shadow-2xl animate-in fade-in duration-200">
+          {imageLoading && !imageError && (
+            <div className={`relative flex flex-col items-center justify-center w-[85vw] sm:w-[580px] h-[50vh] sm:h-[480px] max-w-[92vw] max-h-[85vh] rounded-2xl backdrop-blur-xl border overflow-hidden shadow-2xl animate-in fade-in duration-200 ${surfaceClasses}`}>
               <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/15 dark:via-white/10 to-transparent pointer-events-none" />
               <div className="flex flex-col items-center gap-3 z-10">
-                <div className="h-12 w-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shadow-lg border border-white/15">
+                <div className={`h-12 w-12 rounded-2xl backdrop-blur-md flex items-center justify-center shadow-lg border ${surfaceClasses}`}>
                   <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
                 </div>
-                <span className="text-xs font-medium text-white/80 drop-shadow tracking-tight">
+                <span className={`text-xs font-medium tracking-tight ${textClasses}`}>
                   Loading full image…
                 </span>
               </div>
@@ -334,14 +374,14 @@ export function GlobalImageViewer({
           )}
 
           {imageError ? (
-            <div className="flex flex-col items-center justify-center gap-3 text-center text-white p-8 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 max-w-sm shadow-2xl">
+            <div className={`flex flex-col items-center justify-center gap-3 text-center p-8 rounded-2xl backdrop-blur-md border max-w-sm shadow-2xl ${surfaceClasses} ${textClasses}`}>
               <p className="text-sm font-semibold">Unable to display image</p>
-              <p className="text-xs text-white/70">The file could not be rendered inline.</p>
+              <p className={`text-xs ${subtleTextClasses}`}>The file could not be rendered inline.</p>
               <Button
                 variant="secondary"
                 size="sm"
                 className="mt-1 text-xs"
-                onClick={() => window.open(images[currentIndex], "_blank")}
+                onClick={() => window.open(currentUrl, "_blank", "noopener,noreferrer")}
               >
                 Open in new tab
               </Button>
@@ -349,9 +389,10 @@ export function GlobalImageViewer({
           ) : (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
-              key={images[currentIndex]}
-              src={images[currentIndex]}
-              alt={`Viewing image ${currentIndex + 1}`}
+              ref={imgRef}
+              key={`${safeIndex}-${currentUrl}`}
+              src={currentUrl}
+              alt={`Viewing image ${safeIndex + 1}`}
               onLoad={() => setImageLoading(false)}
               onError={() => {
                 setImageLoading(false);

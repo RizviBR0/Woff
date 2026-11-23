@@ -1,6 +1,5 @@
 "use client";
 import {
-  useMotionValueEvent,
   useScroll,
   useTransform,
   motion,
@@ -18,11 +17,17 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
   const [height, setHeight] = useState(0);
 
   useEffect(() => {
-    if (ref.current) {
-      const rect = ref.current.getBoundingClientRect();
-      setHeight(rect.height);
-    }
-  }, [ref]);
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => {
+      setHeight(element.getBoundingClientRect().height);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -41,8 +46,8 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
       <div className="max-w-7xl mx-auto py-20 px-4 md:px-8 lg:px-10">
         <div className="text-center">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mx-auto mb-6">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mx-auto mb-6">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" aria-hidden="true" />
             HOW IT WORKS
           </div>
 
@@ -64,12 +69,12 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
       <div ref={ref} className="relative max-w-7xl mx-auto pb-20">
         {data.map((item, index) => (
           <div
-            key={index}
+            key={`${item.title}-${index}`}
             className="flex justify-start pt-10 md:pt-40 md:gap-10"
           >
             {/* Sticky left column with node circle containing step number */}
             <div className="sticky flex z-40 items-center top-40 self-start w-12 md:w-16">
-              <div className="h-12 w-12 absolute left-2 md:left-2 rounded-full bg-zinc-50 dark:bg-[#121215] border-2 border-zinc-200 dark:border-[#ff5a00]/40 shadow-[0_0_20px_rgba(255,90,0,0.15)] flex items-center justify-center font-extrabold text-lg text-zinc-900 dark:text-white transition-all duration-300 group-hover:border-[#ff5a00] group-hover:shadow-[0_0_25px_rgba(255,90,0,0.3)]">
+              <div className="h-12 w-12 absolute left-2 md:left-2 rounded-full bg-zinc-50 dark:bg-[#121215] border-2 border-zinc-200 dark:border-[#ff5a00]/40 shadow-[0_0_20px_rgba(255,90,0,0.15)] flex items-center justify-center font-extrabold text-lg text-zinc-900 dark:text-white transition-all duration-300">
                 {item.title}
               </div>
             </div>

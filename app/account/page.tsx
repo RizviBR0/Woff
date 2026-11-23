@@ -34,7 +34,7 @@ const notices: Record<string, string> = {
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ notice?: string }>;
+  searchParams: Promise<{ notice?: string | string[] }>;
 }) {
   const [params, context] = await Promise.all([
     searchParams,
@@ -43,7 +43,11 @@ export default async function AccountPage({
   const config = getLaunchConfig();
   const { account, user, available } = context;
   const verified = isVerifiedSender(user);
-  const notice = params.notice && notices[params.notice];
+  const noticeKey = typeof params.notice === "string" ? params.notice : undefined;
+  const notice =
+    noticeKey && Object.prototype.hasOwnProperty.call(notices, noticeKey)
+      ? notices[noticeKey]
+      : undefined;
   const paidThrough = account?.paid_through || account?.pro_until;
   const storageCharged =
     (account?.storage_used_bytes || 0) + (account?.reserved_bytes || 0);

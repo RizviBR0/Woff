@@ -1,3 +1,5 @@
+import { isValidRoomSlug } from "@/lib/room-slug";
+
 export function extractInvitationPath(value: string): string | null {
   const raw = value.trim();
   const trimmed = /^(?:(?:www\.)?woff\.space|localhost(?::[0-9]{1,5})?)\//i.test(raw) ? `https://${raw}` : raw;
@@ -26,5 +28,4 @@ export function roomSharePath(slug: string, token?: string): string {
   if (!isValidRoomSlug(slug)) throw new Error("Invalid room sharing path");
   return token && /^[a-f0-9]{64}$/.test(token) ? `/s/${token}` : `/${slug}`;
 }
-import { isValidRoomSlug } from "@/lib/room-slug";
 

@@ -62,29 +62,6 @@
   text-align: center;
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: var(--card-soft);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.badge svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: var(--orange);
-  stroke-width: 2;
-}
-
-
-
 .grid {
   position: relative;
   z-index: 1;
@@ -535,7 +512,7 @@
   }
 
   .chart {
-    inset: 22px 18px 118px;
+    inset: 22px 18px 155px;
     padding: 18px;
   }
 
@@ -545,7 +522,6 @@
 
   .shieldWrap,
   .orbit {
-    scale: 1;
     top: 10px;
   }
 

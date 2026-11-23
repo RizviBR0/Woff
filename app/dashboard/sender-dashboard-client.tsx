@@ -1,11 +1,12 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowUpDown,
+  ArrowRight,
   Check,
   ChevronDown,
   ChevronUp,
@@ -13,10 +14,12 @@ import {
   Cloud,
   FolderKanban,
   HardDrive,
+  Hash,
   Infinity as InfinityIcon,
   Link2,
   Loader2,
   LockKeyhole,
+  MoreHorizontal,
   Pencil,
   Plus,
   Radio,
@@ -31,6 +34,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -46,7 +50,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { LocalDateTime } from "@/components/local-date-time";
 import { formatAccountBytes } from "@/lib/account-helpers";
 import { useClientNow } from "@/lib/hooks/use-client-now";
 import { roomExpiryTimestamp } from "@/lib/utils";
@@ -54,6 +57,7 @@ import {
   createSpace,
   createRoomInvitation,
   deleteSpace,
+  deleteSpaces,
   recordRoomEvent,
   type Space,
 } from "@/lib/actions";
@@ -85,6 +89,28 @@ const defaultTemplate: HandoffTemplate = {
 function roomIsActive(room: Space, now: number) {
   const deadline = roomExpiryTimestamp(room);
   return deadline === null || Date.parse(deadline) > now;
+}
+
+function roomTableName(room: Space) {
+  return [room.name, room.title]
+    .map((value) => value?.trim())
+    .find((name) => name && name !== room.slug && name !== `Room ${room.slug}`)
+    || "Untitled room";
+}
+
+function RoomTableDate({ value, local, caption }: { value: string; local: boolean; caption?: string }) {
+  const date = new Date(value);
+  const timeZone = local ? undefined : "UTC";
+  return (
+    <time dateTime={value} className={styles.dateCell} title={local ? date.toLocaleString() : `${value} (UTC)`}>
+      <span>{date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone })}</span>
+      <span className={styles.dateDetail}>
+        {caption ? `${caption} · ` : ""}
+        {date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone })}
+        {!local && " UTC"}
+      </span>
+    </time>
+  );
 }
 
 function SettingsFields({
@@ -164,11 +190,27 @@ function RoomSettingsForm({
 }) {
   const [busy, setBusy] = useState(false);
   const [settings, setSettings] = useState<HandoffTemplate>({
-    name: room.name || room.title || `Room ${room.slug}`,
+    name: room.name || room.title || "",
     welcome_text: room.welcome_text || "",
     delivery_mode: room.delivery_mode || "read_only",
     retention_days: room.retention_days === 30 ? 30 : 7,
   });
+
+  useEffect(() => {
+    setSettings({
+      name: room.name || room.title || "",
+      welcome_text: room.welcome_text || "",
+      delivery_mode: room.delivery_mode || "read_only",
+      retention_days: room.retention_days === 30 ? 30 : 7,
+    });
+  }, [
+    room.id,
+    room.name,
+    room.title,
+    room.welcome_text,
+    room.delivery_mode,
+    room.retention_days,
+  ]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -207,6 +249,25 @@ function RoomSettingsForm({
 type SortField = "name" | "status" | "expires_at" | "created_at";
 type SortDirection = "asc" | "desc";
 
+const roomColumns: { label: string; field?: SortField }[] = [
+  { label: "Room", field: "name" },
+  { label: "Status", field: "status" },
+  { label: "Access" },
+  { label: "Time limit", field: "expires_at" },
+  { label: "Created", field: "created_at" },
+];
+
+const roomSortOptions: { label: string; field: SortField; direction: SortDirection }[] = [
+  { label: "Newest first", field: "created_at", direction: "desc" },
+  { label: "Oldest first", field: "created_at", direction: "asc" },
+  { label: "Name: A–Z", field: "name", direction: "asc" },
+  { label: "Name: Z–A", field: "name", direction: "desc" },
+  { label: "Active first", field: "status", direction: "asc" },
+  { label: "Expired first", field: "status", direction: "desc" },
+  { label: "Closing soonest", field: "expires_at", direction: "asc" },
+  { label: "Closing latest", field: "expires_at", direction: "desc" },
+];
+
 export function SenderDashboardClient({
   initial,
   serverNow,
@@ -215,7 +276,8 @@ export function SenderDashboardClient({
   serverNow: number;
 }) {
   const router = useRouter();
-  const now = useClientNow(15_000) ?? serverNow;
+  const clientNow = useClientNow(15_000);
+  const now = clientNow ?? serverNow;
   const [template, setTemplate] = useState<HandoffTemplate>({
     ...defaultTemplate,
     ...initial.template,
@@ -240,7 +302,27 @@ export function SenderDashboardClient({
 
   // Quick feedback states
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [updatingModeId, setUpdatingModeId] = useState<string | null>(null);
+  const [optimisticModes, setOptimisticModes] = useState<
+    Record<string, "collaborative" | "read_only">
+  >({});
+
+  useEffect(() => {
+    setTemplate({ ...defaultTemplate, ...initial.template });
+  }, [initial.template]);
+
+  useEffect(() => {
+    setOptimisticModes({});
+  }, [initial.rooms]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+      }
+    };
+  }, []);
 
   const query = search.trim().toLowerCase();
   const activeRooms = useMemo(
@@ -260,7 +342,7 @@ export function SenderDashboardClient({
         if (viewTab === "expired" && isActive) return false;
 
         if (query) {
-          const name = (room.name || room.title || "").toLowerCase();
+          const name = roomTableName(room).toLowerCase();
           const slug = room.slug.toLowerCase();
           const welcome = (room.welcome_text || "").toLowerCase();
           if (!name.includes(query) && !slug.includes(query) && !welcome.includes(query)) {
@@ -272,9 +354,9 @@ export function SenderDashboardClient({
       .sort((a, b) => {
         let cmp = 0;
         if (sortBy === "name") {
-          const nameA = (a.name || a.title || `Room ${a.slug}`).toLowerCase();
-          const nameB = (b.name || b.title || `Room ${b.slug}`).toLowerCase();
-          cmp = nameA.localeCompare(nameB);
+          const nameA = roomTableName(a).toLowerCase();
+          const nameB = roomTableName(b).toLowerCase();
+          cmp = nameA.localeCompare(nameB) || a.slug.localeCompare(b.slug);
         } else if (sortBy === "status") {
           const actA = roomIsActive(a, now) ? 1 : 0;
           const actB = roomIsActive(b, now) ? 1 : 0;
@@ -284,12 +366,12 @@ export function SenderDashboardClient({
           const deadB = roomExpiryTimestamp(b);
           const valA = deadA ? Date.parse(deadA) : Infinity;
           const valB = deadB ? Date.parse(deadB) : Infinity;
-          cmp = valA - valB;
+          cmp = valA === valB ? 0 : valA - valB;
         } else {
           // created_at
           const timeA = Date.parse(a.created_at) || 0;
           const timeB = Date.parse(b.created_at) || 0;
-          cmp = timeB - timeA;
+          cmp = timeA - timeB;
         }
         return sortDirection === "asc" ? cmp : -cmp;
       });
@@ -325,6 +407,7 @@ export function SenderDashboardClient({
   };
 
   const handleSort = (field: SortField) => {
+    setPage(1);
     if (sortBy === field) {
       setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
@@ -369,6 +452,7 @@ export function SenderDashboardClient({
     });
 
   const handleCopyLink = async (room: Space) => {
+    if (!roomIsActive(room, now)) return;
     try {
       const invitation = await createRoomInvitation(room.id);
       await navigator.clipboard.writeText(`${window.location.origin}/s/${invitation.token}`);
@@ -376,8 +460,12 @@ export function SenderDashboardClient({
       setCopiedId(room.id);
       toast.success("Invitation link copied");
       void recordRoomEvent(room.id, "share_initiated");
-      setTimeout(() => {
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+      }
+      copiedTimerRef.current = setTimeout(() => {
         setCopiedId((curr) => (curr === room.id ? null : curr));
+        copiedTimerRef.current = null;
       }, 2000);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to copy invitation link");
@@ -388,7 +476,11 @@ export function SenderDashboardClient({
     room: Space,
     targetMode: "collaborative" | "read_only"
   ) => {
-    if (room.delivery_mode === targetMode) return;
+    const effectiveMode =
+      (optimisticModes[room.id] ?? room.delivery_mode) === "read_only"
+        ? "read_only"
+        : "collaborative";
+    if (effectiveMode === targetMode) return;
     if (!initial.is_pro) {
       toast.info("Read-only handoff is a Pro feature", {
         description: "Upgrade to Pro to customize delivery and access modes for your rooms.",
@@ -400,26 +492,26 @@ export function SenderDashboardClient({
       return;
     }
 
-    setUpdatingModeId(room.id);
-    try {
-      await updateHandoffRoom(room.id, {
-        name: room.name || room.title || `Room ${room.slug}`,
-        welcome_text: room.welcome_text || "",
-        delivery_mode: targetMode,
-        retention_days: room.retention_days === 30 ? 30 : 7,
-      });
-      room.delivery_mode = targetMode;
-      toast.success(
-        targetMode === "read_only"
-          ? "Access mode changed to Read-only"
-          : "Access mode changed to Collaborative"
-      );
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Unable to update access mode");
-    } finally {
-      setUpdatingModeId(null);
-    }
+    await run(`mode-${room.id}`, async () => {
+      setUpdatingModeId(room.id);
+      try {
+        await updateHandoffRoom(room.id, {
+          name: room.name || room.title || "",
+          welcome_text: room.welcome_text || "",
+          delivery_mode: targetMode,
+          retention_days: room.retention_days === 30 ? 30 : 7,
+        });
+        setOptimisticModes((prev) => ({ ...prev, [room.id]: targetMode }));
+        toast.success(
+          targetMode === "read_only"
+            ? "Access mode changed to Read-only"
+            : "Access mode changed to Collaborative"
+        );
+        router.refresh();
+      } finally {
+        setUpdatingModeId(null);
+      }
+    });
   };
 
   const handleDeleteRoom = async (roomId: string) => {
@@ -438,13 +530,46 @@ export function SenderDashboardClient({
   };
 
   const handleBatchDelete = async () => {
-    if (selectedIds.size === 0) return;
+    const idsToDelete = Array.from(selectedIds);
+    if (idsToDelete.length === 0) return;
     void run("batch-delete", async () => {
-      await Promise.all(Array.from(selectedIds).map((id) => deleteSpace(id)));
-      toast.success(`${selectedIds.size} rooms deleted`);
-      setSelectedIds(new Set());
-      setConfirmBatchDelete(false);
-      router.refresh();
+      let succeededIds: string[] = [];
+      let failedCount = 0;
+      try {
+        const { deletedIds } = await deleteSpaces(idsToDelete);
+        succeededIds = deletedIds;
+        failedCount = idsToDelete.length - deletedIds.length;
+      } catch {
+        failedCount = idsToDelete.length;
+      }
+
+      if (succeededIds.length > 0) {
+        const succeededSet = new Set(succeededIds);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          succeededIds.forEach((id) => next.delete(id));
+          return next;
+        });
+        if (expandedRoomId && succeededSet.has(expandedRoomId)) {
+          setExpandedRoomId(null);
+        }
+        toast.success(
+          succeededIds.length === 1
+            ? "1 room deleted"
+            : `${succeededIds.length} rooms deleted`
+        );
+        router.refresh();
+      }
+
+      if (failedCount > 0) {
+        toast.error(
+          failedCount === 1
+            ? "1 room could not be deleted"
+            : `${failedCount} rooms could not be deleted`
+        );
+      } else {
+        setConfirmBatchDelete(false);
+      }
     });
   };
 
@@ -464,6 +589,7 @@ export function SenderDashboardClient({
             Account
           </Link>
           <button
+            type="button"
             className={`cta-button-glow ${styles.createButton}`}
             disabled={busy !== null}
             onClick={createRoom}
@@ -524,6 +650,10 @@ export function SenderDashboardClient({
               <span className={`${styles.cardBadge} ${styles.cardBadgePro}`}>
                 {initial.active_room_count} / {initial.active_room_limit} slots
               </span>
+            ) : initial.rooms.length === 0 ? (
+              <span className={`${styles.cardBadge} ${styles.cardBadgeMuted}`}>
+                No rooms yet
+              </span>
             ) : expiredRooms.length > 0 ? (
               <span className={`${styles.cardBadge} ${styles.cardBadgeMuted}`}>
                 {expiredRooms.length} expired
@@ -555,7 +685,7 @@ export function SenderDashboardClient({
           </div>
           <div className={styles.cardBody}>
             <span className={styles.cardMetricValue}>
-              {formatAccountBytes(initial.storage_used_bytes)}
+              {formatAccountBytes(chargedBytes)}
             </span>
             <span className={`${styles.cardBadge} ${styles.cardBadgeOrange}`}>
               {storagePercent}% used
@@ -594,11 +724,17 @@ export function SenderDashboardClient({
             Handoff template
           </span>
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             disabled={busy !== null}
             aria-expanded={templateOpen}
-            onClick={() => setTemplateOpen(!templateOpen)}
+            onClick={() => {
+              if (templateOpen) {
+                setTemplate({ ...defaultTemplate, ...initial.template });
+              }
+              setTemplateOpen(!templateOpen);
+            }}
           >
             {templateOpen ? "Close template" : "Edit template"}
           </Button>
@@ -623,7 +759,14 @@ export function SenderDashboardClient({
           <fieldset disabled={busy !== null}>
             <SettingsFields value={template} onChange={setTemplate} template />
             <div className={styles.formActions}>
-              <Button type="button" variant="outline" onClick={() => setTemplateOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setTemplate({ ...defaultTemplate, ...initial.template });
+                  setTemplateOpen(false);
+                }}
+              >
                 Cancel
               </Button>
               <Button type="submit">
@@ -700,6 +843,7 @@ export function SenderDashboardClient({
               />
               {search && (
                 <button
+                  type="button"
                   aria-label="Clear search"
                   onClick={() => {
                     setSearch("");
@@ -747,11 +891,36 @@ export function SenderDashboardClient({
         {/* Table / Empty State */}
         {filteredRooms.length > 0 ? (
           <div className={styles.tableWrapper}>
+            <div className={styles.mobileTableControls}>
+              <label>
+                <input type="checkbox" checked={allVisibleSelected} ref={(el) => { if (el) el.indeterminate = someVisibleSelected; }} onChange={toggleSelectAll} />
+                Select page
+              </label>
+              <select
+                aria-label="Sort rooms"
+                value={`${sortBy}:${sortDirection}`}
+                onChange={(event) => {
+                  const option = roomSortOptions.find(({ field, direction }) => `${field}:${direction}` === event.target.value);
+                  if (option) { setSortBy(option.field); setSortDirection(option.direction); setPage(1); }
+                }}
+              >
+                {roomSortOptions.map(({ label, field, direction }) => <option key={`${field}:${direction}`} value={`${field}:${direction}`}>{label}</option>)}
+              </select>
+            </div>
             <div className={styles.tableScroll}>
-              <table className={styles.table}>
+              <table className={styles.table} aria-label="Your rooms">
+                <colgroup>
+                  <col className={styles.checkboxColumn} />
+                  <col />
+                  <col className={styles.statusColumn} />
+                  <col className={styles.accessColumn} />
+                  <col className={styles.deadlineColumn} />
+                  <col className={styles.createdColumn} />
+                  <col className={styles.actionsColumn} />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th className={styles.thCheckbox}>
+                    <th scope="col" className={styles.thCheckbox}>
                       <input
                         type="checkbox"
                         checked={allVisibleSelected}
@@ -764,91 +933,37 @@ export function SenderDashboardClient({
                         aria-label="Select all visible rooms on this page"
                       />
                     </th>
-                    <th
-                      className={styles.thSortable}
-                      onClick={() => handleSort("name")}
-                      title="Sort by room name"
-                    >
-                      <div className={styles.thHeaderContent}>
-                        <span>Room</span>
-                        {sortBy === "name" ? (
-                          sortDirection === "asc" ? (
-                            <ChevronUp size={14} />
-                          ) : (
-                            <ChevronDown size={14} />
-                          )
-                        ) : (
-                          <ArrowUpDown size={12} className={styles.thSortMuted} />
-                        )}
-                      </div>
-                    </th>
-                    <th
-                      className={styles.thSortable}
-                      onClick={() => handleSort("status")}
-                      title="Sort by status"
-                    >
-                      <div className={styles.thHeaderContent}>
-                        <span>Status</span>
-                        {sortBy === "status" ? (
-                          sortDirection === "asc" ? (
-                            <ChevronUp size={14} />
-                          ) : (
-                            <ChevronDown size={14} />
-                          )
-                        ) : null}
-                      </div>
-                    </th>
-                    <th>Access Mode</th>
-                    <th
-                      className={styles.thSortable}
-                      onClick={() => handleSort("expires_at")}
-                      title="Sort by deadline"
-                    >
-                      <div className={styles.thHeaderContent}>
-                        <span>Deadline</span>
-                        {sortBy === "expires_at" ? (
-                          sortDirection === "asc" ? (
-                            <ChevronUp size={14} />
-                          ) : (
-                            <ChevronDown size={14} />
-                          )
-                        ) : null}
-                      </div>
-                    </th>
-                    <th
-                      className={styles.thSortable}
-                      onClick={() => handleSort("created_at")}
-                      title="Sort by creation date"
-                    >
-                      <div className={styles.thHeaderContent}>
-                        <span>Created</span>
-                        {sortBy === "created_at" ? (
-                          sortDirection === "asc" ? (
-                            <ChevronUp size={14} />
-                          ) : (
-                            <ChevronDown size={14} />
-                          )
-                        ) : (
-                          <ArrowUpDown size={12} className={styles.thSortMuted} />
-                        )}
-                      </div>
-                    </th>
-                    <th className={styles.thActions}>Actions</th>
+                    {roomColumns.map(({ label, field }) => (
+                      <th key={label} scope="col" aria-sort={field === sortBy ? (sortDirection === "asc" ? "ascending" : "descending") : undefined}>
+                        {field ? (
+                          <button type="button" className={styles.sortButton} onClick={() => handleSort(field)} aria-label={`Sort by ${label.toLowerCase()}`}>
+                            {label}
+                            {sortBy === field ? (
+                              sortDirection === "asc" ? <ChevronUp size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />
+                            ) : <ArrowUpDown size={12} className={styles.thSortMuted} aria-hidden="true" />}
+                          </button>
+                        ) : label}
+                      </th>
+                    ))}
+                    <th scope="col" className={styles.thActions}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedRooms.map((room) => {
                     const active = roomIsActive(room, now);
                     const deadline = roomExpiryTimestamp(room);
-                    const name = room.name || room.title || `Room ${room.slug}`;
+                    const name = roomTableName(room);
+                    const roomLabel = `${name}, ${room.slug}`;
+                    const numericCode = isLegacyRoomSlug(room.slug);
                     const isSelected = selectedIds.has(room.id);
                     const isExpanded = expandedRoomId === room.id;
-                    const isConfirmingDelete = confirmDeleteId === room.id;
+                    const effectiveDeliveryMode =
+                      optimisticModes[room.id] ?? room.delivery_mode;
 
                     return (
                       <Fragment key={room.id}>
                         <tr
-                          className={`${isSelected ? styles.selectedRow : ""} ${
+                          className={`${styles.roomRow} ${isSelected ? styles.selectedRow : ""} ${
                             active ? "" : styles.expiredRow
                           }`}
                         >
@@ -857,53 +972,26 @@ export function SenderDashboardClient({
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggleSelectRoom(room.id)}
-                              aria-label={`Select room ${name}`}
+                              aria-label={`Select ${roomLabel}`}
                             />
                           </td>
-                          <td>
+                          <td className={styles.identityCell}>
                             <div className={styles.roomCell}>
-                              {Boolean(
-                                room.name &&
-                                room.name.trim() !== "" &&
-                                room.name.trim() !== `Room ${room.slug}` &&
-                                room.name.trim() !== room.slug
-                              ) ? (
-                                <>
+                              <Link href={`/${room.slug}`} className={styles.tableRoomName} title={name} aria-label={`Open ${roomLabel}`} dir="auto">
+                                {name}
+                              </Link>
+                              <div className={styles.roomMeta}>
                                   <span
                                     className={`${styles.roomCode} ${
-                                      isLegacyRoomSlug(room.slug) ? "" : styles.namedRoomCode
+                                      numericCode ? "" : styles.namedRoomCode
                                     }`}
-                                    title={room.slug}
+                                    title={`${numericCode ? "Room code" : "Room address"}: ${room.slug}`}
+                                    aria-label={`${numericCode ? "Room code" : "Room address"}: ${room.slug}`}
                                   >
-                                    {room.slug}
+                                    {numericCode ? <Hash size={11} aria-hidden="true" /> : <Link2 size={11} aria-hidden="true" />}
+                                    <span dir="ltr">{room.slug}</span>
                                   </span>
-                                  <div className={styles.roomInfo}>
-                                    <Link
-                                      href={`/${room.slug}`}
-                                      className={styles.tableRoomName}
-                                      title={name}
-                                    >
-                                      {name}
-                                    </Link>
-                                    {room.welcome_text && (
-                                      <span
-                                        className={styles.tableRoomDesc}
-                                        title={room.welcome_text}
-                                      >
-                                        {room.welcome_text}
-                                      </span>
-                                    )}
-                                  </div>
-                                </>
-                              ) : (
-                                <div className={styles.roomInfo}>
-                                  <Link
-                                    href={`/${room.slug}`}
-                                    className={styles.tableRoomName}
-                                    title={`Room ${room.slug}`}
-                                  >
-                                    Room {room.slug}
-                                  </Link>
+                                  {room.code_enabled === false && <span className={styles.codeClosedTag}>Code closed</span>}
                                   {room.welcome_text && (
                                     <span
                                       className={styles.tableRoomDesc}
@@ -912,47 +1000,46 @@ export function SenderDashboardClient({
                                       {room.welcome_text}
                                     </span>
                                   )}
-                                </div>
-                              )}
+                              </div>
                             </div>
                           </td>
-                          <td>
+                          <td className={styles.statusCell}>
                             <span
                               className={`${styles.statusBadge} ${
                                 active ? styles.statusActive : styles.statusExpired
                               }`}
                             >
-                              <span className={styles.statusDot} />
+                              <span className={styles.statusDot} aria-hidden="true" />
                               {active ? "Active" : "Expired"}
                             </span>
                           </td>
-                          <td>
+                          <td className={styles.accessCell} data-label="Access">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button
                                   type="button"
-                                  disabled={updatingModeId === room.id || !active}
+                                  disabled={updatingModeId === room.id || busy !== null || !active}
                                   className={styles.modeBadgeButton}
                                   title={
                                     active
                                       ? "Click to change access mode"
                                       : "Access mode is locked for expired room"
                                   }
-                                  aria-label={`Change access mode for ${name}. Currently ${
-                                    room.delivery_mode === "read_only"
+                                  aria-label={`Change access mode for ${roomLabel}. Currently ${
+                                    effectiveDeliveryMode === "read_only"
                                       ? "Read-only"
                                       : "Collaborative"
                                   }`}
                                 >
                                   {updatingModeId === room.id ? (
-                                    <Loader2 size={12} className="animate-spin text-[#ff5a00]" />
-                                  ) : room.delivery_mode === "read_only" ? (
+                                    <Loader2 size={12} className="animate-spin text-[#ff5a00]" aria-hidden="true" />
+                                  ) : effectiveDeliveryMode === "read_only" ? (
                                     <LockKeyhole size={13} aria-hidden="true" />
                                   ) : (
                                     <Users size={13} aria-hidden="true" />
                                   )}
                                   <span>
-                                    {room.delivery_mode === "read_only"
+                                    {effectiveDeliveryMode === "read_only"
                                       ? "Read-only"
                                       : "Collaborative"}
                                   </span>
@@ -962,9 +1049,6 @@ export function SenderDashboardClient({
                                       className={styles.modeChevron}
                                       aria-hidden="true"
                                     />
-                                  )}
-                                  {room.code_enabled === false && (
-                                    <span className={styles.codeClosedTag}>Closed</span>
                                   )}
                                 </button>
                               </DropdownMenuTrigger>
@@ -979,12 +1063,12 @@ export function SenderDashboardClient({
                                   onClick={() => void handleSetAccessMode(room, "collaborative")}
                                   className="flex items-start gap-2.5 p-2 rounded-lg cursor-pointer transition hover:bg-accent"
                                 >
-                                  <Users className="h-4 w-4 mt-0.5 text-orange-500 shrink-0" />
+                                  <Users className="h-4 w-4 mt-0.5 text-orange-500 shrink-0" aria-hidden="true" />
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between text-xs font-semibold text-foreground">
                                       <span>Collaborative</span>
-                                      {room.delivery_mode !== "read_only" && (
-                                        <Check className="h-3.5 w-3.5 text-[#ff5a00]" />
+                                      {effectiveDeliveryMode !== "read_only" && (
+                                        <Check className="h-3.5 w-3.5 text-[#ff5a00]" aria-hidden="true" />
                                       )}
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
@@ -996,12 +1080,12 @@ export function SenderDashboardClient({
                                   onClick={() => void handleSetAccessMode(room, "read_only")}
                                   className="flex items-start gap-2.5 p-2 rounded-lg cursor-pointer transition hover:bg-accent"
                                 >
-                                  <LockKeyhole className="h-4 w-4 mt-0.5 text-orange-500 shrink-0" />
+                                  <LockKeyhole className="h-4 w-4 mt-0.5 text-orange-500 shrink-0" aria-hidden="true" />
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between text-xs font-semibold text-foreground">
                                       <span>Read-only</span>
-                                      {room.delivery_mode === "read_only" && (
-                                        <Check className="h-3.5 w-3.5 text-[#ff5a00]" />
+                                      {effectiveDeliveryMode === "read_only" && (
+                                        <Check className="h-3.5 w-3.5 text-[#ff5a00]" aria-hidden="true" />
                                       )}
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
@@ -1012,14 +1096,11 @@ export function SenderDashboardClient({
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>
-                          <td>
+                          <td className={styles.deadlineCell} data-label="Time limit">
                             {deadline ? (
                               <div className={styles.timeCell}>
                                 <Clock3 size={13} aria-hidden="true" />
-                                <span>
-                                  {active ? "Closes" : "Closed"}{" "}
-                                  <LocalDateTime value={deadline} />
-                                </span>
+                                <RoomTableDate value={deadline} local={clientNow !== null} caption={active ? "Closes" : "Closed"} />
                               </div>
                             ) : (
                               <div className={styles.timeCell}>
@@ -1028,12 +1109,10 @@ export function SenderDashboardClient({
                               </div>
                             )}
                           </td>
-                          <td>
-                            <span className={styles.dateCell}>
-                              <LocalDateTime value={room.created_at} />
-                            </span>
+                          <td className={styles.createdCell} data-label="Created">
+                            <RoomTableDate value={room.created_at} local={clientNow !== null} />
                           </td>
-                          <td>
+                          <td className={styles.actionsTd}>
                             <div className={styles.actionsCell}>
                               <Button
                                 asChild
@@ -1041,18 +1120,24 @@ export function SenderDashboardClient({
                                 variant="outline"
                                 className={styles.openButton}
                               >
-                                <Link href={`/${room.slug}`}>Open room</Link>
+                                <Link href={`/${room.slug}`} aria-label={`Open room ${roomLabel}`}>Open <ArrowRight size={13} aria-hidden="true" /></Link>
                               </Button>
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                disabled={busy !== null}
+                                disabled={busy !== null || !active}
                                 onClick={() => void handleCopyLink(room)}
                                 className={`${styles.copyIconButton} ${
                                   copiedId === room.id ? styles.copiedButton : ""
                                 }`}
-                                title={copiedId === room.id ? "Link copied!" : "Copy invitation link"}
-                                aria-label={`Copy link for ${name}`}
+                                title={
+                                  !active
+                                    ? "Room has expired"
+                                    : copiedId === room.id
+                                    ? "Link copied!"
+                                    : "Copy invitation link"
+                                }
+                                aria-label={`Copy invitation link for ${roomLabel}`}
                               >
                                 {copiedId === room.id ? (
                                   <Check
@@ -1064,37 +1149,27 @@ export function SenderDashboardClient({
                                   <Link2 size={15} aria-hidden="true" />
                                 )}
                               </Button>
-                              {initial.is_pro && active && (
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  disabled={busy !== null}
-                                  aria-expanded={isExpanded}
-                                  onClick={() => {
-                                    setExpandedRoomId(isExpanded ? null : room.id);
-                                    setConfirmDeleteId(null);
-                                  }}
-                                  className={styles.settingsIconButton}
-                                  title="Room settings & identity"
-                                  aria-label={`Settings for ${name}`}
-                                >
-                                  <Settings2 size={15} aria-hidden="true" />
-                                </Button>
-                              )}
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className={styles.deleteButton}
-                                disabled={busy !== null}
-                                aria-label={`Delete ${name}`}
-                                title="Delete room"
-                                onClick={() => {
-                                  setConfirmDeleteId(room.id);
-                                  if (isExpanded) setExpandedRoomId(null);
-                                }}
-                              >
-                                <Trash2 size={15} aria-hidden="true" />
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="icon" variant="ghost" className={styles.moreButton} disabled={busy !== null} aria-label={`More actions for ${roomLabel}`} title="More actions">
+                                    <MoreHorizontal size={17} aria-hidden="true" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5">
+                                  {initial.is_pro && active && <>
+                                    <DropdownMenuItem onSelect={() => { setExpandedRoomId(room.id); setExpandedTab("settings"); }} className="gap-2 rounded-lg">
+                                      <Settings2 size={14} aria-hidden="true" /> Room settings
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => { setExpandedRoomId(room.id); setExpandedTab("identity"); }} className="gap-2 rounded-lg">
+                                      <Pencil size={14} aria-hidden="true" /> Edit name & URL
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                  </>}
+                                  <DropdownMenuItem onSelect={() => { setConfirmDeleteId(room.id); if (isExpanded) setExpandedRoomId(null); }} className="gap-2 rounded-lg text-destructive focus:bg-destructive/10 focus:text-destructive">
+                                    <Trash2 size={14} aria-hidden="true" /> Delete room
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </td>
                         </tr>
@@ -1105,9 +1180,11 @@ export function SenderDashboardClient({
                             <td colSpan={7}>
                               <div className={styles.expandedPanel}>
                                 <div className={styles.expandedHeader}>
-                                  <div className={styles.expandedTabs}>
+                                  <div className={styles.expandedTabs} role="tablist" aria-label="Room settings tabs">
                                     <button
                                       type="button"
+                                      role="tab"
+                                      aria-selected={expandedTab === "settings"}
                                       className={`${styles.expandedTab} ${
                                         expandedTab === "settings"
                                           ? styles.expandedTabActive
@@ -1115,10 +1192,12 @@ export function SenderDashboardClient({
                                       }`}
                                       onClick={() => setExpandedTab("settings")}
                                     >
-                                      <Settings2 size={14} /> Handoff settings
+                                      <Settings2 size={14} aria-hidden="true" /> Handoff settings
                                     </button>
                                     <button
                                       type="button"
+                                      role="tab"
+                                      aria-selected={expandedTab === "identity"}
                                       className={`${styles.expandedTab} ${
                                         expandedTab === "identity"
                                           ? styles.expandedTabActive
@@ -1126,7 +1205,7 @@ export function SenderDashboardClient({
                                       }`}
                                       onClick={() => setExpandedTab("identity")}
                                     >
-                                      <Pencil size={14} /> Name & URL
+                                      <Pencil size={14} aria-hidden="true" /> Name & URL
                                     </button>
                                   </div>
                                   <button
@@ -1135,7 +1214,7 @@ export function SenderDashboardClient({
                                     onClick={() => setExpandedRoomId(null)}
                                     aria-label="Close settings panel"
                                   >
-                                    <X size={16} />
+                                    <X size={16} aria-hidden="true" />
                                   </button>
                                 </div>
 
@@ -1191,20 +1270,18 @@ export function SenderDashboardClient({
 
             {/* Pagination Footer */}
             <div className={styles.tableFooter}>
-              <div className={styles.paginationInfo}>
-                Page {safePage} of {totalPages}
-                <span className={styles.paginationCount}>
-                  · Showing {(safePage - 1) * PAGE_SIZE + 1}–
+              <div className={styles.paginationInfo} role="status">
+                  Showing {(safePage - 1) * PAGE_SIZE + 1}–
                   {Math.min(safePage * PAGE_SIZE, filteredRooms.length)} of{" "}
                   {filteredRooms.length} {filteredRooms.length === 1 ? "room" : "rooms"}
-                </span>
               </div>
               <div className={styles.paginationButtons}>
+                <span className={styles.paginationCount}>Page {safePage} of {totalPages}</span>
                 <Button
                   size="sm"
                   variant="outline"
                   disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => setPage(Math.max(1, safePage - 1))}
                   className={styles.paginationBtn}
                 >
                   Previous
@@ -1213,7 +1290,7 @@ export function SenderDashboardClient({
                   size="sm"
                   variant="outline"
                   disabled={safePage >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() => setPage(Math.min(totalPages, safePage + 1))}
                   className={styles.paginationBtn}
                 >
                   Next
@@ -1297,11 +1374,8 @@ export function SenderDashboardClient({
             </div>
             <AlertDialogDescription className="text-sm text-foreground/80 pt-2 leading-relaxed">
               Are you sure you want to delete{" "}
-              <strong className="text-foreground font-semibold">
-                {roomToDelete?.name ||
-                  (roomToDelete?.slug
-                    ? `Room ${roomToDelete.slug}`
-                    : "this room")}
+              <strong className="text-foreground font-semibold [overflow-wrap:anywhere]">
+                {roomToDelete ? `${roomTableName(roomToDelete)} (${roomToDelete.slug})` : "this room"}
               </strong>
               ? All uploaded files, media, and notes in this room will be permanently removed immediately.
             </AlertDialogDescription>

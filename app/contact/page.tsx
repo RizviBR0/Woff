@@ -20,15 +20,15 @@ export default function ContactPage() {
       
       {/* Glows */}
       <div className="pointer-events-none absolute right-1/4 top-1/4 h-[350px] w-[350px] rounded-full bg-[#ff5a00]/5 dark:bg-[#ff5a00]/15 blur-[120px]" />
-      <div className="pointer-events-none absolute left-0 bottom-1/4 h-[400px] w-[400px] rounded-full bg-[#ff5a00]/3 dark:bg-[#ff5a00]/10 blur-[130px]" />
+      <div className="pointer-events-none absolute left-0 bottom-1/4 h-[400px] w-[400px] rounded-full bg-[#ff5a00]/5 dark:bg-[#ff5a00]/10 blur-[130px]" />
 
       <Navbar />
 
       <main id="main-content" className="relative max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8 z-10">
         {/* Header */}
         <div className="text-center space-y-4 mb-16">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#ff5a00]">
-            <MessageSquare className="w-3.5 h-3.5" />
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#ff5a00]">
+            <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
             Support & Feedback
           </div>
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
@@ -45,12 +45,12 @@ export default function ContactPage() {
         {/* Option Grid */}
         <div className="grid gap-6 sm:grid-cols-2">
           {/* Email Support Card */}
-          <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/50 backdrop-blur-xl rounded-[24px] p-8 shadow-xl flex flex-col justify-between h-64">
+          <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/50 backdrop-blur-xl rounded-[24px] p-8 shadow-xl flex flex-col justify-between gap-6 min-h-64">
             <div className="space-y-3">
               <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
-                <Mail className="w-5 h-5" />
+                <Mail className="w-5 h-5" aria-hidden="true" />
               </div>
-              <h3 className="font-bold text-xl">Direct Email</h3>
+              <h2 className="font-bold text-xl">Direct Email</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Drop us a message for general queries, partnership ideas, feature suggestions, or tech support.
               </p>
@@ -64,12 +64,12 @@ export default function ContactPage() {
           </div>
 
           {/* Booking Card */}
-          <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/50 backdrop-blur-xl rounded-[24px] p-8 shadow-xl flex flex-col justify-between h-64">
+          <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-900/50 backdrop-blur-xl rounded-[24px] p-8 shadow-xl flex flex-col justify-between gap-6 min-h-64">
             <div className="space-y-3">
               <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
-                <Calendar className="w-5 h-5" />
+                <Calendar className="w-5 h-5" aria-hidden="true" />
               </div>
-              <h3 className="font-bold text-xl">Schedule Meeting</h3>
+              <h2 className="font-bold text-xl">Schedule Meeting</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Book a quick 30-minute voice or video call on Calendly to chat with the founders.
               </p>
@@ -88,10 +88,10 @@ export default function ContactPage() {
         {/* Abuse / Safety Banner */}
         <div className="mt-8 border border-red-500/20 bg-red-500/5 dark:bg-red-500/10 rounded-[24px] p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 shadow-sm">
           <div className="h-10 w-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 shrink-0">
-            <ShieldAlert className="w-5 h-5" />
+            <ShieldAlert className="w-5 h-5" aria-hidden="true" />
           </div>
           <div className="flex-1 space-y-1">
-            <h4 className="font-bold text-foreground">Report Abuse or Copyright Issues</h4>
+            <h2 className="font-bold text-foreground">Report Abuse or Copyright Issues</h2>
             <p className="text-xs text-muted-foreground leading-relaxed">
               To report malicious, fraudulent, or unauthorized copyrighted content, email <a href="mailto:sabbirh9990@gmail.com" className="underline font-medium hover:text-red-500 transition-colors">sabbirh9990@gmail.com</a> with the relevant reference and your concern. We review reports and may restrict or remove content. Review times depend on the report; an immediate response is not guaranteed.
             </p>

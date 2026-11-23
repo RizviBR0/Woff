@@ -26,5 +26,9 @@ export function formatActivityDate(value: string, clientNow: number | null): str
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
   if (sameDay(yesterday)) return "Yesterday";
-  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(date);
+  const options: Intl.DateTimeFormatOptions =
+    date.getFullYear() === now.getFullYear()
+      ? { day: "numeric", month: "short" }
+      : { day: "numeric", month: "short", year: "numeric" };
+  return new Intl.DateTimeFormat("en-US", options).format(date);
 }

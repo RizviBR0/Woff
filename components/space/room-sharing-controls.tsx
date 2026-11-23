@@ -32,6 +32,7 @@ export function RoomSharingControls({
   onIdentityChange: (name: string, slug: string) => Promise<void>;
 }) {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editingCode, setEditingCode] = useState(false);
   const [newCode, setNewCode] = useState(isLegacyRoomSlug(space.slug) ? space.slug : "");
   const [editingIdentity, setEditingIdentity] = useState(false);
@@ -50,6 +51,14 @@ export function RoomSharingControls({
     setNewCode(isLegacyRoomSlug(space.slug) ? space.slug : "");
     setTimeChoice(space.expires_at ? "custom" : "none");
   }, [space.slug, space.expires_at]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+      }
+    };
+  }, []);
 
   async function run(name: string, action: () => Promise<void>) {
     if (pending.current) return false;
@@ -127,7 +136,11 @@ export function RoomSharingControls({
                 try {
                   await navigator.clipboard.writeText(space.slug);
                   setCopied(true);
-                  window.setTimeout(() => setCopied(false), 2000);
+                  if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+                  copiedTimerRef.current = setTimeout(() => {
+                    setCopied(false);
+                    copiedTimerRef.current = null;
+                  }, 2000);
                 } catch { toast.error("Unable to copy room code"); }
               }}
             >{copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}</Button>
@@ -276,7 +289,7 @@ export function RoomSharingControls({
         </section>
       )}
 
-      {error && <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+      {error && !customDateOpen && <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
 
       {isCreator && (
         <details className="group border-t border-border/60 pt-4">

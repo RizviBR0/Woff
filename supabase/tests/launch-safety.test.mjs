@@ -136,7 +136,10 @@ try {
     // Remove only this fixture membership to retain later expired-room assertions.
     await db.query('delete from public.space_members where space_id=$1 and user_id=$2',[room.id,fresh]);
     assert.equal(Number((await db.query('select public.cleanup_expired_spaces() result')).rows[0].result),0);
-    await as(owner,c=>c.query('update public.notes set updated_at=now() where slug=$1',[noteSlug]));
+    const savedInactive=await rpc(owner,'select public.save_note_snapshot($1,$2,$3,$4,$5) result',
+      [noteSlug,'Image note','<p>Still editable after 7 days</p>',{type:'doc',content:[]},1]);
+    assert.equal(savedInactive.version,2);
+    await db.query('update public.notes set version=1 where slug=$1',[noteSlug]);
     assert.equal((await db.query('select expires_at from public.spaces where id=$1',[room.id])).rows[0].expires_at,null);
   });
   await check('Free owners can set a fixed timer that content activity cannot extend',async()=>{
@@ -232,9 +235,14 @@ try {
     assert.equal(Number((await db.query('select count(*) from public.upload_intents where path=$1',[first])).rows[0].count),0);
   });
   await check('revoked invitation immediately removes existing guest reads and writes',async()=>{
+    const publicEntry=(await db.query("select id from public.entries where space_id=$1 and text='Timer fixture' limit 1",[room.id])).rows[0];
+    await as(guest,async c=>{
+      assert.equal((await c.query('insert into public.content_reports(entry_id,reported_by_user_id) values($1,$2)',[publicEntry.id,guest])).rowCount,1);
+    });
     assert.equal(await rpc(owner,'select public.revoke_room_invitation($1) result',[created.invitation_id]),true);
     await as(guest,async c=>assert.equal((await c.query('select * from public.entries where space_id=$1',[room.id])).rowCount,0));
     assert.equal(await rpc(guest,'select public.reserve_upload($1,$2,$3,$4) result',[room.id,room.id+'/revoked',1,'text/plain']),false);
+    await assert.rejects(as(guest,c=>c.query('insert into public.content_reports(entry_id,reported_by_user_id) values($1,$2)',[publicEntry.id,guest])),/row-level security/);
   });
   const invitation=await rpc(owner,'select public.create_room_invitation($1,false,null) result',[room.id]);
   await rpc(guest,'select to_jsonb(public.join_room_invitation($1,$2)) result',[invitation.token,'Guest']);
@@ -297,6 +305,8 @@ try {
     assert.equal(edited.space.code_enabled,false);
     assert.equal(edited.space.expiry_mode,closed.expiry_mode);
     assert.equal(edited.space.expires_at,closed.expires_at);
+    const rotatedReadOnly=await rpc(sender,'select public.rotate_room_access($1) result',[proRoom.space.id]);
+    assert.equal((await db.query('select can_write from public.room_invitations where id=$1',[rotatedReadOnly.id])).rows[0].can_write,false);
     await rpc(sender,'select public.set_room_access($1,true,null,false) result',[proRoom.space.id]);
   });
   await check('Pro retention rejects null/unbounded choices and stale entitlement',async()=>{

@@ -56,10 +56,11 @@ export const EntryCard = memo(function EntryCard({
   const firstLetter = nameLabel.charAt(0).toUpperCase();
 
   // Loading overlay for optimistic UI
+  const isUploading = Boolean(entry.isLoading && !entry.isError);
   const loadingOverlay = entry.id.startsWith("placeholder-") ? (
     <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-background/70 backdrop-blur-[2px] transition-all">
       <div className="flex flex-col items-center gap-2 p-3 text-center">
-        {entry.isLoading ? (
+        {isUploading ? (
           <div className="h-7 w-7 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
         ) : (
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-destructive/10 text-destructive font-bold text-sm">
@@ -69,13 +70,13 @@ export const EntryCard = memo(function EntryCard({
         {entry.uploadMessage && (
           <span
             className={`text-xs font-medium ${
-              entry.isLoading ? "text-muted-foreground" : "text-destructive"
+              isUploading ? "text-muted-foreground" : "text-destructive"
             }`}
           >
             {entry.uploadMessage}
           </span>
         )}
-        {entry.isLoading &&
+        {isUploading &&
           typeof entry.uploadProgress === "number" &&
           entry.uploadProgress > 0 && (
             <div className="w-24 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -103,7 +104,7 @@ export const EntryCard = memo(function EntryCard({
         className={`flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full font-bold text-xs text-white shadow-sm ${
           isMine ? "bg-blue-600" : AVATAR_COLORS[colorIndex]
         }`}
-        aria-label={nameLabel}
+        aria-hidden="true"
       >
         {firstLetter}
       </div>
@@ -139,7 +140,7 @@ export const EntryCard = memo(function EntryCard({
             <MediaEntryCard entry={entry} onNewEntry={canWrite ? onNewEntry : undefined} canWrite={canWrite} />
           )}
           {category === "file" && (
-            <FileEntryCard entry={entry} spaceSlug={spaceSlug} />
+            <FileEntryCard entry={entry} spaceSlug={spaceSlug} canWrite={canWrite} />
           )}
           {category === "text" && (
             <TextEntry

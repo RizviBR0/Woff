@@ -47,10 +47,10 @@ export function EntryContextMenu({
   // If optimistic placeholder, disable actions
   if (entry.id.startsWith("placeholder-") || entry.id.startsWith("temp-") || entry.isLoading) return null;
 
-  const isNote = getEntryCategory(entry) === "note";
+  const isTextEntry = getEntryCategory(entry) === "text";
 
   const handleCopy = async () => {
-    if (!entry.text || isNote) return;
+    if (!entry.text || !isTextEntry) return;
     try {
       await navigator.clipboard.writeText(entry.text);
       toast.success("Copied to clipboard");
@@ -110,7 +110,7 @@ export function EntryContextMenu({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
-            {entry.text && !isNote && (
+            {entry.text && isTextEntry && (
               <DropdownMenuItem onClick={handleCopy} className="gap-2 cursor-pointer">
                 <Copy className="h-4 w-4" />
                 <span>Copy text</span>
@@ -139,7 +139,12 @@ export function EntryContextMenu({
       </div>
 
       {/* Delete Confirmation Alert Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting) setDeleteDialogOpen(open);
+        }}
+      >
         <AlertDialogContent className="sm:max-w-md rounded-2xl">
           <AlertDialogHeader>
             <div className="flex items-center gap-3">

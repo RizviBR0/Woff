@@ -3,6 +3,12 @@
 import React, { useState, useMemo } from "react";
 import { Entry } from "./entry-card";
 import {
+  extractNoteSlugFromEntry,
+  getEntryCategory,
+  isSafeLegacyMediaUrl,
+  parseLegacyPhotosText,
+} from "./entries/entry-types";
+import {
   Search,
   Filter,
   Download,
@@ -35,7 +41,6 @@ async function createZip() {
   return new JSZip();
 }
 
-
 interface ActivitySidebarProps {
   entries: Entry[];
   isOpen: boolean;
@@ -43,6 +48,13 @@ interface ActivitySidebarProps {
 }
 
 type FilterType = "all" | "images" | "files" | "notes";
+
+interface MetaFileItem {
+  name: string;
+  size?: number;
+  type?: string;
+  url: string;
+}
 
 function formatDateIso(date: Date): string {
   try {
@@ -53,24 +65,64 @@ function formatDateIso(date: Date): string {
 }
 
 function getItemType(entry: Entry): "image" | "file" | "note" | "unknown" {
-  if (entry.kind === "file") {
-    const presentation = entry.meta?.presentation;
-    if (presentation === "photos" || presentation === "drawing") return "image";
-    return "file";
-  }
-  if (entry.kind === "image") return "image";
-  if (entry.kind === "pdf") return "file";
-  if (entry.meta?.type === "note") return "note";
-  if (entry.kind === "text" && entry.text) {
-    if (
-      entry.text.startsWith("DRAWING:") ||
-      entry.text.startsWith("PHOTO:") ||
-      entry.text.startsWith("PHOTOS:")
-    )
-      return "image";
-    if (entry.text.startsWith("NOTE:")) return "note";
-  }
+  const category = getEntryCategory(entry);
+  if (category === "media") return "image";
+  if (category === "file") return "file";
+  if (category === "note") return "note";
   return "unknown";
+}
+
+function getMetaItems(entry: Entry): MetaFileItem[] {
+  if (!Array.isArray(entry.meta?.items)) return [];
+  return entry.meta.items.filter(
+    (item: unknown): item is MetaFileItem =>
+      Boolean(item) &&
+      typeof item === "object" &&
+      typeof (item as MetaFileItem).url === "string" &&
+      (item as MetaFileItem).url.length > 0
+  );
+}
+
+function extractNoteTitle(entry: Entry, fallback = "Untitled note"): string {
+  if (typeof entry.meta?.title === "string" && entry.meta.title.trim()) {
+    return entry.meta.title.trim();
+  }
+  if (entry.text?.startsWith("NOTE:")) {
+    const parts = entry.text.slice("NOTE:".length).split(":");
+    const legacyTitle = parts.slice(2).join(":").trim();
+    if (legacyTitle) return legacyTitle;
+  }
+  return fallback;
+}
+
+function extractLegacyImageUrls(entry: Entry): {
+  kind: "drawing" | "photo" | "photos";
+  urls: string[];
+} | null {
+  if (entry.kind !== "text" || !entry.text) return null;
+  if (entry.text.startsWith("DRAWING:")) {
+    const url = entry.text.slice("DRAWING:".length).trim();
+    return isSafeLegacyMediaUrl(url) ? { kind: "drawing", urls: [url] } : null;
+  }
+  if (entry.text.startsWith("PHOTO:")) {
+    const url = entry.text.slice("PHOTO:".length).trim();
+    return isSafeLegacyMediaUrl(url) ? { kind: "photo", urls: [url] } : null;
+  }
+  if (entry.text.startsWith("PHOTOS:")) {
+    const urls = parseLegacyPhotosText(entry.text.slice("PHOTOS:".length));
+    return urls.length > 0 ? { kind: "photos", urls } : null;
+  }
+  return null;
+}
+
+function extensionFromDataUrl(dataUrl: string, fallback = "png"): string {
+  const mimeType = dataUrl.split(";")[0]?.split(":")[1]?.toLowerCase();
+  if (mimeType === "image/jpeg" || mimeType === "image/jpg") return "jpg";
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/gif") return "gif";
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType === "image/avif") return "avif";
+  return fallback;
 }
 
 interface SidebarItemProps {
@@ -80,10 +132,12 @@ interface SidebarItemProps {
   isDownloading?: boolean;
 }
 
-function SidebarItem({ entry, spaceSlug, onDownload, isDownloading }: SidebarItemProps) {
-  const [hovering, setHovering] = useState(false);
-
-  // Helper function for smooth scrolling
+function SidebarItem({
+  entry,
+  spaceSlug,
+  onDownload,
+  isDownloading,
+}: SidebarItemProps) {
   const scrollToEntry = (e: React.MouseEvent) => {
     e.preventDefault();
     const element = document.getElementById(`entry-${entry.id}`);
@@ -92,368 +146,34 @@ function SidebarItem({ entry, spaceSlug, onDownload, isDownloading }: SidebarIte
     }
   };
 
-  // Modern File & Media entries
-  if (entry.kind === "file" || entry.kind === "pdf") {
-    const items: Array<{
-      name: string;
-      size: number;
-      type: string;
-      url: string;
-    }> = entry.meta?.items || [];
-    const count = items.length;
-    const first = items[0];
-    const isPhotos = entry.meta?.presentation === "photos";
-    const isDrawing = entry.meta?.presentation === "drawing";
+  const actionRevealClass = isDownloading
+    ? "opacity-100"
+    : "opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100";
 
-    // Photos / Drawing presentation: show real image thumbnail
-    if (isPhotos || isDrawing) {
-      return (
-        <a
-          href={`#entry-${entry.id}`}
-          onClick={scrollToEntry}
-          className="group flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors"
-          onMouseEnter={() => setHovering(true)}
-          onMouseLeave={() => setHovering(false)}
-        >
-          <div className="relative h-10 w-10 flex-shrink-0">
-            {count > 1 && (
-              <>
-                <div className="absolute top-0.5 left-0.5 h-9 w-9 rounded-lg bg-muted border border-border/30" />
-                <div className="absolute top-1 left-1 h-9 w-9 rounded-lg bg-muted border border-border/30" />
-              </>
-            )}
-            <div className="relative h-10 w-10 rounded-lg overflow-hidden bg-muted border border-border/50 z-10">
-              {first?.url && (
-                <NextImage
-                  src={first.url}
-                  alt={first.name || (isDrawing ? "Drawing" : "Photo")}
-                  fill
-                  unoptimized
-                  sizes="40px"
-                  className="object-cover"
-                />
-              )}
-            </div>
-            {count > 1 && (
-              <div className="absolute -bottom-1 -right-1 z-20 bg-primary text-primary-foreground text-[9px] font-semibold px-1.5 py-0.5 rounded-full leading-none border-2 border-background">
-                {count}
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate text-foreground">
-              {isDrawing ? "Drawing" : count > 1 ? `${count} photos` : first?.name || "Photo"}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {isDrawing ? "drawing" : count > 1 ? "images" : "image"}
-            </div>
-          </div>
-          {(hovering || isDownloading) && (
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                disabled={isDownloading}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onDownload(entry);
-                }}
-                title={isDownloading ? "Downloading…" : "Download"}
-              >
-                {isDownloading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </div>
-          )}
-        </a>
-      );
-    }
+  const type = getItemType(entry);
+  const metaItems = getMetaItems(entry);
 
-    const firstName = items[0]?.name || "file";
-    const displayName = count > 1 ? "Multiple files" : firstName;
-    const subtitle = count > 1 ? `${count} files` : "file";
+  // Notes (both modern meta-based and legacy NOTE: text entries)
+  if (type === "note") {
+    const noteSlug = extractNoteSlugFromEntry(entry);
+    const noteTitle = extractNoteTitle(entry, "Untitled note");
+    const targetSpaceSlug =
+      spaceSlug ||
+      (typeof entry.meta?.space_slug === "string"
+        ? entry.meta.space_slug
+        : undefined);
+    const noteUrl = noteSlug
+      ? targetSpaceSlug
+        ? `/${encodeURIComponent(targetSpaceSlug)}/${encodeURIComponent(noteSlug)}`
+        : `/n/${encodeURIComponent(noteSlug)}`
+      : null;
 
     return (
-      <a
-        href={`#entry-${entry.id}`}
-        onClick={scrollToEntry}
-        className="group flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors relative"
-        onMouseEnter={() => setHovering(true)}
-        onMouseLeave={() => setHovering(false)}
-      >
-        {/* Thumbnail */}
-        <div className="relative h-10 w-10 flex-shrink-0">
-          {count > 1 && (
-            <>
-              <div className="absolute top-0.5 left-0.5 h-9 w-9 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/40" />
-              <div className="absolute top-1 left-1 h-9 w-9 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/40" />
-            </>
-          )}
-          <div className="relative h-10 w-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center border border-orange-200 dark:border-orange-800/50 z-10">
-            <File className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-          </div>
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium truncate text-foreground">
-            {displayName}
-          </div>
-          <div className="text-xs text-muted-foreground">{subtitle}</div>
-        </div>
-
-        {/* Hover actions */}
-        {(hovering || isDownloading) && (
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              disabled={isDownloading}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onDownload(entry);
-              }}
-              title={isDownloading ? "Downloading…" : "Download"}
-            >
-              {isDownloading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-              ) : (
-                <Download className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </div>
-        )}
-      </a>
-    );
-  }
-
-  // Image entries (PHOTO, PHOTOS, DRAWING)
-  if (entry.kind === "text" && entry.text) {
-    if (entry.text.startsWith("DRAWING:")) {
-      const dataUrl = entry.text.replace("DRAWING:", "");
-      return (
+      <div className="group flex items-center gap-2 px-2 py-1.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors">
         <a
           href={`#entry-${entry.id}`}
           onClick={scrollToEntry}
-          className="group flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors"
-          onMouseEnter={() => setHovering(true)}
-          onMouseLeave={() => setHovering(false)}
-        >
-          <div className="relative h-10 w-10 rounded-lg overflow-hidden bg-muted border border-border/50 flex-shrink-0">
-            <NextImage
-              src={dataUrl}
-              alt="Drawing"
-              fill
-              unoptimized
-              sizes="40px"
-              className="object-cover"
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate text-foreground">
-              Drawing
-            </div>
-            <div className="text-xs text-muted-foreground">image</div>
-          </div>
-          {(hovering || isDownloading) && (
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                disabled={isDownloading}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onDownload(entry);
-                }}
-                title={isDownloading ? "Downloading…" : "Download"}
-              >
-                {isDownloading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </div>
-          )}
-        </a>
-      );
-    }
-
-    if (entry.text.startsWith("PHOTO:")) {
-      const dataUrl = entry.text.replace("PHOTO:", "");
-      return (
-        <a
-          href={`#entry-${entry.id}`}
-          onClick={scrollToEntry}
-          className="group flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors"
-          onMouseEnter={() => setHovering(true)}
-          onMouseLeave={() => setHovering(false)}
-        >
-          <div className="relative h-10 w-10 rounded-lg overflow-hidden bg-muted border border-border/50 flex-shrink-0">
-            <NextImage
-              src={dataUrl}
-              alt="Photo"
-              fill
-              unoptimized
-              sizes="40px"
-              className="object-cover"
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate text-foreground">
-              Photo
-            </div>
-            <div className="text-xs text-muted-foreground">image</div>
-          </div>
-          {(hovering || isDownloading) && (
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                disabled={isDownloading}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onDownload(entry);
-                }}
-                title={isDownloading ? "Downloading…" : "Download"}
-              >
-                {isDownloading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </div>
-          )}
-        </a>
-      );
-    }
-
-    if (entry.text.startsWith("PHOTOS:")) {
-      const raw = entry.text.replace("PHOTOS:", "");
-      let photos: string[] = [];
-      try {
-        if (raw.trim().startsWith("[")) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            photos = parsed.filter(
-              (v) => typeof v === "string" && v.startsWith("data:image")
-            );
-          }
-        } else {
-          photos = raw
-            .split(",")
-            .map((u) => u.trim())
-            .filter((u) => u.startsWith("data:image"));
-        }
-      } catch {
-        photos = raw
-          .split(",")
-          .map((u) => u.trim())
-          .filter((u) => u.startsWith("data:image"));
-      }
-
-      const count = photos.length;
-      const first = photos[0];
-
-      return (
-        <a
-          href={`#entry-${entry.id}`}
-          onClick={scrollToEntry}
-          className="group flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors"
-          onMouseEnter={() => setHovering(true)}
-          onMouseLeave={() => setHovering(false)}
-        >
-          <div className="relative h-10 w-10 flex-shrink-0">
-            {/* Stacked thumbnails effect for multi-image */}
-            {count > 1 && (
-              <>
-                <div className="absolute top-0.5 left-0.5 h-9 w-9 rounded-lg bg-muted border border-border/30" />
-                <div className="absolute top-1 left-1 h-9 w-9 rounded-lg bg-muted border border-border/30" />
-              </>
-            )}
-            <div className="relative h-10 w-10 rounded-lg overflow-hidden bg-muted border border-border/50 z-10">
-              {first && (
-                <NextImage
-                  src={first}
-                  alt="Photos"
-                  fill
-                  unoptimized
-                  sizes="40px"
-                  className="object-cover"
-                />
-              )}
-            </div>
-            {count > 1 && (
-              <div className="absolute -bottom-1 -right-1 z-20 bg-primary text-primary-foreground text-[9px] font-semibold px-1.5 py-0.5 rounded-full leading-none border-2 border-background">
-                {count}
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate text-foreground">
-              {count === 1 ? "Photo" : `${count} images`}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {count === 1 ? "image" : "images"}
-            </div>
-          </div>
-          {(hovering || isDownloading) && (
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                disabled={isDownloading}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onDownload(entry);
-                }}
-                title={isDownloading ? "Downloading…" : "Download"}
-              >
-                {isDownloading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </div>
-          )}
-        </a>
-      );
-    }
-
-    if (entry.meta?.type === "note" || entry.text.startsWith("NOTE:")) {
-      const noteData = entry.text?.startsWith("NOTE:")
-        ? entry.text.replace("NOTE:", "").split(":")
-        : [];
-      const noteSlug = entry.meta?.note_slug || noteData[0];
-      const noteTitle = entry.meta?.title || noteData[2] || "Untitled note";
-      const noteUrl = spaceSlug
-        ? `/${spaceSlug}/${noteSlug}`
-        : entry.meta?.space_slug
-          ? `/${entry.meta.space_slug}/${noteSlug}`
-          : `/n/${noteSlug}`;
-
-      return (
-        <a
-          href={`#entry-${entry.id}`}
-          onClick={scrollToEntry}
-          className="group flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors"
-          onMouseEnter={() => setHovering(true)}
-          onMouseLeave={() => setHovering(false)}
+          className="flex items-center gap-3 flex-1 min-w-0 py-1 px-1"
         >
           <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0 border border-amber-200 dark:border-amber-800/50">
             <Pen className="h-5 w-5 text-amber-600 dark:text-amber-400" />
@@ -464,92 +184,316 @@ function SidebarItem({ entry, spaceSlug, onDownload, isDownloading }: SidebarIte
             </div>
             <div className="text-xs text-muted-foreground">note</div>
           </div>
-          {(hovering || isDownloading) && (
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  window.open(noteUrl, "_blank");
-                }}
-                title="Preview"
-              >
-                <Eye className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                disabled={isDownloading}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onDownload(entry);
-                }}
-                title={isDownloading ? "Preparing print preview…" : "Print / Save as PDF"}
-              >
-                {isDownloading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            </div>
-          )}
         </a>
+        {noteUrl && (
+          <div
+            className={`flex items-center gap-1 shrink-0 transition-opacity ${actionRevealClass}`}
+          >
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={() => window.open(noteUrl, "_blank", "noopener,noreferrer")}
+              title="Open note"
+              aria-label={`Open note ${noteTitle}`}
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              disabled={isDownloading}
+              onClick={() => onDownload(entry)}
+              title={
+                isDownloading
+                  ? "Preparing print preview…"
+                  : "Print / Save as PDF"
+              }
+              aria-label={`Print or save ${noteTitle} as PDF`}
+            >
+              {isDownloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Modern uploaded media/files (including kind="file", "pdf", "image" with meta.items)
+  if (metaItems.length > 0) {
+    const count = metaItems.length;
+    const first = metaItems[0];
+    const isDrawing =
+      entry.meta?.presentation === "drawing" || entry.meta?.type === "drawing";
+    const isVisual = type === "image";
+
+    if (isVisual) {
+      return (
+        <div className="group flex items-center gap-2 px-2 py-1.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors">
+          <a
+            href={`#entry-${entry.id}`}
+            onClick={scrollToEntry}
+            className="flex items-center gap-3 flex-1 min-w-0 py-1 px-1"
+          >
+            <div className="relative h-10 w-10 flex-shrink-0">
+              {count > 1 && (
+                <>
+                  <div className="absolute top-0.5 left-0.5 h-9 w-9 rounded-lg bg-muted border border-border/30" />
+                  <div className="absolute top-1 left-1 h-9 w-9 rounded-lg bg-muted border border-border/30" />
+                </>
+              )}
+              <div className="relative h-10 w-10 rounded-lg overflow-hidden bg-muted border border-border/50 z-10">
+                {first?.url && (
+                  <NextImage
+                    src={first.url}
+                    alt={first.name || (isDrawing ? "Drawing" : "Photo")}
+                    fill
+                    unoptimized
+                    sizes="40px"
+                    className="object-cover"
+                  />
+                )}
+              </div>
+              {count > 1 && (
+                <div className="absolute -bottom-1 -right-1 z-20 bg-primary text-primary-foreground text-[9px] font-semibold px-1.5 py-0.5 rounded-full leading-none border-2 border-background">
+                  {count}
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium truncate text-foreground">
+                {isDrawing
+                  ? "Drawing"
+                  : count > 1
+                    ? `${count} photos`
+                    : first?.name || "Photo"}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {isDrawing ? "drawing" : count > 1 ? "images" : "image"}
+              </div>
+            </div>
+          </a>
+          <div
+            className={`flex items-center gap-1 shrink-0 transition-opacity ${actionRevealClass}`}
+          >
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              disabled={isDownloading}
+              onClick={() => onDownload(entry)}
+              title={isDownloading ? "Downloading…" : "Download"}
+              aria-label={`Download ${isDrawing ? "drawing" : first?.name || "image"}`}
+            >
+              {isDownloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        </div>
       );
     }
+
+    const firstName = first?.name || "file";
+    const displayName = count > 1 ? "Multiple files" : firstName;
+    const subtitle = count > 1 ? `${count} files` : "file";
+
+    return (
+      <div className="group flex items-center gap-2 px-2 py-1.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors relative">
+        <a
+          href={`#entry-${entry.id}`}
+          onClick={scrollToEntry}
+          className="flex items-center gap-3 flex-1 min-w-0 py-1 px-1"
+        >
+          <div className="relative h-10 w-10 flex-shrink-0">
+            {count > 1 && (
+              <>
+                <div className="absolute top-0.5 left-0.5 h-9 w-9 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/40" />
+                <div className="absolute top-1 left-1 h-9 w-9 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/40" />
+              </>
+            )}
+            <div className="relative h-10 w-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center border border-orange-200 dark:border-orange-800/50 z-10">
+              <File className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate text-foreground">
+              {displayName}
+            </div>
+            <div className="text-xs text-muted-foreground">{subtitle}</div>
+          </div>
+        </a>
+        <div
+          className={`flex items-center gap-1 shrink-0 transition-opacity ${actionRevealClass}`}
+        >
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            disabled={isDownloading}
+            onClick={() => onDownload(entry)}
+            title={isDownloading ? "Downloading…" : "Download"}
+            aria-label={`Download ${displayName}`}
+          >
+            {isDownloading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Legacy text-encoded image entries (PHOTO:, PHOTOS:, DRAWING:)
+  const legacyImages = extractLegacyImageUrls(entry);
+  if (legacyImages) {
+    const count = legacyImages.urls.length;
+    const first = legacyImages.urls[0];
+    const label =
+      legacyImages.kind === "drawing"
+        ? "Drawing"
+        : count === 1
+          ? "Photo"
+          : `${count} images`;
+    const sublabel = count === 1 ? "image" : "images";
+
+    return (
+      <div className="group flex items-center gap-2 px-2 py-1.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors">
+        <a
+          href={`#entry-${entry.id}`}
+          onClick={scrollToEntry}
+          className="flex items-center gap-3 flex-1 min-w-0 py-1 px-1"
+        >
+          <div className="relative h-10 w-10 flex-shrink-0">
+            {count > 1 && (
+              <>
+                <div className="absolute top-0.5 left-0.5 h-9 w-9 rounded-lg bg-muted border border-border/30" />
+                <div className="absolute top-1 left-1 h-9 w-9 rounded-lg bg-muted border border-border/30" />
+              </>
+            )}
+            <div className="relative h-10 w-10 rounded-lg overflow-hidden bg-muted border border-border/50 z-10">
+              {first && (
+                <NextImage
+                  src={first}
+                  alt={label}
+                  fill
+                  unoptimized
+                  sizes="40px"
+                  className="object-cover"
+                />
+              )}
+            </div>
+            {count > 1 && (
+              <div className="absolute -bottom-1 -right-1 z-20 bg-primary text-primary-foreground text-[9px] font-semibold px-1.5 py-0.5 rounded-full leading-none border-2 border-background">
+                {count}
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate text-foreground">
+              {label}
+            </div>
+            <div className="text-xs text-muted-foreground">{sublabel}</div>
+          </div>
+        </a>
+        <div
+          className={`flex items-center gap-1 shrink-0 transition-opacity ${actionRevealClass}`}
+        >
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            disabled={isDownloading}
+            onClick={() => onDownload(entry)}
+            title={isDownloading ? "Downloading…" : "Download"}
+            aria-label={`Download ${label}`}
+          >
+            {isDownloading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return null;
 }
 
-export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarProps) {
+export function ActivitySidebar({
+  entries,
+  isOpen,
+  spaceSlug,
+}: ActivitySidebarProps) {
   const clientNow = useClientNow(60_000);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [filterOpen, setFilterOpen] = useState(false);
 
-  // Filter relevant entries
   const items = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return entries
       .filter((e) => {
         const type = getItemType(e);
         if (type === "unknown") return false;
 
-        // Apply type filter
         if (activeFilter === "images" && type !== "image") return false;
         if (activeFilter === "files" && type !== "file") return false;
         if (activeFilter === "notes" && type !== "note") return false;
 
-        // Apply search filter (basic name matching)
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          if (e.kind === "file" && e.meta?.items?.[0]?.name) {
-            return e.meta.items[0].name.toLowerCase().includes(q);
+        if (q) {
+          if (type === "note") {
+            return extractNoteTitle(e, "note").toLowerCase().includes(q);
           }
-          if (e.meta?.type === "note" || e.text?.startsWith("NOTE:")) {
-            const noteData = e.text?.startsWith("NOTE:")
-              ? e.text.replace("NOTE:", "").split(":")
-              : [];
-            const noteTitle = e.meta?.title || noteData[2] || "note";
-            return noteTitle.toLowerCase().includes(q);
+          const metaItems = getMetaItems(e);
+          if (metaItems.length > 0) {
+            const matchesName = metaItems.some((item) =>
+              (item.name || "").toLowerCase().includes(q)
+            );
+            if (matchesName) return true;
+            if (type === "image") {
+              const isDrawing =
+                e.meta?.presentation === "drawing" ||
+                e.meta?.type === "drawing";
+              return (isDrawing ? "drawing image" : "photo image").includes(q);
+            }
+            return false;
           }
-          // For images, just include them if searching (no specific name)
-          return true;
+          const legacy = extractLegacyImageUrls(e);
+          if (legacy) {
+            const label =
+              legacy.kind === "drawing" ? "drawing image" : "photo image";
+            return label.includes(q);
+          }
+          return false;
         }
         return true;
       })
       .slice()
-      .sort((a, b) => b.created_at.localeCompare(a.created_at)); // newest first
+      .sort(
+        (a, b) =>
+          (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0)
+      );
   }, [entries, activeFilter, searchQuery]);
 
-  // Group items by date
   const groupedItems = useMemo(() => {
-    const groups: { [key: string]: Entry[] } = {};
+    const groups: Record<string, Entry[]> = {};
     items.forEach((item) => {
       const dateKey = formatActivityDate(item.created_at, clientNow);
       if (!groups[dateKey]) groups[dateKey] = [];
@@ -558,229 +502,292 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
     return groups;
   }, [items, clientNow]);
 
-  const [downloadingEntryId, setDownloadingEntryId] = useState<string | null>(null);
-  const [downloadingDateGroup, setDownloadingDateGroup] = useState<string | null>(null);
+  const [downloadingEntryId, setDownloadingEntryId] = useState<string | null>(
+    null
+  );
+  const [downloadingDateGroup, setDownloadingDateGroup] = useState<
+    string | null
+  >(null);
 
   const handleDownload = async (entry: Entry) => {
     if (downloadingEntryId) return;
     setDownloadingEntryId(entry.id);
     let toastId: string | number | undefined;
     const controller = new AbortController();
+    const cancelAction = { label: "Cancel", onClick: () => controller.abort() };
 
     try {
-      if (entry.kind === "file" && entry.meta?.type === "files") {
-        const items = entry.meta.items || [];
-        if (items.length === 1) {
-          toastId = toast.loading(`Preparing "${items[0].name}" for download...`);
-          await downloadFileFromUrl(items[0].url, items[0].name);
-          toast.success(`Download started for "${items[0].name}"`, { id: toastId });
-        } else if (items.length > 1) {
-          toastId = toast.loading(`Preparing ZIP for ${items.length} files...`, { action: { label: "Cancel", onClick: () => controller.abort() } });
+      const type = getItemType(entry);
+      const metaItems = getMetaItems(entry);
+
+      if (metaItems.length > 0) {
+        if (metaItems.length === 1) {
+          const single = metaItems[0];
+          const label = single.name || (type === "image" ? "photo.png" : "file");
+          toastId = toast.loading(`Preparing "${label}" for download...`);
+          await downloadFileFromUrl(single.url, label);
+          toast.success(`Download started for "${label}"`, { id: toastId });
+        } else {
+          toastId = toast.loading(
+            `Preparing ZIP for ${metaItems.length} ${type === "image" ? "photos" : "files"}...`,
+            { action: cancelAction }
+          );
           const zip = await createZip();
-          await addArchiveFiles(zip, items.map((item: { url: string; name: string }) => ({ url: item.url, name: item.name || "file" })), { signal: controller.signal, onProgress: (done, total) => toast.loading(`Preparing ZIP: ${done}/${total} files`, { id: toastId }) });
-          const zipBlob = await generateArchive(zip, { signal: controller.signal });
-          triggerBlobDownload(zipBlob, `files-${entry.id}.zip`);
+          await addArchiveFiles(
+            zip,
+            metaItems.map((item, idx) => ({
+              url: item.url,
+              name: item.name || `file-${idx + 1}`,
+            })),
+            {
+              signal: controller.signal,
+              onProgress: (done, total) =>
+                toast.loading(`Preparing ZIP: ${done}/${total}`, {
+                  id: toastId,
+                  action: cancelAction,
+                }),
+            }
+          );
+          const zipBlob = await generateArchive(zip, {
+            signal: controller.signal,
+          });
+          triggerBlobDownload(
+            zipBlob,
+            `${type === "image" ? "photos" : "files"}-${entry.id}.zip`
+          );
           toast.success("ZIP download started", { id: toastId });
         }
-      } else if (entry.text?.startsWith("DRAWING:")) {
-        toastId = toast.loading("Preparing drawing download...");
-        const dataUrl = entry.text.replace("DRAWING:", "");
-        await downloadFileFromUrl(dataUrl, `drawing-${entry.id}.png`);
-        toast.success("Download started", { id: toastId });
-      } else if (entry.text?.startsWith("PHOTO:")) {
-        toastId = toast.loading("Preparing photo download...");
-        const dataUrl = entry.text.replace("PHOTO:", "");
-        await downloadFileFromUrl(dataUrl, `photo-${entry.id}.jpg`);
-        toast.success("Download started", { id: toastId });
-      } else if (entry.text?.startsWith("PHOTOS:")) {
-        const raw = entry.text.replace("PHOTOS:", "");
-        let photos: string[] = [];
-        try {
-          if (raw.trim().startsWith("[")) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-              photos = parsed.filter(
-                (v) => typeof v === "string" && v.startsWith("data:image")
-              );
-            }
-          } else {
-            photos = raw
-              .split(",")
-              .map((u) => u.trim())
-              .filter((u) => u.startsWith("data:image"));
-          }
-        } catch {
-          photos = raw
-            .split(",")
-            .map((u) => u.trim())
-            .filter((u) => u.startsWith("data:image"));
-        }
+        return;
+      }
 
-        if (photos.length === 1) {
-          toastId = toast.loading("Preparing photo download...");
-          await downloadFileFromUrl(photos[0], `photo-${entry.id}.jpg`);
+      const legacyImages = extractLegacyImageUrls(entry);
+      if (legacyImages) {
+        if (legacyImages.urls.length === 1) {
+          const url = legacyImages.urls[0];
+          const fallbackExt = legacyImages.kind === "drawing" ? "png" : "jpg";
+          const ext = url.startsWith("data:")
+            ? extensionFromDataUrl(url, fallbackExt)
+            : fallbackExt;
+          toastId = toast.loading(
+            `Preparing ${legacyImages.kind === "drawing" ? "drawing" : "photo"} download...`
+          );
+          await downloadFileFromUrl(
+            url,
+            `${legacyImages.kind === "drawing" ? "drawing" : "photo"}-${entry.id}.${ext}`
+          );
           toast.success("Download started", { id: toastId });
-        } else if (photos.length > 1) {
-          toastId = toast.loading(`Preparing ZIP for ${photos.length} photos...`);
+        } else {
+          toastId = toast.loading(
+            `Preparing ZIP for ${legacyImages.urls.length} photos...`,
+            { action: cancelAction }
+          );
           const zip = await createZip();
-          photos.forEach((dataUrl, index) => {
-            if (dataUrl.startsWith("data:image/")) {
-              const base64Data = dataUrl.split(",")[1];
-              const mimeType = dataUrl.split(";")[0].split(":")[1];
-              const extension =
-                mimeType === "image/jpeg"
-                  ? "jpg"
-                  : mimeType === "image/png"
-                  ? "png"
-                  : mimeType === "image/gif"
-                  ? "gif"
-                  : "jpg";
-              zip.file(`photo-${index + 1}.${extension}`, base64Data, {
-                base64: true,
-              });
+          const remoteUrls: { url: string; name: string }[] = [];
+          legacyImages.urls.forEach((url, index) => {
+            if (url.startsWith("data:image/")) {
+              const base64Data = url.split(",")[1];
+              if (base64Data) {
+                zip.file(
+                  `photo-${index + 1}.${extensionFromDataUrl(url, "jpg")}`,
+                  base64Data,
+                  { base64: true }
+                );
+              }
+            } else {
+              remoteUrls.push({ url, name: `photo-${index + 1}.jpg` });
             }
           });
-
-          const content = await generateArchive(zip, { signal: controller.signal });
+          if (remoteUrls.length > 0) {
+            await addArchiveFiles(zip, remoteUrls, {
+              signal: controller.signal,
+              onProgress: (done, total) =>
+                toast.loading(`Preparing ZIP: ${done}/${total} photos`, {
+                  id: toastId,
+                  action: cancelAction,
+                }),
+            });
+          }
+          const content = await generateArchive(zip, {
+            signal: controller.signal,
+          });
           triggerBlobDownload(content, `photos-${entry.id}.zip`);
           toast.success("ZIP download started", { id: toastId });
         }
-      } else if (entry.meta?.type === "note" || entry.text?.startsWith("NOTE:")) {
-        const noteData = entry.text?.startsWith("NOTE:")
-          ? entry.text.replace("NOTE:", "").split(":")
-          : [];
-        const noteSlug = entry.meta?.note_slug || noteData[0];
-        const noteTitle = entry.meta?.title || noteData[2] || "Untitled Note";
+        return;
+      }
 
-        toastId = toast.loading(`Preparing "${noteTitle}" for print…`);
-        const res = await fetch(`/api/notes/${noteSlug}`);
+      if (type === "note") {
+        const noteSlug = extractNoteSlugFromEntry(entry);
+        if (!noteSlug) throw new Error("Invalid note link");
+        const noteTitle = extractNoteTitle(entry, "Untitled Note");
+
+        toastId = toast.loading(`Preparing "${noteTitle}" for print…`, {
+          action: cancelAction,
+        });
+        const res = await fetch(`/api/notes/${encodeURIComponent(noteSlug)}`, {
+          signal: controller.signal,
+        });
         if (!res.ok) throw new Error("Failed to fetch note");
         const note = await res.json();
-        if (note.is_locked && !note.is_owner) throw new Error("This note is private.");
+        if (note.is_locked && !note.is_owner) {
+          throw new Error("This note is private.");
+        }
         await printPortableNote(note.title || noteTitle, note.content || "");
-        toast.success("Choose Save as PDF in the print dialog", { id: toastId });
+        toast.success("Choose Save as PDF in the print dialog", {
+          id: toastId,
+        });
       }
     } catch (error) {
-      if (toastId) {
-        toast.error(error instanceof Error ? error.message : "Download failed. Please try again.", { id: toastId });
+      if (controller.signal.aborted) {
+        if (toastId) toast.message("Download cancelled", { id: toastId });
       } else {
-        toast.error(error instanceof Error ? error.message : "Download failed. Please try again.");
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Download failed. Please try again.";
+        if (toastId) toast.error(message, { id: toastId });
+        else toast.error(message);
       }
     } finally {
       setDownloadingEntryId(null);
     }
   };
 
-  // Download all items in a date group as zip
-  const handleDownloadAll = async (dateGroup: string, groupEntries: Entry[]) => {
+  const handleDownloadAll = async (
+    dateGroup: string,
+    groupEntries: Entry[]
+  ) => {
     if (downloadingDateGroup) return;
     setDownloadingDateGroup(dateGroup);
     const controller = new AbortController();
-    const toastId = toast.loading(`Preparing ZIP archive for ${groupEntries.length} items...`, { action: { label: "Cancel", onClick: () => controller.abort() } });
+    const cancelAction = { label: "Cancel", onClick: () => controller.abort() };
+    const toastId = toast.loading(
+      `Preparing ZIP archive for ${groupEntries.length} items...`,
+      { action: cancelAction }
+    );
     try {
       const zip = await createZip();
 
-      const remoteFiles = groupEntries.flatMap((entry) => entry.kind === "file" && entry.meta?.type === "files" ? (entry.meta.items || []).map((item: { url: string; name: string }) => ({ url: item.url, name: `files/${item.name || `file-${entry.id}`}` })) : []);
-      await addArchiveFiles(zip, remoteFiles, { signal: controller.signal, onProgress: (done, total) => toast.loading(`Preparing ZIP: ${done}/${total} files`, { id: toastId }) });
+      const remoteFiles: { url: string; name: string }[] = [];
+      for (const entry of groupEntries) {
+        const type = getItemType(entry);
+        const metaItems = getMetaItems(entry);
+        if (metaItems.length > 0) {
+          const folder = type === "image" ? "images" : "files";
+          for (const item of metaItems) {
+            remoteFiles.push({
+              url: item.url,
+              name: `${folder}/${item.name || `file-${entry.id}`}`,
+            });
+          }
+          continue;
+        }
+        const legacyImages = extractLegacyImageUrls(entry);
+        if (legacyImages) {
+          legacyImages.urls.forEach((url, index) => {
+            if (!url.startsWith("data:")) {
+              const prefix =
+                legacyImages.kind === "drawing" ? "drawing" : "photo";
+              remoteFiles.push({
+                url,
+                name: `images/${prefix}-${entry.id}-${index + 1}.jpg`,
+              });
+            }
+          });
+        }
+      }
+
+      if (remoteFiles.length > 0) {
+        await addArchiveFiles(zip, remoteFiles, {
+          signal: controller.signal,
+          onProgress: (done, total) =>
+            toast.loading(`Preparing ZIP: ${done}/${total} files`, {
+              id: toastId,
+              action: cancelAction,
+            }),
+        });
+      }
 
       for (const entry of groupEntries) {
         controller.signal.throwIfAborted();
-        // Files
-        if (entry.kind === "file" && entry.meta?.type === "files") {
+        if (getMetaItems(entry).length > 0) continue;
+
+        const legacyImages = extractLegacyImageUrls(entry);
+        if (legacyImages) {
+          legacyImages.urls.forEach((url, index) => {
+            if (!url.startsWith("data:image/")) return;
+            const base64Data = url.split(",")[1];
+            if (!base64Data) return;
+            const prefix =
+              legacyImages.kind === "drawing" ? "drawing" : "photo";
+            const ext = extensionFromDataUrl(
+              url,
+              legacyImages.kind === "drawing" ? "png" : "jpg"
+            );
+            const suffix = legacyImages.urls.length > 1 ? `-${index + 1}` : "";
+            zip.file(`images/${prefix}-${entry.id}${suffix}.${ext}`, base64Data, {
+              base64: true,
+            });
+          });
           continue;
         }
-        // Drawing
-        else if (entry.text?.startsWith("DRAWING:")) {
-          const dataUrl = entry.text.replace("DRAWING:", "");
-          const base64Data = dataUrl.split(",")[1];
-          zip.file(`images/drawing-${entry.id}.png`, base64Data, {
-            base64: true,
-          });
-        }
-        // Single photo
-        else if (entry.text?.startsWith("PHOTO:")) {
-          const dataUrl = entry.text.replace("PHOTO:", "");
-          const base64Data = dataUrl.split(",")[1];
-          zip.file(`images/photo-${entry.id}.jpg`, base64Data, {
-            base64: true,
-          });
-        }
-        // Multiple photos
-        else if (entry.text?.startsWith("PHOTOS:")) {
-          const raw = entry.text.replace("PHOTOS:", "");
-          let photos: string[] = [];
-          try {
-            if (raw.trim().startsWith("[")) {
-              const parsed = JSON.parse(raw);
-              if (Array.isArray(parsed)) {
-                photos = parsed.filter(
-                  (v) => typeof v === "string" && v.startsWith("data:image")
-                );
-              }
-            } else {
-              photos = raw
-                .split(",")
-                .map((u) => u.trim())
-                .filter((u) => u.startsWith("data:image"));
-            }
-          } catch {
-            photos = raw
-              .split(",")
-              .map((u) => u.trim())
-              .filter((u) => u.startsWith("data:image"));
-          }
-          photos.forEach((dataUrl, index) => {
-            if (dataUrl.startsWith("data:image/")) {
-              const base64Data = dataUrl.split(",")[1];
-              const mimeType = dataUrl.split(";")[0].split(":")[1];
-              const extension =
-                mimeType === "image/png"
-                  ? "png"
-                  : mimeType === "image/gif"
-                  ? "gif"
-                  : "jpg";
-              zip.file(
-                `images/photo-${entry.id}-${index + 1}.${extension}`,
-                base64Data,
-                { base64: true }
-              );
-            }
-          });
-        }
-        // Notes as portable HTML, including images and Unicode text
-        else if (entry.meta?.type === "note" || entry.text?.startsWith("NOTE:")) {
-          const noteData = entry.text?.startsWith("NOTE:")
-            ? entry.text.replace("NOTE:", "").split(":")
-            : [];
-          const noteSlug = entry.meta?.note_slug || noteData[0];
-          const noteTitle = entry.meta?.title || noteData[2] || "Untitled Note";
 
-          try {
-            const res = await fetch(`/api/notes/${noteSlug}`);
-            if (res.ok) {
-              const note = await res.json();
-
-              if (note.is_locked && !note.is_owner) throw new Error("A note is private. No partial ZIP was downloaded.");
-              const html = await portableNoteHtml(note.title || noteTitle, note.content || "", controller.signal);
-              const safeName = (note.title || noteTitle).replace(/[\x00-\x1f/\\:*?"<>|]/g, "_").slice(0,120) || "note";
-              let filename = `notes/${safeName}.html`;
-              let suffix = 1;
-              while (zip.files[filename]) filename = `notes/${safeName} (${suffix++}).html`;
-              addArchiveText(zip, filename, html);
-              zip.file("README.txt", "Notes are portable HTML with embedded images. Open a note in a browser and choose Print / Save as PDF. Files retain their original formats. Keep this export before your room expires.");
-            } else { throw new Error("A note is unavailable. No partial ZIP was downloaded."); }
-          } catch (error) {
-            throw error;
+        if (getItemType(entry) === "note") {
+          const noteSlug = extractNoteSlugFromEntry(entry);
+          if (!noteSlug) {
+            throw new Error("A note link is invalid. No partial ZIP was downloaded.");
           }
+          const noteTitle = extractNoteTitle(entry, "Untitled Note");
+          const res = await fetch(
+            `/api/notes/${encodeURIComponent(noteSlug)}`,
+            { signal: controller.signal }
+          );
+          if (!res.ok) {
+            throw new Error("A note is unavailable. No partial ZIP was downloaded.");
+          }
+          const note = await res.json();
+          if (note.is_locked && !note.is_owner) {
+            throw new Error("A note is private. No partial ZIP was downloaded.");
+          }
+          const html = await portableNoteHtml(
+            note.title || noteTitle,
+            note.content || "",
+            controller.signal
+          );
+          const safeName =
+            (note.title || noteTitle)
+              .replace(/[\x00-\x1f/\\:*?"<>|]/g, "_")
+              .slice(0, 120) || "note";
+          let filename = `notes/${safeName}.html`;
+          let suffix = 1;
+          while (zip.files[filename]) {
+            filename = `notes/${safeName} (${suffix++}).html`;
+          }
+          addArchiveText(zip, filename, html);
+          zip.file(
+            "README.txt",
+            "Notes are portable HTML with embedded images. Open a note in a browser and choose Print / Save as PDF. Files retain their original formats. Keep this export before your room expires."
+          );
         }
       }
 
       const content = await generateArchive(zip, { signal: controller.signal });
-      triggerBlobDownload(content, `woff-files-${formatDateIso(new Date())}.zip`);
+      triggerBlobDownload(
+        content,
+        `woff-files-${formatDateIso(new Date())}.zip`
+      );
       toast.success("ZIP download started", { id: toastId });
     } catch (error) {
-      if (controller.signal.aborted) toast.message("ZIP cancelled", { id: toastId });
-      else toast.error(error instanceof Error ? error.message : "Failed to generate ZIP archive", { id: toastId });
+      if (controller.signal.aborted) {
+        toast.message("ZIP cancelled", { id: toastId });
+      } else {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to generate ZIP archive",
+          { id: toastId }
+        );
+      }
     } finally {
       setDownloadingDateGroup(null);
     }
@@ -815,10 +822,14 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
       <div className="p-3 border-b border-zinc-200/80 dark:border-white/[0.06]">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500 z-10" />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 dark:text-zinc-500 z-10"
+              aria-hidden="true"
+            />
             <Input
               type="text"
               placeholder="Search"
+              aria-label="Search shared items"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full h-9 pl-9 pr-3 text-sm rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100/60 dark:bg-zinc-900/50 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
@@ -827,8 +838,11 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
           <Popover open={filterOpen} onOpenChange={setFilterOpen}>
             <PopoverTrigger asChild>
               <Button
+                type="button"
                 variant="outline"
                 size="icon"
+                aria-label="Filter shared items"
+                title="Filter shared items"
                 className={`h-9 w-9 flex-shrink-0 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 ${
                   activeFilter !== "all" ? "border-primary text-primary" : ""
                 }`}
@@ -840,6 +854,7 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
               {filterOptions.map((option) => (
                 <button
                   key={option.value}
+                  type="button"
                   onClick={() => {
                     setActiveFilter(option.value);
                     setFilterOpen(false);
@@ -878,7 +893,10 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
           </div>
         ) : (
           Object.entries(groupedItems).map(([dateGroup, groupEntries]) => (
-            <div key={dateGroup} className="py-2 border-b border-zinc-100/50 dark:border-white/[0.02] last:border-0">
+            <div
+              key={dateGroup}
+              className="py-2 border-b border-zinc-100/50 dark:border-white/[0.02] last:border-0"
+            >
               {/* Date header */}
               <div className="flex items-center justify-between px-4 py-2">
                 <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
@@ -886,16 +904,19 @@ export function ActivitySidebar({ entries, isOpen, spaceSlug }: ActivitySidebarP
                 </span>
                 {groupEntries.length > 1 && (
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDownloadAll(dateGroup, groupEntries)}
-                    disabled={downloadingDateGroup === dateGroup}
+                    disabled={Boolean(downloadingDateGroup)}
                     className="h-auto p-0 inline-flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-transparent font-normal disabled:opacity-60"
                   >
                     {downloadingDateGroup === dateGroup ? (
                       <>
                         <Loader2 className="h-2.5 w-2.5 animate-spin text-primary" />
-                        <span className="text-primary font-medium">Zipping…</span>
+                        <span className="text-primary font-medium">
+                          Zipping…
+                        </span>
                       </>
                     ) : (
                       "Download all"

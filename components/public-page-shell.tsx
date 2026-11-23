@@ -24,7 +24,7 @@ export function PublicPageShell({
       <Navbar />
       <main id="main-content" className="relative mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
         <header className="mx-auto mb-12 max-w-3xl space-y-5 text-center">
-          <p className="inline-flex rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">{eyebrow}</p>
+          <p className="inline-flex rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">{eyebrow}</p>
           <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
             {title}{accent ? <>{" "}<span className="bg-gradient-to-r from-[#ff7d3b] via-[#ff5a00] to-[#ff3600] bg-clip-text text-transparent">{accent}</span></> : null}
           </h1>

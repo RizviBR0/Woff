@@ -4,6 +4,8 @@ import { Check } from "lucide-react";
 import { getLaunchConfig } from "@/lib/launch-config";
 import { PublicPageShell, publicCardClass, publicPrimaryLinkClass } from "@/components/public-page-shell";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Pricing and Sharing Limits",
   description: "Free temporary sharing and the $8/month Pro sender pilot. Compare file limits, availability, room organization, and guest access.",

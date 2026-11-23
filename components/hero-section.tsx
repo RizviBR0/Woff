@@ -48,7 +48,10 @@ export default function HeroSection() {
   const [linkCopied, setLinkCopied] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const roomAddressRef = useRef<HTMLInputElement>(null);
-  const qrScannerRef = useRef<any>(null);
+  const qrCleanupRef = useRef<(() => void) | null>(null);
+  const mountedRef = useRef(true);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const linkCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const joiningRef = useRef(false);
   const rejectJoin = useCallback(() => {
@@ -80,7 +83,8 @@ export default function HeroSection() {
       const slugFromUrl = roomFromUrl ? extractRoomSlug(roomFromUrl) : "";
       if (slugFromUrl) {
         showRoomAddress(slugFromUrl);
-        setTimeout(() => {
+        if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+        focusTimerRef.current = setTimeout(() => {
           (isLegacyRoomSlug(slugFromUrl) ? inputRefs.current[3] : roomAddressRef.current)?.focus();
         }, 100);
         return;
@@ -89,19 +93,33 @@ export default function HeroSection() {
       // Ignore if window is not ready
     }
 
-    const savedRoom =
-      localStorage.getItem("last_room") ||
-      localStorage.getItem("last_created_space");
-    const savedSlug = savedRoom ? extractRoomSlug(savedRoom) : "";
-    if (savedSlug) showRoomAddress(savedSlug);
+    try {
+      const savedRoom =
+        localStorage.getItem("last_room") ||
+        localStorage.getItem("last_created_space");
+      const savedSlug = savedRoom ? extractRoomSlug(savedRoom) : "";
+      if (savedSlug) showRoomAddress(savedSlug);
+    } catch {
+      // Ignore storage access failures (e.g. strict privacy modes)
+    }
   }, [showRoomAddress]);
 
   useEffect(() => {
+    mountedRef.current = true;
     setShareHost(window.location.host);
-    return () => {
-      if (qrScannerRef.current) {
-        qrScannerRef.current.stop();
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        joiningRef.current = false;
+        setIsJoining(false);
       }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => {
+      mountedRef.current = false;
+      window.removeEventListener("pageshow", handlePageShow);
+      qrCleanupRef.current?.();
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+      if (linkCopiedTimerRef.current) clearTimeout(linkCopiedTimerRef.current);
     };
   }, []);
 
@@ -227,22 +245,20 @@ export default function HeroSection() {
       await navigator.clipboard.writeText(`${window.location.origin}/${slug}`);
       setLinkCopied(true);
       toast.success("Link copied!");
-      setTimeout(() => setLinkCopied(false), 2000);
+      if (linkCopiedTimerRef.current) clearTimeout(linkCopiedTimerRef.current);
+      linkCopiedTimerRef.current = setTimeout(() => setLinkCopied(false), 2000);
     } catch {
       toast.error("Failed to copy link");
     }
   };
 
   const handleQRScan = async () => {
+    if (isScanning || qrCleanupRef.current) return;
+    let cleanupScanner: (() => void) | null = null;
     try {
       setIsScanning(true);
       const QrScanner = (await import("qr-scanner")).default;
-
-      const safeRemoveOverlay = (overlayElement: HTMLElement) => {
-        if (document.body.contains(overlayElement)) {
-          document.body.removeChild(overlayElement);
-        }
-      };
+      if (!mountedRef.current) return;
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         toast.error("Camera not supported in this browser");
@@ -251,6 +267,9 @@ export default function HeroSection() {
       }
 
       const overlay = document.createElement("div");
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", "Scan Space QR Code");
       overlay.style.cssText = `
         position: fixed;
         top: 0;
@@ -300,6 +319,7 @@ export default function HeroSection() {
       `;
 
       const closeButton = document.createElement("button");
+      closeButton.type = "button";
       closeButton.textContent = "Cancel Scan";
       closeButton.style.cssText = `
         width: 100%;
@@ -319,22 +339,69 @@ export default function HeroSection() {
       container.appendChild(closeButton);
       overlay.appendChild(container);
       document.body.appendChild(overlay);
+      closeButton.focus();
 
-      const qrScanner = new QrScanner(
+      let cleaned = false;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      let qrScanner: InstanceType<typeof QrScanner> | null = null;
+
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          cleanupScanner?.();
+        }
+      };
+
+      cleanupScanner = () => {
+        if (cleaned) return;
+        cleaned = true;
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        window.removeEventListener("keydown", onKeyDown);
+        if (qrScanner) {
+          try { qrScanner.stop(); } catch {}
+          try { qrScanner.destroy(); } catch {}
+          qrScanner = null;
+        }
+        if (document.body.contains(overlay)) {
+          document.body.removeChild(overlay);
+        }
+        if (qrCleanupRef.current === cleanupScanner) {
+          qrCleanupRef.current = null;
+        }
+        if (mountedRef.current) {
+          setIsScanning(false);
+        }
+      };
+
+      qrCleanupRef.current = cleanupScanner;
+      window.addEventListener("keydown", onKeyDown);
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) {
+          cleanupScanner?.();
+        }
+      });
+      closeButton.onclick = () => {
+        cleanupScanner?.();
+      };
+
+      qrScanner = new QrScanner(
         video,
         async (result) => {
           const invitation = extractInvitationPath(result.data);
           if (invitation) {
-            qrScanner.stop(); safeRemoveOverlay(overlay); setIsScanning(false); router.push(invitation); return;
+            cleanupScanner?.();
+            router.push(invitation);
+            return;
           }
           const extractedCode = extractRoomSlug(result.data);
           if (extractedCode) {
             try {
-                showRoomAddress(extractedCode);
-                qrScanner.stop();
-                safeRemoveOverlay(overlay);
-                setIsScanning(false);
-                void handleJoinRoom(extractedCode);
+              showRoomAddress(extractedCode);
+              cleanupScanner?.();
+              void handleJoinRoom(extractedCode);
             } catch (err) {
               console.error("Error validating scanned room code:", err);
             }
@@ -347,38 +414,35 @@ export default function HeroSection() {
         },
       );
 
-      qrScannerRef.current = qrScanner;
-
-      closeButton.onclick = () => {
-        qrScanner.stop();
-        safeRemoveOverlay(overlay);
-        setIsScanning(false);
-      };
-
       await qrScanner.start();
+      if (cleaned || !mountedRef.current) {
+        cleanupScanner();
+        return;
+      }
 
-      setTimeout(() => {
-        if (qrScannerRef.current) {
-          qrScanner.stop();
-          safeRemoveOverlay(overlay);
-          setIsScanning(false);
+      timeoutId = setTimeout(() => {
+        if (!cleaned) {
+          cleanupScanner?.();
           toast.error("QR scan timeout - please try again");
         }
       }, 30000);
     } catch (err) {
       console.error("Failed to start QR scanner:", err);
-      if (err instanceof Error) {
-        if (err.name === "NotAllowedError") {
-          toast.error("Camera permission denied");
-        } else if (err.name === "NotFoundError") {
-          toast.error("No camera found");
+      cleanupScanner?.();
+      if (mountedRef.current) {
+        if (err instanceof Error) {
+          if (err.name === "NotAllowedError") {
+            toast.error("Camera permission denied");
+          } else if (err.name === "NotFoundError") {
+            toast.error("No camera found");
+          } else {
+            toast.error("Unable to access camera");
+          }
         } else {
-          toast.error("Unable to access camera");
+          toast.error("QR scanning failed");
         }
-      } else {
-        toast.error("QR scanning failed");
+        setIsScanning(false);
       }
-      setIsScanning(false);
     }
   };
 
@@ -386,11 +450,11 @@ export default function HeroSection() {
     <section className="relative min-h-screen overflow-hidden bg-zinc-50 dark:bg-[#030303] px-4 py-6 text-zinc-900 dark:text-white sm:px-6 lg:px-10 transition-colors duration-300">
       <Suspense fallback={null}><JoinFeedback onRejected={rejectJoin} /></Suspense>
       {/* Background — controlled single glow + subtle grid */}
-      <div className="pointer-events-none absolute inset-0">
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
         {/* Single controlled orange radial glow behind mockup area */}
-        <div className="absolute top-1/2 right-[15%] h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-orange-500/8 dark:bg-[#ff5a00]/15 blur-[160px]" />
+        <div className="absolute top-1/2 right-[15%] h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-orange-500/10 dark:bg-[#ff5a00]/15 blur-[160px]" />
         {/* Subtle bottom ambient */}
-        <div className="absolute -bottom-20 left-1/2 h-[300px] w-[700px] -translate-x-1/2 rounded-full bg-orange-500/5 dark:bg-[#ff3600]/8 blur-[140px]" />
+        <div className="absolute -bottom-20 left-1/2 h-[300px] w-[700px] -translate-x-1/2 rounded-full bg-orange-500/5 dark:bg-[#ff3600]/10 blur-[140px]" />
         {/* Subtle grid texture */}
         <div
           className="absolute inset-0 opacity-[0.03] dark:opacity-[0.04]"
@@ -411,17 +475,17 @@ export default function HeroSection() {
           <div className="max-w-[540px] md:max-w-[460px] lg:max-w-[540px] hero-stagger-container">
             {/* Badge */}
             <div
-              className="hero-stagger-item inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/25 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] backdrop-blur-md mb-7"
+              className="hero-stagger-item inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/25 bg-[#ff5a00]/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] backdrop-blur-md mb-7"
               style={{ animationDelay: '0ms' }}
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
+              <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" aria-hidden="true" />
               Instant file sharing
             </div>
 
             {/* Headline — LCP element: renders immediately, no opacity:0 */}
             <h1
-              className="hero-stagger-item max-w-[500px] text-4xl font-extrabold tracking-[-0.04em] sm:text-5xl md:text-4xl lg:text-[56px] text-zinc-900 dark:text-white"
-              style={{ lineHeight: 1.15, animationDelay: '80ms' }}
+              className="max-w-[500px] text-4xl font-extrabold tracking-[-0.04em] sm:text-5xl md:text-4xl lg:text-[56px] text-zinc-900 dark:text-white"
+              style={{ lineHeight: 1.15 }}
             >
               Share files
               <br />
@@ -450,7 +514,7 @@ export default function HeroSection() {
                 disabled={isCreating}
               >
                 {isCreating ? (
-                  <Loader2 className="h-[18px] w-[18px] shrink-0 animate-spin" />
+                  <Loader2 className="h-[18px] w-[18px] shrink-0 animate-spin" aria-hidden="true" />
                 ) : (
                   <Upload className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
                 )}
@@ -462,11 +526,14 @@ export default function HeroSection() {
                 onClick={() => {
                   const el = document.getElementById("join-room-section");
                   el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  setTimeout(() => (joinByName ? roomAddressRef.current : inputRefs.current[0])?.focus(), 400);
+                  if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+                  focusTimerRef.current = setTimeout(() => {
+                    (joinByName ? roomAddressRef.current : inputRefs.current[0])?.focus();
+                  }, 400);
                 }}
                 className="h-12 px-7 text-[15px] font-semibold rounded-xl border-zinc-200 dark:border-white/10 bg-white/60 dark:bg-white/5 text-zinc-800 dark:text-white backdrop-blur-sm transition hover:bg-zinc-100 dark:hover:bg-white/10 hover:border-zinc-300 dark:hover:border-white/20 flex items-center gap-2.5"
               >
-                <Users size={18} />
+                <Users size={18} aria-hidden="true" />
                 Join Room
               </Button>
             </div>
@@ -521,12 +588,12 @@ export default function HeroSection() {
                 <div aria-hidden="true" className="pointer-events-none absolute bottom-24 left-0 top-8 w-px bg-gradient-to-b from-white/5 via-white/60 to-transparent dark:via-orange-100/25" />
                 <div className="mb-6 flex items-center gap-3">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-orange-500/15 bg-orange-500/[0.08] text-orange-600 dark:text-orange-400">
-                    <Users size={20} strokeWidth={1.8} />
+                    <Users size={20} strokeWidth={1.8} aria-hidden="true" />
                   </span>
                   <div>
-                    <h3 id="join-room-heading" className="text-[17px] font-semibold tracking-tight text-zinc-900 sm:text-lg dark:text-zinc-100">
+                    <h2 id="join-room-heading" className="text-[17px] font-semibold tracking-tight text-zinc-900 sm:text-lg dark:text-zinc-100">
                       Join an existing space
-                    </h3>
+                    </h2>
                     <p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Enter a room code or invitation link.</p>
                   </div>
                 </div>
@@ -692,37 +759,22 @@ function FeatureCard({ icon, title, text }: FeatureCardProps) {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#ff5a00]/0 to-transparent transition-all duration-500 group-hover:via-[#ff5a00]/40" />
 
       {/* Ambient corner glow on hover */}
-      <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-[#ff5a00]/0 blur-2xl transition-all duration-500 group-hover:bg-[#ff5a00]/12 dark:group-hover:bg-[#ff5a00]/18" />
+      <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-[#ff5a00]/0 blur-2xl transition-all duration-500 group-hover:bg-[#ff5a00]/15 dark:group-hover:bg-[#ff5a00]/20" />
 
       {/* Icon Badge */}
-      <div className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#ff5a00]/20 bg-gradient-to-br from-[#ff5a00]/15 via-[#ff5a00]/10 to-[#ff5a00]/5 text-[#ff5a00] shadow-[0_2px_8px_rgba(255,90,0,0.06)] transition-all duration-300 group-hover:scale-105 group-hover:border-[#ff5a00]/40 group-hover:shadow-[0_4px_12px_rgba(255,90,0,0.15)] sm:mb-3 dark:border-[#ff5a00]/25 dark:text-[#ff7d3b]">
+      <div className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#ff5a00]/20 bg-gradient-to-br from-[#ff5a00]/15 via-[#ff5a00]/10 to-[#ff5a00]/5 text-[#ff5a00] shadow-[0_2px_8px_rgba(255,90,0,0.06)] transition-all duration-300 group-hover:scale-105 group-hover:border-[#ff5a00]/40 group-hover:shadow-[0_4px_12px_rgba(255,90,0,0.15)] sm:mb-3 dark:border-[#ff5a00]/25 dark:text-[#ff7d3b]" aria-hidden="true">
         {icon}
       </div>
 
       {/* Content */}
       <div className="relative z-10 min-w-0 flex-1">
-        <h3 className="text-[13px] font-bold tracking-tight text-zinc-900 transition-colors group-hover:text-zinc-950 dark:text-white dark:group-hover:text-white">
+        <h2 className="text-[13px] font-bold tracking-tight text-zinc-900 transition-colors group-hover:text-zinc-950 dark:text-white dark:group-hover:text-white">
           {title}
-        </h3>
+        </h2>
         <p className="mt-0.5 text-[11.5px] leading-relaxed text-zinc-500 transition-colors sm:mt-1 dark:text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300">
           {text}
         </p>
       </div>
-    </div>
-  );
-}
-
-/* ─── Divider ─── */
-interface DividerProps {
-  text: string;
-}
-
-function Divider({ text }: DividerProps) {
-  return (
-    <div className="my-6 flex items-center gap-4 text-[12px] font-medium text-zinc-400 dark:text-white/35">
-      <div className="h-px flex-1 bg-zinc-200 dark:bg-white/[0.06]" />
-      {text}
-      <div className="h-px flex-1 bg-zinc-200 dark:bg-white/[0.06]" />
     </div>
   );
 }

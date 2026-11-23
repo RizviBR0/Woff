@@ -20,11 +20,19 @@ const errors: Record<string, string> = {
 
 export async function AuthPage({ mode, params }: {
   mode: "existing" | "link";
-  params: { next?: string; error?: string };
+  params: { next?: string | string[]; error?: string | string[]; email?: string | string[] };
 }) {
   const signingUp = mode === "link";
   const config = getLaunchConfig();
-  const next = safeReturnPath(params.next ?? (await cookies()).get(AUTH_RETURN_COOKIE)?.value);
+  const rawNext = typeof params.next === "string" ? params.next : undefined;
+  const errorKey = typeof params.error === "string" ? params.error : undefined;
+  const initialEmail = typeof params.email === "string" ? params.email.slice(0, 254) : undefined;
+  const errorMessage = errorKey
+    ? Object.prototype.hasOwnProperty.call(errors, errorKey)
+      ? errors[errorKey]
+      : "That email link could not be completed. Request a new link and open it in this browser."
+    : undefined;
+  const next = safeReturnPath(rawNext ?? (await cookies()).get(AUTH_RETURN_COOKIE)?.value);
   let signedInEmail: string | undefined;
   if (config.accountsEnabled) {
     try {
@@ -43,7 +51,7 @@ export async function AuthPage({ mode, params }: {
           <div className={styles.headerSwitch}>
             {signedInEmail ? <Link href="/account">Your account</Link> : <>
               <span>{signingUp ? "Already have an account?" : "Don’t have an account?"}</span>
-              <Link href={`${signingUp ? "/sign-in" : "/sign-up"}?next=${encodeURIComponent(next)}`}>
+              <Link href={`${signingUp ? "/sign-in" : "/sign-up"}?next=${encodeURIComponent(next)}${initialEmail ? `&email=${encodeURIComponent(initialEmail)}` : ""}`}>
                 {signingUp ? "Sign in" : "Sign up"}
               </Link>
             </>}
@@ -70,8 +78,8 @@ export async function AuthPage({ mode, params }: {
             </> : <>
               <h1 className={styles.heading}>{signingUp ? "Create an account" : "Sign in"}</h1>
               <p className={styles.description}>{signingUp ? "Bring your Woff rooms together." : "Sign in to your Woff account."}</p>
-              {params.error && <p role="alert" className={styles.error}>{errors[params.error] || "That email link could not be completed. Request a new link and open it in this browser."}</p>}
-              <SignInForm mode={mode} next={next} enabled={config.accountsEnabled && config.emailDeliveryVerified} />
+              {errorMessage && <p role="alert" className={styles.error}>{errorMessage}</p>}
+              <SignInForm mode={mode} next={next} enabled={config.accountsEnabled && config.emailDeliveryVerified} initialEmail={initialEmail} />
             </>}
             <div className={styles.guestNote}><Link href="/">Keep sharing as a guest</Link></div>
           </div>

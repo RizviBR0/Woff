@@ -16,10 +16,12 @@ interface SpaceNotePageProps {
 export async function generateMetadata({
   params,
 }: SpaceNotePageProps): Promise<Metadata> {
-  const { slug, note_slug } = await params;
+  const { slug } = await params;
+  const canonicalSlug = normalizeRoomSlug(slug);
+  const label = isValidRoomSlug(canonicalSlug) ? canonicalSlug : "Room";
   return {
-    title: { absolute: `Note • Space ${slug} – Woff` },
-    description: `Rich text editor for note in space ${slug}`,
+    title: { absolute: `Note • Space ${label} – Woff` },
+    description: `Rich text editor for note in space ${label}`,
     referrer: "no-referrer",
     robots: {
       index: false,

@@ -14,7 +14,7 @@ export default function TimelineDemo() {
           {/* Step Copy */}
           <div className="lg:col-span-5 flex flex-col justify-center">
             {/* Step Badge */}
-            <div className="inline-flex items-center self-start gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mb-4">
+            <div className="inline-flex items-center self-start gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mb-4">
               <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
               Step 1
             </div>
@@ -59,7 +59,7 @@ export default function TimelineDemo() {
           {/* Step Copy */}
           <div className="lg:col-span-5 flex flex-col justify-center">
             {/* Step Badge */}
-            <div className="inline-flex items-center self-start gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mb-4">
+            <div className="inline-flex items-center self-start gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mb-4">
               <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
               Step 2
             </div>
@@ -104,7 +104,7 @@ export default function TimelineDemo() {
           {/* Step Copy */}
           <div className="lg:col-span-5 flex flex-col justify-center">
             {/* Step Badge */}
-            <div className="inline-flex items-center self-start gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mb-4">
+            <div className="inline-flex items-center self-start gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00] dark:text-[#ff7d3b] shadow-[0_0_15px_rgba(255,90,0,0.06)] dark:shadow-[0_0_20px_rgba(255,90,0,0.1)] backdrop-blur-md mb-4">
               <span className="h-1.5 w-1.5 rounded-full bg-[#ff5a00] animate-pulse" />
               Step 3
             </div>

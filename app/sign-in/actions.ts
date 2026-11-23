@@ -30,15 +30,32 @@ export async function sendSignInEmail(
     return { message: "Enter a valid email address." };
   const mode = form.get("mode") === "existing" ? "existing" : "link";
   const next = safeReturnPath(form.get("next"));
-  const requestHeaders = await headers();
-  const origin =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    (process.env.NODE_ENV !== "production"
-      ? requestHeaders.get("origin")
-      : "https://woff.space");
-  if (!origin)
+  let origin = process.env.NEXT_PUBLIC_SITE_URL || "https://woff.space";
+  if (process.env.NODE_ENV !== "production") {
+    const requestHeaders = await headers();
+    const headerOrigin = requestHeaders.get("origin");
+    const rawHost = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host");
+    const host = rawHost?.split(",")[0]?.trim();
+    const rawProto = requestHeaders.get("x-forwarded-proto");
+    const proto = rawProto?.split(",")[0]?.trim() === "https" ? "https" : "http";
+    const candidate = headerOrigin || (host ? `${proto}://${host}` : null);
+    if (candidate) {
+      try {
+        const parsed = new URL(candidate);
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          origin = parsed.origin;
+        }
+      } catch {
+        // Fall back to configured origin when dev headers are malformed.
+      }
+    }
+  }
+  let callback: URL;
+  try {
+    callback = new URL("/auth/callback", origin);
+  } catch {
     return { message: "Email sign-in is unavailable. Please try again later." };
-  const callback = new URL("/auth/callback", origin);
+  }
   callback.searchParams.set("next", next);
   try {
     const supabase = await createServerSupabaseClient();
@@ -130,7 +147,9 @@ export async function sendSignInEmail(
         message:
           error.status === 429
             ? "Please wait before requesting another email."
-            : "We could not link this email. If it already has an account, use the Sign in page. Your browser's rooms are still here.",
+            : typeof error.status === "number" && error.status >= 500
+              ? "Email could not be sent. Please try again later."
+              : "We could not link this email. If it already has an account, use the Sign in page. Your browser's rooms are still here.",
       };
     rememberDestination();
     return {
@@ -150,8 +169,9 @@ export async function sendSignInEmail(
 export async function signOutAccount() {
   const supabase = await createServerSupabaseClient();
   await supabase.auth.signOut({ scope: "local" });
-  (await cookies()).delete({ name: MERGE_COOKIE, path: "/" });
-  (await cookies()).delete({ name: MERGE_PENDING_COOKIE, path: "/" });
-  (await cookies()).delete({ name: AUTH_RETURN_COOKIE, path: "/" });
+  const jar = await cookies();
+  jar.delete({ name: MERGE_COOKIE, path: "/" });
+  jar.delete({ name: MERGE_PENDING_COOKIE, path: "/" });
+  jar.delete({ name: AUTH_RETURN_COOKIE, path: "/" });
   redirect("/sign-in");
 }

@@ -324,10 +324,28 @@
   * {
     @apply border-border;
   }
-  body, button, input, select, textarea {
+  body {
     @apply bg-background text-foreground;
+  }
+  body, button, input, select, textarea {
     font-family: var(--font-inter), var(--font-almarai), 'Almarai', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
+}
+
+.article-copy > * + * {
+  margin-top: 1.5rem;
+}
+
+.article-copy h2 {
+  margin-top: 3rem;
+}
+
+.article-copy h2:first-child {
+  margin-top: 0;
+}
+
+.article-copy h3 {
+  margin-top: 2rem;
 }
 
 /* Long rooms skip layout and paint work for messages outside the viewport. */
@@ -386,84 +404,76 @@
   }
 }
 
-/* Custom premium CTA button style from Uiverse.io suitable for light and dark modes */
-.cta-button-glow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  border: none;
-  cursor: pointer;
-  position: relative;
-  background: linear-gradient(90deg, #ff7d3b, #ff5a00, #ff3600);
-  border-radius: 12px;
-  color: #fff;
-  transition: all 0.3s ease;
-  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.4);
-  z-index: 10;
-}
+/* Custom premium CTA button style suitable for light and dark modes */
+@layer components {
+  .cta-button-glow {
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    background: linear-gradient(90deg, #ff7d3b, #ff5a00, #ff3600);
+    border-radius: 12px;
+    color: #fff;
+    transition: transform 0.2s ease, box-shadow 0.3s ease, opacity 0.2s ease;
+    box-shadow:
+      inset 0px 0px 5px rgba(255, 255, 255, 0.8),
+      inset 0px 35px 30px rgba(255, 255, 255, 0.55),
+      0px 5px 15px rgba(255, 90, 0, 0.25);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.15);
+    z-index: 10;
+  }
 
-/* Dark mode specific shadows for button */
-.dark .cta-button-glow {
-  box-shadow:
-    inset 0px 0px 5px rgba(255, 255, 255, 0.66),
-    inset 0px 35px 30px rgba(0, 0, 0, 0.95),
-    0px 5px 15px rgba(0, 0, 0, 0.8);
-}
+  .dark .cta-button-glow {
+    box-shadow:
+      inset 0px 0px 5px rgba(255, 255, 255, 0.66),
+      inset 0px 35px 30px rgba(0, 0, 0, 0.95),
+      0px 5px 15px rgba(0, 0, 0, 0.8);
+    text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.4);
+  }
 
-/* Light mode specific shadows for button (clean, glossy look) */
-:not(.dark) > .cta-button-glow,
-.cta-button-glow:not(.dark) {
-  box-shadow:
-    inset 0px 0px 5px rgba(255, 255, 255, 0.8),
-    inset 0px 35px 30px rgba(255, 255, 255, 0.55),
-    0px 5px 15px rgba(255, 90, 0, 0.25);
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.15);
-}
+  /* Background glowing blur (using theme orange, amber, and coral colors) */
+  .cta-button-glow::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    border-radius: 12px;
+    filter: blur(0);
+    z-index: -1;
+    box-shadow: none;
+    background: conic-gradient(
+      rgba(0, 0, 0, 0) 80deg,
+      #ff9e00,
+      #ff5a00,
+      #ff2a00,
+      rgba(0, 0, 0, 0) 280deg
+    );
+    transition: filter 0.3s ease, transform 0.2s ease;
+  }
 
-/* Background glowing blur (using theme orange, amber, and coral colors) */
-.cta-button-glow::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  border-radius: 12px;
-  filter: blur(0);
-  z-index: -1;
-  box-shadow: none;
-  background: conic-gradient(
-    rgba(0, 0, 0, 0) 80deg,
-    #ff9e00,
-    #ff5a00,
-    #ff2a00,
-    rgba(0, 0, 0, 0) 280deg
-  );
-  transition: all 0.3s ease;
-}
+  .cta-button-glow:hover::before {
+    filter: blur(15px);
+  }
 
-.cta-button-glow:hover::before {
-  filter: blur(15px);
-}
+  .cta-button-glow:active::before {
+    filter: blur(5px);
+    transform: translateY(1px);
+  }
 
-.cta-button-glow:active::before {
-  filter: blur(5px);
-  transform: translateY(1px);
-}
+  .cta-button-glow:active {
+    transform: translateY(1px);
+    box-shadow:
+      inset 0px 0px 5px rgba(255, 255, 255, 0.8),
+      inset 0px 35px 30px rgba(255, 255, 255, 0.55);
+  }
 
-.cta-button-glow:active {
-  margin-top: 3px;
-}
-
-.dark .cta-button-glow:active {
-  box-shadow:
-    inset 0px 0px 5px rgba(255, 255, 255, 0.66),
-    inset 0px 35px 30px rgba(0, 0, 0, 0.95);
-}
-
-.cta-button-glow:active:not(.dark) {
-  box-shadow:
-    inset 0px 0px 5px rgba(255, 255, 255, 0.8),
-    inset 0px 35px 30px rgba(255, 255, 255, 0.55);
+  .dark .cta-button-glow:active {
+    box-shadow:
+      inset 0px 0px 5px rgba(255, 255, 255, 0.66),
+      inset 0px 35px 30px rgba(0, 0, 0, 0.95);
+  }
 }
 
 /* Subtle orange gradient glow on navbar bottom border */
@@ -585,10 +595,6 @@ html[data-magicui-theme-vt="active"]::view-transition-new(root) {
 }
 
 /* Keep the shared glossy CTA treatment, with a quiet empty-input state. */
-.hero-join-submit:active {
-  margin-top: 0;
-}
-
 .hero-join-submit:disabled {
   background: rgb(244 244 245 / 70%);
   border: 1px solid rgb(161 161 170 / 16%);
@@ -855,15 +861,16 @@ html[data-magicui-theme-vt="active"]::view-transition-new(root) {
     color: black !important;
   }
 
-  /* Hide application chrome, navigation, headers, footers, toolbars, buttons */
-  header,
+  /* Hide application chrome, navigation, footers, toolbars, buttons */
   .sticky,
   .note-toolbar,
   .note-editor-header,
   .note-editor-footer,
   .note-options-menu,
   .note-recovery-banner,
+  [data-print-hide],
   button,
+  footer,
   nav {
     display: none !important;
   }

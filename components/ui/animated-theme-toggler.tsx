@@ -180,10 +180,15 @@ export const AnimatedThemeToggler = ({
       const newTheme = !isDark
       setIsDark(newTheme)
       document.documentElement.classList.toggle("dark", newTheme)
+      document.documentElement.classList.toggle("light", !newTheme)
       setTheme(newTheme ? "dark" : "light")
     }
 
-    if (typeof document.startViewTransition !== "function") {
+    const prefersReducedMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+    if (typeof document.startViewTransition !== "function" || prefersReducedMotion) {
       applyTheme()
       return
     }
@@ -214,26 +219,28 @@ export const AnimatedThemeToggler = ({
       flushSync(applyTheme)
     })
     if (typeof transition?.finished?.finally === "function") {
-      transition.finished.finally(cleanup)
+      transition.finished.catch(() => {}).finally(cleanup)
     } else {
       cleanup()
     }
 
     const ready = transition?.ready
     if (ready && typeof ready.then === "function") {
-      ready.then(() => {
-        document.documentElement.animate(
-          {
-            clipPath,
-          },
-          {
-            duration,
-            easing: shape === "star" ? "linear" : "ease-in-out",
-            fill: "forwards",
-            pseudoElement: "::view-transition-new(root)",
-          }
-        )
-      })
+      ready
+        .then(() => {
+          document.documentElement.animate(
+            {
+              clipPath,
+            },
+            {
+              duration,
+              easing: shape === "star" ? "linear" : "ease-in-out",
+              fill: "forwards",
+              pseudoElement: "::view-transition-new(root)",
+            }
+          )
+        })
+        .catch(() => {})
     }
   }, [shape, fromCenter, duration, isDark, setTheme])
 
@@ -245,7 +252,7 @@ export const AnimatedThemeToggler = ({
       className={cn(className)}
       {...props}
     >
-      {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      {isDark ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
       <span className="sr-only">Toggle theme</span>
     </button>
   )

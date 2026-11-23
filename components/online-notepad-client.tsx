@@ -8,7 +8,6 @@ import { useCreateSpace } from "@/lib/hooks/use-create-space";
 import { STANDARD_SPACE_RETENTION, PRO_SPACE_RETENTION } from "@/lib/sharing-copy";
 import {
   Zap,
-  Shield,
   RefreshCw,
   Loader2,
   ChevronDown,
@@ -17,8 +16,6 @@ import {
   Link as LinkIcon,
   Laptop,
   Terminal,
-  HelpCircle,
-  Lock,
   Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -73,15 +70,15 @@ export function OnlineNotepadClient() {
 
       {/* Ambient glows */}
       <div className="pointer-events-none absolute left-0 top-1/4 h-[350px] w-[350px] rounded-full bg-[#ff5a00]/5 dark:bg-[#ff5a00]/15 blur-[120px]" />
-      <div className="pointer-events-none absolute right-1/4 bottom-1/4 h-[400px] w-[400px] rounded-full bg-[#ff5a00]/3 dark:bg-[#ff5a00]/10 blur-[130px]" />
+      <div className="pointer-events-none absolute right-1/4 bottom-1/4 h-[400px] w-[400px] rounded-full bg-[#ff5a00]/5 dark:bg-[#ff5a00]/10 blur-[130px]" />
 
       <Navbar />
       <main id="main-content">
 
       {/* Hero Section */}
       <section className="relative max-w-5xl mx-auto px-4 pt-16 pb-20 sm:px-6 lg:px-8 text-center z-10 space-y-6">
-        <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00]">
-          <Zap className="w-3.5 h-3.5 animate-pulse" />
+        <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ff5a00]">
+          <Zap className="w-3.5 h-3.5 animate-pulse" aria-hidden="true" />
           Frictionless Web Notepad
         </div>
 
@@ -100,18 +97,19 @@ export function OnlineNotepadClient() {
 
         <div className="pt-4 flex justify-center">
           <button
+            type="button"
             onClick={handleCreateSpace}
             disabled={isCreating}
             className="cta-button-glow inline-flex items-center gap-3 px-8 py-5 bg-zinc-950 dark:bg-white text-white dark:text-black font-extrabold text-lg rounded-2xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-75 transition-all duration-200 shadow-xl dark:shadow-[0_0_40px_rgba(255,90,0,0.15)]"
           >
             {isCreating ? (
               <>
-                <Loader2 className="w-6 h-6 animate-spin text-[#ff5a00]" />
+                <Loader2 className="w-6 h-6 animate-spin text-[#ff5a00]" aria-hidden="true" />
                 Creating Space...
               </>
             ) : (
               <>
-                <FileText className="w-5.5 h-5.5 text-[#ff5a00]" />
+                <FileText className="w-5 h-5 text-[#ff5a00]" aria-hidden="true" />
                 Create a Free Notepad
               </>
             )}
@@ -174,7 +172,7 @@ export function OnlineNotepadClient() {
               <div className="h-10 w-10 rounded-xl bg-orange-500/10 dark:bg-orange-500/15 border border-orange-500/20 flex items-center justify-center text-orange-500 mb-3.5">
                 <Info className="w-5 h-5" />
               </div>
-              <h4 className="font-bold text-base text-foreground">Meeting Notes</h4>
+              <h3 className="font-bold text-base text-foreground">Meeting Notes</h3>
               <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                 Share action items, decisions, and agendas with your remote team
                 instantly.
@@ -184,9 +182,9 @@ export function OnlineNotepadClient() {
           <div className="rounded-[20px] border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-emerald-500/30 flex flex-col justify-between">
             <div>
               <div className="h-10 w-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-500 mb-3.5">
-                <Terminal className="w-5 h-5" />
+                <Terminal className="w-5 h-5" aria-hidden="true" />
               </div>
-              <h4 className="font-bold text-base text-foreground">Code Snippets</h4>
+              <h3 className="font-bold text-base text-foreground">Code Snippets</h3>
               <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                 Send JSON, SQL, or component codes with teammates, styled with
                 exact formatting.
@@ -196,9 +194,9 @@ export function OnlineNotepadClient() {
           <div className="rounded-[20px] border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-sky-500/30 flex flex-col justify-between">
             <div>
               <div className="h-10 w-10 rounded-xl bg-sky-500/10 dark:bg-sky-500/15 border border-sky-500/20 flex items-center justify-center text-sky-500 mb-3.5">
-                <Laptop className="w-5 h-5" />
+                <Laptop className="w-5 h-5" aria-hidden="true" />
               </div>
-              <h4 className="font-bold text-base text-foreground">Transfer Text</h4>
+              <h3 className="font-bold text-base text-foreground">Transfer Text</h3>
               <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                 Move clipboard links, captions, and texts between your phone and
                 laptop in seconds.
@@ -208,9 +206,9 @@ export function OnlineNotepadClient() {
           <div className="rounded-[20px] border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-amber-500/30 flex flex-col justify-between">
             <div>
               <div className="h-10 w-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/20 flex items-center justify-center text-amber-500 mb-3.5">
-                <FileText className="w-5 h-5" />
+                <FileText className="w-5 h-5" aria-hidden="true" />
               </div>
-              <h4 className="font-bold text-base text-foreground">Study Topics</h4>
+              <h3 className="font-bold text-base text-foreground">Study Topics</h3>
               <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
                 Distribute exam notes, lists, reference sites, and PDFs with study
                 groups quickly.
@@ -232,10 +230,10 @@ export function OnlineNotepadClient() {
         <div className="grid gap-6 sm:grid-cols-3">
           <div className="flex gap-4">
             <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
-              <Zap className="w-5 h-5" />
+              <Zap className="w-5 h-5" aria-hidden="true" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-bold text-base">No account signup</h4>
+              <h3 className="font-bold text-base">No account signup</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Skip the verification steps. Open the page and share instantly.
               </p>
@@ -243,10 +241,10 @@ export function OnlineNotepadClient() {
           </div>
           <div className="flex gap-4">
             <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
-              <LinkIcon className="w-5 h-5" />
+              <LinkIcon className="w-5 h-5" aria-hidden="true" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-bold text-base">Shareable link</h4>
+              <h3 className="font-bold text-base">Shareable link</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Generates clean URL routes instantly that look great on any
                 platform.
@@ -255,10 +253,10 @@ export function OnlineNotepadClient() {
           </div>
           <div className="flex gap-4">
             <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
-              <RefreshCw className="w-5 h-5" />
+              <RefreshCw className="w-5 h-5" aria-hidden="true" />
             </div>
             <div className="space-y-1">
-              <h4 className="font-bold text-base">Multi-device sync</h4>
+              <h3 className="font-bold text-base">Multi-device sync</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Open the same room on your devices. Room messages update while connected; a note has one editing owner.
               </p>
@@ -285,19 +283,25 @@ export function OnlineNotepadClient() {
               className="border border-zinc-200 dark:border-zinc-800/80 bg-white/60 dark:bg-zinc-950/40 rounded-xl overflow-hidden transition-all duration-200"
             >
               <Button
+                type="button"
                 variant="ghost"
+                aria-expanded={openFaq === idx}
+                aria-controls={`notepad-faq-${idx}`}
                 onClick={() => toggleFaq(idx)}
-                className="w-full h-auto px-6 py-4 flex items-center justify-between font-bold text-base text-left rounded-none hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
+                className="w-full h-auto whitespace-normal px-6 py-4 flex items-center justify-between gap-4 font-bold text-base text-left rounded-none hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
               >
                 <span>{faq.q}</span>
                 {openFaq === idx ? (
-                  <ChevronUp className="w-4 h-4 text-orange-500" />
+                  <ChevronUp className="w-4 h-4 shrink-0 text-orange-500" aria-hidden="true" />
                 ) : (
-                  <ChevronDown className="w-4 h-4 text-zinc-400" />
+                  <ChevronDown className="w-4 h-4 shrink-0 text-zinc-400" aria-hidden="true" />
                 )}
               </Button>
               {openFaq === idx && (
-                <div className="px-6 pb-5 text-sm text-muted-foreground border-t border-zinc-100 dark:border-zinc-900/60 pt-3 leading-relaxed">
+                <div
+                  id={`notepad-faq-${idx}`}
+                  className="px-6 pb-5 text-sm text-muted-foreground border-t border-zinc-100 dark:border-zinc-900/60 pt-3 leading-relaxed"
+                >
                   {faq.a}
                 </div>
               )}
@@ -309,9 +313,9 @@ export function OnlineNotepadClient() {
       {/* Internal Links Grid */}
       <section className="relative max-w-4xl mx-auto px-4 py-12 sm:px-6 lg:px-8 z-10 border-t border-zinc-200/50 dark:border-white/[0.04]">
         <div className="text-center mb-6">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             Related Sharing Utilities
-          </h4>
+          </h2>
         </div>
         <div className="flex flex-wrap justify-center gap-4">
           {internalLinks.map((link) => (

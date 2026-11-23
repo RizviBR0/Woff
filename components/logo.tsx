@@ -12,14 +12,11 @@ interface LogoProps {
  * the light and dark logo with 0ms delay, zero JS, zero hydration shift, and zero client bundle.
  */
 export function Logo({ width = 120, height = 40, className = "" }: LogoProps) {
+  const hasWidthClass = /\bw-/.test(className);
   return (
     <div
-      className={className}
-      style={{
-        width: `${width}px`,
-        height: `${height}px`,
-        position: "relative",
-      }}
+      className={`inline-block shrink-0 ${className}`}
+      style={hasWidthClass ? undefined : { width: `${width}px` }}
     >
       {/* Light mode logo — hidden in dark mode */}
       <Image
@@ -27,9 +24,7 @@ export function Logo({ width = 120, height = 40, className = "" }: LogoProps) {
         alt="Woff Logo"
         width={width}
         height={height}
-        className="block dark:hidden"
-        style={{ position: "absolute", inset: 0 }}
-        priority
+        className="block dark:hidden h-auto w-full"
       />
       {/* Dark mode logo — hidden in light mode */}
       <Image
@@ -37,9 +32,7 @@ export function Logo({ width = 120, height = 40, className = "" }: LogoProps) {
         alt="Woff Logo"
         width={width}
         height={height}
-        className="hidden dark:block"
-        style={{ position: "absolute", inset: 0 }}
-        priority
+        className="hidden dark:block h-auto w-full"
       />
     </div>
   );

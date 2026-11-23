@@ -1,7 +1,7 @@
 /**
  * Heuristic programming language detection and chat message code segmenter.
- * Automatically parses fenced code blocks (including unspaced syntax like ```#include<stdio.h>)
- * and detects raw code snippets and full-file source code in chat messages.
+ * Parses fenced code blocks (including unspaced syntax like ```#include<stdio.h>)
+ * and detects programming languages for syntax highlighting.
  */
 
 export interface CodeSegment {
@@ -107,7 +107,9 @@ export const KNOWN_LANGUAGES: Record<string, string> = {
  */
 export function formatLanguageTag(tag: string): string {
   const clean = tag.trim().toLowerCase();
-  if (KNOWN_LANGUAGES[clean]) return KNOWN_LANGUAGES[clean];
+  if (Object.prototype.hasOwnProperty.call(KNOWN_LANGUAGES, clean)) {
+    return KNOWN_LANGUAGES[clean];
+  }
   if (clean === "c#" || clean === "c++") return clean.toUpperCase();
   return clean.charAt(0).toUpperCase() + clean.slice(1);
 }
@@ -121,7 +123,7 @@ export function isLanguageIdentifier(tag: string): boolean {
   if (clean === "c#" || clean === "c++") return true;
   // If it contains syntax characters, it's code, not a tag
   if (/[\s<>;=(){}"'`]/.test(clean)) return false;
-  if (clean in KNOWN_LANGUAGES) return true;
+  if (Object.prototype.hasOwnProperty.call(KNOWN_LANGUAGES, clean)) return true;
   // Standard identifier word (e.g. 'solidity', 'vue', 'terraform')
   return /^[a-z0-9_#+.-]{1,25}$/.test(clean);
 }
@@ -160,15 +162,20 @@ export function detectLanguage(code: string, hintedLang?: string): string {
     Dockerfile: 0,
   };
 
-  const text = code.trim();
+  const fullTrimmed = code.trim();
+  // Cap heuristic regex scanning to avoid quadratic work on huge pastes
+  const text = fullTrimmed.slice(0, 4000);
 
   // 1. JSON check (strict or structural)
-  if ((text.startsWith("{") && text.endsWith("}")) || (text.startsWith("[") && text.endsWith("]"))) {
+  if (
+    (fullTrimmed.startsWith("{") && fullTrimmed.endsWith("}")) ||
+    (fullTrimmed.startsWith("[") && fullTrimmed.endsWith("]"))
+  ) {
     try {
-      JSON.parse(text);
+      JSON.parse(fullTrimmed);
       return "JSON";
     } catch {
-      if (/"[a-zA-Z0-9_]+"\s*:\s*("[^"]*"|\d+|true|false|null|{|\[)/.test(text)) {
+      if (/"[a-zA-Z0-9_]{1,64}"\s*:\s*("[^"\n]{0,200}"|\d+|true|false|null|{|\[)/.test(text)) {
         scores.JSON += 25;
       }
     }
@@ -197,7 +204,7 @@ export function detectLanguage(code: string, hintedLang?: string): string {
     scores["C++"] += 10;
   }
   if (
-    (/\bint\s+main\s*\([^)]*\)\s*\{/i.test(text) || /\bvoid\s+main\s*\([^)]*\)\s*\{/i.test(text)) &&
+    (/\bint\s+main\s*\([^)\n]{0,120}\)\s*\{/i.test(text) || /\bvoid\s+main\s*\([^)\n]{0,120}\)\s*\{/i.test(text)) &&
     !/static\s+void\s+main/i.test(text)
   ) {
     scores.C += 25;
@@ -205,19 +212,19 @@ export function detectLanguage(code: string, hintedLang?: string): string {
   }
 
   // 3. Python patterns
-  if (/def\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*:/i.test(text)) {
+  if (/def\s+[a-zA-Z_]\w*\s*\([^)\n]{0,160}\)\s*:/i.test(text)) {
     scores.Python += 30;
   }
   if (/if\s+__name__\s*==\s*["']__main__["']\s*:/i.test(text)) {
     scores.Python += 35;
   }
-  if (/elif\s+.*:/i.test(text)) {
+  if (/\belif\s+[^\n:]{1,160}:/i.test(text)) {
     scores.Python += 25;
   }
   if (/(^|\n)(import\s+[a-zA-Z0-9_]+(\s+as\s+[a-zA-Z0-9_]+)?|from\s+[a-zA-Z0-9_.]+\s+import\s+)/.test(text)) {
     scores.Python += 20;
   }
-  if (/\bprint\s*\([^)]*\)/.test(text)) {
+  if (/\bprint\s*\([^)\n]{0,200}\)/.test(text)) {
     scores.Python += 15;
   }
   if (/\bself\.[a-zA-Z_]/.test(text)) {
@@ -237,7 +244,7 @@ export function detectLanguage(code: string, hintedLang?: string): string {
   if (/=>\s*\{|=>\s*[a-zA-Z0-9_$]/.test(text)) {
     scores.JavaScript += 15;
   }
-  if (/import\s+.*\s+from\s+['"][^'"]+['"]/.test(text)) {
+  if (/import\s+[^\n]{1,160}\s+from\s+['"][^'\n"]{1,200}['"]/.test(text)) {
     scores.JavaScript += 20;
   }
   if (/export\s+(default\s+)?(const|function|class)/.test(text)) {
@@ -257,7 +264,8 @@ export function detectLanguage(code: string, hintedLang?: string): string {
   if (/\bas\s+(const|[A-Z]\w*)/.test(text)) {
     tsIndicators += 20;
   }
-  if (/<[A-Z]\w*(\s*extends\s*[^>]+)?>/.test(text)) {
+  // Only count explicit generic constraints (not plain JSX tags like <Header>)
+  if (/<[A-Z]\w*\s+extends\s+[^>\n]{1,120}>/.test(text)) {
     tsIndicators += 20;
   }
   if (/\b(private|protected|public|readonly)\s+[a-zA-Z_$]\w*\s*:/.test(text)) {
@@ -267,8 +275,8 @@ export function detectLanguage(code: string, hintedLang?: string): string {
 
   // React JSX / TSX detection
   const hasReactOrJsx =
-    (/<(div|span|button|input|form|section|article|header|footer|table|p|h1|h2|h3)[^>]*>/i.test(text) ||
-     /<[A-Z]\w*[^>]*>/m.test(text)) &&
+    (/<(div|span|button|input|form|section|article|header|footer|table|p|h1|h2|h3)[^>\n]{0,200}>/i.test(text) ||
+     /<[A-Z]\w*[^>\n]{0,200}>/m.test(text)) &&
     (/\bclassName=/i.test(text) ||
      /\bonClick=/i.test(text) ||
      /\buseState\b/i.test(text) ||
@@ -291,7 +299,7 @@ export function detectLanguage(code: string, hintedLang?: string): string {
   }
 
   // 6. Rust
-  if (/fn\s+main\s*\([^)]*\)/i.test(text) || /fn\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*(->\s*[^{]+)?\{/.test(text)) {
+  if (/fn\s+main\s*\([^)\n]{0,80}\)/i.test(text) || /fn\s+[a-zA-Z_]\w*\s*\([^)\n]{0,160}\)\s*(->\s*[^{\n]{1,80})?\{/.test(text)) {
     scores.Rust += 35;
   }
   if (/println!\s*\(|eprintln!\s*\(|vec!\s*\[/.test(text)) {
@@ -308,7 +316,7 @@ export function detectLanguage(code: string, hintedLang?: string): string {
   }
 
   // 7. Go
-  if (/package\s+(main|[a-zA-Z_]\w*)/.test(text)) {
+  if (/^package\s+(main|[a-z_][a-z0-9_]*)\s*$/m.test(text)) {
     scores.Go += 30;
   }
   if (/func\s+main\s*\(\)/.test(text) || /func\s+\([a-zA-Z_]+\s+\*?[a-zA-Z_]+\)/.test(text)) {
@@ -333,7 +341,7 @@ export function detectLanguage(code: string, hintedLang?: string): string {
   if (/<!DOCTYPE\s+html>/i.test(text)) {
     scores.HTML += 40;
   }
-  if (/<(html|head|body|div|span|button|input|form|section|article|header|footer|table|tbody|tr|td)[^>]*>/i.test(text) && !hasReactOrJsx) {
+  if (/<(html|head|body|div|span|button|input|form|section|article|header|footer|table|tbody|tr|td)[^>\n]{0,200}>/i.test(text) && !hasReactOrJsx) {
     scores.HTML += 25;
   }
 
@@ -341,7 +349,7 @@ export function detectLanguage(code: string, hintedLang?: string): string {
   if (/@media\s*\(|@keyframes\s+[a-zA-Z_-]/i.test(text)) {
     scores.CSS += 35;
   }
-  if (/\b(margin|padding|display|background|border|font-family|font-size|flex|grid|position)\s*:\s*[^;]+;/i.test(text)) {
+  if (/\b(margin|padding|display|background|border|font-family|font-size|flex|grid|position)\s*:\s*[^;\n]{1,160};/i.test(text)) {
     scores.CSS += 25;
   }
 
@@ -379,22 +387,22 @@ export function detectLanguage(code: string, hintedLang?: string): string {
   if (/\bimport\s+(UIKit|Foundation|SwiftUI|Cocoa)\b/.test(text)) {
     scores.Swift += 35;
   }
-  if (/\bguard\s+let\s+[a-zA-Z_$]\w*\s*=\s*/.test(text) || /\bfunc\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*->/.test(text)) {
+  if (/\bguard\s+let\s+[a-zA-Z_$]\w*\s*=\s*/.test(text) || /\bfunc\s+[a-zA-Z_]\w*\s*\([^)\n]{0,160}\)\s*->/.test(text)) {
     scores.Swift += 30;
   }
 
   // 15. Kotlin
-  if (/\b(fun\s+[a-zA-Z_]\w*\s*\(|val\s+[a-zA-Z_]\w*\s*=|package\s+[a-z.]+|import\s+kotlin\.)/.test(text)) {
+  if (/\b(fun\s+[a-zA-Z_]\w*\s*\(|val\s+[a-zA-Z_]\w*\s*=|import\s+kotlin\.)/.test(text) || /\bpackage\s+[a-z]+(\.[a-z0-9_]+)+\b/.test(text)) {
     scores.Kotlin += 35;
   }
 
   // 16. Dart
-  if (/\b(void\s+main\(\)|import\s+['"]package:flutter|Widget\s+build\(|StatefulWidget|StatelessWidget)\b/.test(text)) {
+  if (/\b(import\s+['"]package:flutter|Widget\s+build\(|StatefulWidget|StatelessWidget)\b/.test(text) || (/\bvoid\s+main\s*\(\)/.test(text) && /\b(print\s*\(|final\s+|var\s+|Future<|async\s*\{)/.test(text))) {
     scores.Dart += 35;
   }
 
   // 17. Ruby
-  if (/(^|\n)\s*(def\s+[a-zA-Z_]\w*|class\s+[A-Z]\w*\s*<|puts\s+|require\s+['"][^'"]+['"]|attr_accessor)\b/.test(text) && /\bend\b/.test(text)) {
+  if (/(^|\n)[ \t]*(def\s+[a-zA-Z_]\w*|class\s+[A-Z]\w*\s*<|puts\s+|require\s+['"][^'\n"]{1,120}['"]|attr_accessor)\b/.test(text) && /\bend\b/.test(text)) {
     scores.Ruby += 35;
   }
 
@@ -453,87 +461,19 @@ export function detectLanguage(code: string, hintedLang?: string): string {
 }
 
 /**
- * Checks if an unfenced block of text strongly looks like source code.
- */
-export function isRawCodeParagraph(paragraph: string): boolean {
-  const trimmed = paragraph.trim();
-  const lines = trimmed.split("\n").filter((l) => l.trim().length > 0);
-  if (lines.length < 1) return false;
-
-  // Single-line commands / queries
-  if (lines.length === 1) {
-    return /^(npm\s+(i|install|run|start|test|build|exec)|npx\s+|pnpm\s+|yarn\s+|git\s+(checkout|commit|push|pull|clone|status|diff|branch|add)|docker\s+|curl\s+-|wget\s+|sudo\s+|cargo\s+(build|run|test|add)|pip\s+install|SELECT\s+[\s\S]+\s+FROM)\b/i.test(
-      trimmed,
-    );
-  }
-
-  // Obvious signature starts
-  if (
-    /^#include\s*[<"][^>"]+[>"]/i.test(trimmed) ||
-    /^(import|export)\s+/m.test(trimmed) ||
-    /^(public|private|protected)\s+(class|interface|static|void)/m.test(trimmed) ||
-    /^def\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*:/m.test(trimmed) ||
-    /^func(tion)?\s+[a-zA-Z_]/m.test(trimmed) ||
-    /^package\s+[a-zA-Z_]/m.test(trimmed) ||
-    /^fn\s+main\s*\(/m.test(trimmed) ||
-    /^<!DOCTYPE\s+html>/i.test(trimmed) ||
-    /^<\?php/i.test(trimmed) ||
-    /^using\s+System;/i.test(trimmed) ||
-    /^(SELECT|INSERT\s+INTO|CREATE\s+TABLE)\b/i.test(trimmed) ||
-    /^pragma\s+solidity\b/i.test(trimmed) ||
-    /^FROM\s+[a-zA-Z0-9_.-]+/m.test(trimmed)
-  ) {
-    return true;
-  }
-
-  // Count code-like syntax characteristics with boundary checks
-  let codeSignals = 0;
-  for (const line of lines) {
-    const l = line.trim();
-    // In code, lines ending in ; usually contain assignments, calls, or symbols
-    if (
-      l.endsWith(";") &&
-      (/(=|\(|\)|\{|\}|\[|\]|<|>|\$|=>|::)/.test(l) || /^\s*(return|break|continue|throw)\b/.test(l))
-    ) {
-      codeSignals++;
-    } else if (l.endsWith("{") || l.endsWith("}")) {
-      codeSignals++;
-    }
-    // Python / YAML colon only when preceded by keywords or dict key
-    if (/(^(def|class|if|elif|else|for|while|try|except|finally|with|async|match|case)\b|["']\w+["']\s*):\s*$/.test(l)) {
-      codeSignals++;
-    }
-    // Keywords in explicit code positions (prevents matching English prose)
-    if (
-      /(\bconst\s+[a-zA-Z_$]|\blet\s+(mut\s+)?[a-zA-Z_$]|\bvar\s+[a-zA-Z_$]|\bfunction\s+[a-zA-Z_$]|\bdef\s+[a-zA-Z_]|\bclass\s+[A-Z]|(^\s*|[;{}])\s*return(\s+[^;]+;?|\s*;|\s*\{)|\bif\s*\(|\bfor\s*\(|\bwhile\s*\()/.test(
-        l,
-      )
-    ) {
-      codeSignals++;
-    }
-    if (/\bconsole\.(log|error)|\bprintf\(|\bstd::|\bSystem\.out|\bprintln!|\bfmt\.Print/.test(l)) {
-      codeSignals += 2;
-    }
-  }
-
-  return codeSignals >= Math.max(2, Math.ceil(lines.length * 0.35));
-}
-
-/**
  * Parses a chat message string into an ordered array of text and code segments.
  * Correctly handles:
  * 1. Standard fenced code blocks (```python ... ```)
  * 2. Unspaced / malformed fences (```#include<stdio.h> ... ```)
- * 3. Preserves entire source files without shattering them on blank lines
- * 4. Merges contiguous code paragraphs into cohesive blocks
+ * 3. Preserves unfenced text verbatim as plain text
  */
 export function parseMessageSegments(content: string): MessageSegment[] {
   if (!content) return [];
 
   const segments: MessageSegment[] = [];
 
-  // Regex matching fenced code blocks
-  const fenceRegex = /```([^\r\n`]*)[\r\n]?([\s\S]*?)```/g;
+  // Regex matching fenced code blocks (supports both LF and CRLF)
+  const fenceRegex = /```([^\r\n`]*)(?:\r?\n)?([\s\S]*?)```/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;

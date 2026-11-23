@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Entry } from "./entry-types";
+import { extractNoteSlugFromEntry, type Entry } from "./entry-types";
 
 interface NoteEntryCardProps {
   entry: Entry;
@@ -28,14 +28,7 @@ export function NoteEntryCard({ entry, currentDeviceId, spaceSlug }: NoteEntryCa
     Boolean(currentDeviceId) &&
     entry.created_by_device_id === currentDeviceId;
 
-  const noteSlug = (() => {
-    if (entry.meta?.note_slug) return entry.meta.note_slug;
-    if (entry.text?.startsWith("NOTE:")) {
-      const parts = entry.text.replace("NOTE:", "").split(":");
-      return parts[0];
-    }
-    return null;
-  })();
+  const noteSlug = extractNoteSlugFromEntry(entry);
 
   const title = (() => {
     if (entry.meta?.title) return entry.meta.title;
@@ -48,14 +41,6 @@ export function NoteEntryCard({ entry, currentDeviceId, spaceSlug }: NoteEntryCa
 
   const isLocked = Boolean(entry.meta?.is_locked);
 
-  const handleOpenNote = (e: React.MouseEvent) => {
-    // If locked and user is NOT the creator, display informative locked modal
-    if (isLocked && !isMine) {
-      e.preventDefault();
-      setLockedModalOpen(true);
-    }
-  };
-
   if (!noteSlug) {
     return (
       <div className="flex items-center gap-3 p-3 rounded-xl border bg-card text-muted-foreground text-sm">
@@ -65,45 +50,58 @@ export function NoteEntryCard({ entry, currentDeviceId, spaceSlug }: NoteEntryCa
     );
   }
 
-  const noteUrl = spaceSlug
-    ? `/${spaceSlug}/${noteSlug}`
-    : entry.meta?.space_slug
-      ? `/${entry.meta.space_slug}/${noteSlug}`
-      : `/n/${noteSlug}`;
+  const safeSlug = encodeURIComponent(noteSlug);
+  const resolvedSpaceSlug = spaceSlug || entry.meta?.space_slug;
+  const noteUrl = resolvedSpaceSlug
+    ? `/${encodeURIComponent(resolvedSpaceSlug)}/${safeSlug}`
+    : `/n/${safeSlug}`;
+
+  const cardBody = (
+    <div className="flex items-start justify-between gap-3 text-left">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-[#ff5a00] group-hover:scale-105 transition-transform">
+          <FileText className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <h4 className="font-semibold text-sm truncate text-foreground group-hover:text-primary transition-colors">
+            {title}
+          </h4>
+          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+            {isLocked ? (
+              <>
+                <Lock className="h-3 w-3 text-amber-500" />
+                <span>{isMine ? "Locked Note (Author Access)" : "Author Locked Note"}</span>
+              </>
+            ) : (
+              <span>Shared rich note</span>
+            )}
+          </p>
+        </div>
+      </div>
+      <div className="shrink-0 text-muted-foreground group-hover:text-foreground transition-colors">
+        <ExternalLink className="h-4 w-4" />
+      </div>
+    </div>
+  );
+
+  const cardClass =
+    "group block w-full rounded-2xl border bg-card/80 p-4 transition-all hover:bg-card hover:shadow-md hover:border-primary/40 active:scale-[0.99]";
 
   return (
     <>
-      <Link
-        href={noteUrl}
-        onClick={handleOpenNote}
-        className="group block rounded-2xl border bg-card/80 p-4 transition-all hover:bg-card hover:shadow-md hover:border-primary/40 active:scale-[0.99]"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-[#ff5a00] group-hover:scale-105 transition-transform">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <h4 className="font-semibold text-sm truncate text-foreground group-hover:text-primary transition-colors">
-                {title}
-              </h4>
-              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                {isLocked ? (
-                  <>
-                    <Lock className="h-3 w-3 text-amber-500" />
-                    <span>{isMine ? "Locked Note (Author Access)" : "Author Locked Note"}</span>
-                  </>
-                ) : (
-                  <span>Shared rich note</span>
-                )}
-              </p>
-            </div>
-          </div>
-          <div className="shrink-0 text-muted-foreground group-hover:text-foreground transition-colors">
-            <ExternalLink className="h-4 w-4" />
-          </div>
-        </div>
-      </Link>
+      {isLocked && !isMine ? (
+        <button
+          type="button"
+          onClick={() => setLockedModalOpen(true)}
+          className={cardClass}
+        >
+          {cardBody}
+        </button>
+      ) : (
+        <Link href={noteUrl} className={cardClass}>
+          {cardBody}
+        </Link>
+      )}
 
       {/* Informative Locked Note Dialog for Non-Authors */}
       <Dialog open={lockedModalOpen} onOpenChange={setLockedModalOpen}>

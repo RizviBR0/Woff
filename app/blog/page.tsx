@@ -5,8 +5,9 @@ import { Clock3 } from "lucide-react";
 import { getPublishedBlogPosts, getReadingTime } from "@/lib/blog";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
+import { SITE_URL, absoluteSocialImageUrl } from "@/lib/site-url";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://woff.space";
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: "Woff Field Notes: Faster Ways to Share Online",
@@ -59,16 +60,16 @@ export default function BlogPage() {
     "@type": "Blog",
     name: "Woff Field Notes",
     description: metadata.description,
-    url: `${siteUrl}/blog`,
-    publisher: { "@type": "Organization", name: "Woff Space", url: siteUrl },
+    url: `${SITE_URL}/blog`,
+    publisher: { "@type": "Organization", name: "Woff Space", url: SITE_URL },
     blogPost: posts.map((post) => ({
       "@type": "BlogPosting",
       headline: post.title,
       description: post.excerpt,
       datePublished: post.date,
       dateModified: post.updatedDate || post.date,
-      url: `${siteUrl}/blog/${post.slug}`,
-      image: post.coverImageUrl,
+      url: `${SITE_URL}/blog/${post.slug}`,
+      image: absoluteSocialImageUrl(post.coverImageUrl),
       author: { "@type": "Organization", name: post.author.name },
     })),
   };
@@ -176,7 +177,12 @@ export default function BlogPage() {
                   }`}
                 >
                   {post.coverImageUrl ? (
-                    <Link href={`/blog/${post.slug}`} className="relative aspect-[16/9] overflow-hidden bg-muted" tabIndex={-1}>
+                    <Link
+                      href={`/blog/${post.slug}`}
+                      className="relative aspect-[16/9] overflow-hidden bg-muted"
+                      tabIndex={-1}
+                      aria-hidden="true"
+                    >
                       <Image
                         src={post.coverImageUrl}
                         alt={post.coverAlt || post.title}

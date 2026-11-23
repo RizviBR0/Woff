@@ -1,10 +1,19 @@
 import { triggerBlobDownload } from "./download";
 
+function sanitizeFilenameBase(title: string): string {
+  const cleaned = title
+    .replace(/[\x00-\x1f/\\:*?"<>|]/g, "_")
+    .replace(/[. ]+$/g, "")
+    .trim()
+    .slice(0, 120);
+  return cleaned || "note";
+}
+
 /**
  * Downloads note content as a Markdown (.md) file.
  */
 export function downloadMarkdownNote(title: string, markdownContent: string): void {
-  const baseName = title.trim() || "note";
+  const baseName = sanitizeFilenameBase(title);
   const filename = baseName.toLowerCase().endsWith(".md")
     ? baseName
     : `${baseName}.md`;
@@ -18,7 +27,7 @@ export function downloadMarkdownNote(title: string, markdownContent: string): vo
  * Downloads note content as a Plain Text (.txt) file.
  */
 export function downloadPlainTextNote(title: string, plainText: string): void {
-  const baseName = title.trim() || "note";
+  const baseName = sanitizeFilenameBase(title);
   const filename = baseName.toLowerCase().endsWith(".txt")
     ? baseName
     : `${baseName}.txt`;
@@ -52,18 +61,18 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
     }
   }
 
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.appendChild(textArea);
   try {
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    textArea.style.position = "fixed";
-    textArea.style.opacity = "0";
-    document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
-    const success = document.execCommand("copy");
-    document.body.removeChild(textArea);
-    return success;
+    return document.execCommand("copy");
   } catch {
     return false;
+  } finally {
+    document.body.removeChild(textArea);
   }
 }

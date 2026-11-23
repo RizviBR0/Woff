@@ -27,10 +27,17 @@ import type { Entry, UploadedFileItem } from "./entry-types";
 interface FileEntryCardProps {
   entry: Entry;
   spaceSlug?: string;
+  canWrite?: boolean;
+}
+
+function getFileExtension(name: string): string {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0 || dot === name.length - 1) return "";
+  return name.slice(dot + 1).toLowerCase();
 }
 
 export function isMarkdownFile(name: string, type?: string) {
-  const ext = name.split(".").pop()?.toLowerCase() || "";
+  const ext = getFileExtension(name);
   return (
     ["md", "markdown", "mdown", "mkdn", "mdwn", "mdtxt", "mdtext"].includes(ext) ||
     type === "text/markdown" ||
@@ -39,7 +46,7 @@ export function isMarkdownFile(name: string, type?: string) {
 }
 
 function getFileIcon(type: string, name: string) {
-  const ext = name.split(".").pop()?.toLowerCase() || "";
+  const ext = getFileExtension(name);
 
   if (["md", "markdown"].includes(ext) || type === "text/markdown" || type === "text/x-markdown") {
     return <FileText className="h-5 w-5 text-sky-500" />;
@@ -69,7 +76,7 @@ function getFileIcon(type: string, name: string) {
   return <File className="h-5 w-5 text-muted-foreground" />;
 }
 
-export function FileEntryCard({ entry, spaceSlug }: FileEntryCardProps) {
+export function FileEntryCard({ entry, spaceSlug, canWrite = true }: FileEntryCardProps) {
   const router = useRouter();
   const [isZipping, setIsZipping] = useState(false);
   const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
@@ -81,19 +88,15 @@ export function FileEntryCard({ entry, spaceSlug }: FileEntryCardProps) {
   })();
 
   const openInRichNote = async (file: UploadedFileItem, index: number) => {
-    if (openingNoteIndex !== null) return;
+    if (!canWrite || openingNoteIndex !== null) return;
     setOpeningNoteIndex(index);
     const toastId = toast.loading(`Opening "${file.name}" in Rich Note…`);
     try {
-      let markdownContent = "";
-      try {
-        const res = await fetch(file.url);
-        if (res.ok) {
-          markdownContent = await res.text();
-        }
-      } catch {
-        // Fallback gracefully if network/cors blocks direct fetch
+      const res = await fetch(file.url);
+      if (!res.ok) {
+        throw new Error("Could not load Markdown file content. Please retry.");
       }
+      const markdownContent = await res.text();
 
       const { noteSlug } = await openOrCreateNoteForMarkdownFile({
         spaceId: entry.space_id,
@@ -103,13 +106,16 @@ export function FileEntryCard({ entry, spaceSlug }: FileEntryCardProps) {
 
       toast.dismiss(toastId);
       const targetSlug = spaceSlug || entry.meta?.space_slug;
-      const targetUrl = targetSlug ? `/${targetSlug}/${noteSlug}` : `/n/${noteSlug}`;
+      const targetUrl = targetSlug
+        ? `/${encodeURIComponent(targetSlug)}/${encodeURIComponent(noteSlug)}`
+        : `/n/${encodeURIComponent(noteSlug)}`;
       router.push(targetUrl);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to open rich note",
         { id: toastId },
       );
+    } finally {
       setOpeningNoteIndex(null);
     }
   };
@@ -132,18 +138,34 @@ export function FileEntryCard({ entry, spaceSlug }: FileEntryCardProps) {
     if (!items.length || isZipping) return;
     setIsZipping(true);
     const controller = new AbortController();
-    const toastId = toast.loading(`Preparing ZIP archive for ${items.length} files...`, { action: { label: "Cancel", onClick: () => controller.abort() } });
+    const cancelAction = { label: "Cancel", onClick: () => controller.abort() };
+    const toastId = toast.loading(`Preparing ZIP archive for ${items.length} files...`, { action: cancelAction });
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
 
-      await addArchiveFiles(zip, items.map((file, index) => ({ url: file.url, name: file.name || `file-${index + 1}` })), { signal: controller.signal, onProgress: (done, total) => toast.loading(`Preparing ZIP: ${done}/${total} files`, { id: toastId }) });
+      await addArchiveFiles(
+        zip,
+        items.map((file, index) => ({ url: file.url, name: file.name || `file-${index + 1}` })),
+        {
+          signal: controller.signal,
+          onProgress: (done, total) =>
+            toast.loading(`Preparing ZIP: ${done}/${total} files`, {
+              id: toastId,
+              action: cancelAction,
+            }),
+        },
+      );
 
       const zipBlob = await generateArchive(zip, { signal: controller.signal });
       triggerBlobDownload(zipBlob, `woff-files-${Date.now()}.zip`);
       toast.success("ZIP download started", { id: toastId });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to generate ZIP archive", { id: toastId });
+      if (controller.signal.aborted) {
+        toast.info("ZIP download cancelled", { id: toastId });
+      } else {
+        toast.error(err instanceof Error ? err.message : "Failed to generate ZIP archive", { id: toastId });
+      }
     } finally {
       setIsZipping(false);
     }
@@ -185,39 +207,51 @@ export function FileEntryCard({ entry, spaceSlug }: FileEntryCardProps) {
 
         <div className="space-y-1.5">
           {items.map((file, idx) => {
-            const isMd = isMarkdownFile(file.name, file.type);
+            const canOpenInNote = canWrite && isMarkdownFile(file.name, file.type);
 
             return (
               <div
                 key={idx}
                 className="flex items-center justify-between gap-3 p-2.5 rounded-xl border bg-card hover:bg-muted/50 transition-colors"
               >
-                <div
-                  className={`flex items-center gap-3 min-w-0 flex-1 ${
-                    isMd ? "cursor-pointer group/mdinfo" : ""
-                  }`}
-                  onClick={() => {
-                    if (isMd) {
-                      void openInRichNote(file, idx);
-                    }
-                  }}
-                  title={isMd ? `Open ${file.name} in Rich Note` : undefined}
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                    {getFileIcon(file.type, file.name)}
+                {canOpenInNote ? (
+                  <button
+                    type="button"
+                    className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer group/mdinfo bg-transparent border-0 p-0"
+                    onClick={() => void openInRichNote(file, idx)}
+                    disabled={openingNoteIndex === idx}
+                    title={`Open ${file.name} in Rich Note`}
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      {getFileIcon(file.type, file.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate text-foreground group-hover/mdinfo:text-sky-600 dark:group-hover/mdinfo:text-sky-400 transition-colors">
+                        {file.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatBytes(file.size)}
+                      </p>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      {getFileIcon(file.type, file.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate text-foreground">
+                        {file.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatBytes(file.size)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate text-foreground group-hover/mdinfo:text-sky-600 dark:group-hover/mdinfo:text-sky-400 transition-colors">
-                      {file.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatBytes(file.size)}
-                    </p>
-                  </div>
-                </div>
+                )}
 
                 <div className="flex items-center gap-1 shrink-0">
-                  {isMd && (
+                  {canOpenInNote && (
                     <Button
                       size="icon"
                       variant="ghost"

@@ -6,7 +6,7 @@ export function Footer() {
   return (
     <footer className="relative border-t border-zinc-200/80 dark:border-white/[0.06] bg-white/70 dark:bg-[#0a0a0a]/90 backdrop-blur-xl py-16 mt-20">
       {/* Background ambient glow */}
-      <div className="pointer-events-none absolute right-1/4 bottom-0 h-[220px] w-[350px] rounded-full bg-[#ff5a00]/3 dark:bg-[#ff5a00]/8 blur-[90px]" />
+      <div aria-hidden="true" className="pointer-events-none absolute right-1/4 bottom-0 h-[220px] w-[350px] rounded-full bg-[#ff5a00]/5 dark:bg-[#ff5a00]/10 blur-[90px]" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-6 mb-12">
@@ -66,38 +66,38 @@ export function Footer() {
             </h3>
             <ul className="space-y-2.5 text-sm">
               <li>
-                <Link href="/pricing" className="flex items-center gap-2 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"><Info className="h-4 w-4 text-orange-500/80" />Pricing and limits</Link>
+                <Link href="/pricing" className="flex items-center gap-2 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"><Info className="h-4 w-4 text-orange-500/80" aria-hidden="true" />Pricing and limits</Link>
               </li>
               <li>
-                <Link href="/help" className="flex items-center gap-2 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"><Info className="h-4 w-4 text-orange-500/80" />Sharing help</Link>
+                <Link href="/help" className="flex items-center gap-2 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"><Info className="h-4 w-4 text-orange-500/80" aria-hidden="true" />Sharing help</Link>
               </li>
               <li>
                 <Link href="/about" className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors duration-200">
-                  <Info className="w-4 h-4 text-orange-500/80" />
+                  <Info className="w-4 h-4 text-orange-500/80" aria-hidden="true" />
                   About Us
                 </Link>
               </li>
               <li>
                 <Link href="/contact" className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors duration-200">
-                  <Mail className="w-4 h-4 text-orange-500/80" />
+                  <Mail className="w-4 h-4 text-orange-500/80" aria-hidden="true" />
                   Contact Us
                 </Link>
               </li>
               <li>
                 <Link href="/privacy" className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors duration-200">
-                  <Shield className="w-4 h-4 text-orange-500/80" />
+                  <Shield className="w-4 h-4 text-orange-500/80" aria-hidden="true" />
                   Privacy Policy
                 </Link>
               </li>
               <li>
                 <Link href="/terms" className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors duration-200">
-                  <FileText className="w-4 h-4 text-orange-500/80" />
+                  <FileText className="w-4 h-4 text-orange-500/80" aria-hidden="true" />
                   Terms of Service
                 </Link>
               </li>
               <li>
                 <Link href="/blog" className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors duration-200">
-                  <FileSignature className="w-4 h-4 text-orange-500/80" />
+                  <FileSignature className="w-4 h-4 text-orange-500/80" aria-hidden="true" />
                   Woff Blog
                 </Link>
               </li>
@@ -109,7 +109,7 @@ export function Footer() {
         <div className="border-t border-zinc-200/50 dark:border-white/[0.04] pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 font-medium">
             Made with
-            <Heart className="w-4 h-4 text-red-500 fill-current animate-pulse" />
+            <Heart className="w-4 h-4 text-red-500 fill-current animate-pulse" aria-hidden="true" />
             by the Woff Space team
           </div>
           <div className="text-xs text-zinc-400 dark:text-zinc-500">

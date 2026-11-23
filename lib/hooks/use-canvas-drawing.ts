@@ -34,13 +34,13 @@ export interface CanvasDimensions {
 
 export interface UseCanvasDrawingOptions {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
-  containerRef?: React.RefObject<HTMLDivElement | null>;
   backgroundImage?: HTMLImageElement | null;
   initialColor?: string;
   initialSize?: number;
   initialMode?: ToolMode;
   theme?: "dark" | "light";
   transparentBackground?: boolean;
+  enabled?: boolean;
 }
 
 export function paintStrokes(
@@ -82,7 +82,7 @@ export function paintStrokes(
       context.arc(
         point.x * width,
         point.y * height,
-        (stroke.size * sizeScale) / 2,
+        context.lineWidth / 2,
         0,
         Math.PI * 2,
       );
@@ -103,13 +103,13 @@ export function paintStrokes(
 
 export function useCanvasDrawing({
   canvasRef,
-  containerRef,
   backgroundImage = null,
   initialColor,
   initialSize = 4,
   initialMode = "pen",
   theme = "dark",
   transparentBackground = false,
+  enabled = true,
 }: UseCanvasDrawingOptions) {
   // Theme default color: crisp white in dark mode, dark slate in light mode
   const defaultStrokeColor = initialColor || (theme === "dark" ? "#ffffff" : "#18181b");
@@ -118,8 +118,14 @@ export function useCanvasDrawing({
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [images, setImages] = useState<CanvasImage[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [color, setColor] = useState(defaultStrokeColor);
+  const [color, setColorState] = useState(defaultStrokeColor);
   const [size, setSize] = useState(initialSize);
+  const hasCustomColorRef = useRef(Boolean(initialColor));
+
+  const setColor = useCallback((next: string) => {
+    hasCustomColorRef.current = true;
+    setColorState(next);
+  }, []);
 
   // Undo / Redo history
   const [history, setHistory] = useState<{ strokes: Stroke[]; images: CanvasImage[] }[]>([]);
@@ -132,6 +138,7 @@ export function useCanvasDrawing({
   const modeRef = useRef<ToolMode>(mode);
   const dimensionsRef = useRef<CanvasDimensions>({ width: 1, height: 1, dpr: 1 });
   const frameRef = useRef<number | null>(null);
+  const managedBlobUrlsRef = useRef<Set<string>>(new Set());
 
   strokesRef.current = strokes;
   imagesRef.current = images;
@@ -144,11 +151,27 @@ export function useCanvasDrawing({
   const marqueeRef = useRef<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
   const dragTypeRef = useRef<"none" | "draw" | "marquee" | "move" | "resize">("none");
   const dragStartPointRef = useRef<Point>({ x: 0, y: 0 });
+  const dragHistoryPushedRef = useRef(false);
+  const eraserPushedRef = useRef(false);
   const dragInitialBoundsRef = useRef<
     Map<string, { centerX: number; centerY: number; widthRatio: number; points?: Point[] }>
   >(new Map());
   const resizeHandleRef = useRef<ResizeHandle | null>(null);
   const resizeImageIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const managedUrls = managedBlobUrlsRef.current;
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+      for (const url of managedUrls) {
+        URL.revokeObjectURL(url);
+      }
+      managedUrls.clear();
+    };
+  }, []);
 
   // Record undo state before modification
   const pushHistory = useCallback(() => {
@@ -334,9 +357,12 @@ export function useCanvasDrawing({
       atPos?: Point,
       customWidthRatio?: number,
       autoSelect = true,
+      skipHistory = false,
     ) => {
       const processElement = (img: HTMLImageElement, src: string) => {
-        pushHistory();
+        if (!skipHistory) {
+          pushHistory();
+        }
         const { width, height } = dimensionsRef.current;
         const naturalW = img.naturalWidth || 400;
         const naturalH = img.naturalHeight || 300;
@@ -382,9 +408,14 @@ export function useCanvasDrawing({
         processElement(fileOrImg, fileOrImg.src);
       } else {
         const url = URL.createObjectURL(fileOrImg);
+        managedBlobUrlsRef.current.add(url);
         const img = new Image();
         img.crossOrigin = "anonymous";
         img.onload = () => processElement(img, url);
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          managedBlobUrlsRef.current.delete(url);
+        };
         img.src = url;
       }
     },
@@ -480,15 +511,17 @@ export function useCanvasDrawing({
       dragStartPointRef.current = pt;
 
       const currentMode = modeRef.current;
+      dragHistoryPushedRef.current = false;
+      eraserPushedRef.current = false;
 
       if (currentMode === "select") {
         // Check 1: Hit test resize handle on a selected image
         const handleHit = hitTestResizeHandle(pt);
         if (handleHit) {
-          pushHistory();
           dragTypeRef.current = "resize";
           resizeImageIdRef.current = handleHit.imageId;
           resizeHandleRef.current = handleHit.handle;
+          dragInitialBoundsRef.current.clear();
           const targetImg = imagesRef.current.find((img) => img.id === handleHit.imageId);
           if (targetImg) {
             dragInitialBoundsRef.current.set(targetImg.id, {
@@ -500,21 +533,10 @@ export function useCanvasDrawing({
           return;
         }
 
-        // Check 2: Hit test image
-        const imageHitId = hitTestImage(pt);
-        if (imageHitId) {
-          pushHistory();
-          dragTypeRef.current = "move";
-          const newSelected = selectedIdsRef.current.has(imageHitId)
-            ? new Set(selectedIdsRef.current)
-            : new Set([imageHitId]);
-          setSelectedIds(newSelected);
-          selectedIdsRef.current = newSelected;
-
-          // Record initial positions for smooth dragging
+        const recordSelectionBounds = (selection: Set<string>) => {
           dragInitialBoundsRef.current.clear();
           for (const img of imagesRef.current) {
-            if (newSelected.has(img.id)) {
+            if (selection.has(img.id)) {
               dragInitialBoundsRef.current.set(img.id, {
                 centerX: img.centerX,
                 centerY: img.centerY,
@@ -522,24 +544,8 @@ export function useCanvasDrawing({
               });
             }
           }
-          scheduleRedraw();
-          return;
-        }
-
-        // Check 3: Hit test stroke
-        const strokeHitId = hitTestStroke(pt);
-        if (strokeHitId) {
-          pushHistory();
-          dragTypeRef.current = "move";
-          const newSelected = selectedIdsRef.current.has(strokeHitId)
-            ? new Set(selectedIdsRef.current)
-            : new Set([strokeHitId]);
-          setSelectedIds(newSelected);
-          selectedIdsRef.current = newSelected;
-
-          dragInitialBoundsRef.current.clear();
           for (const s of strokesRef.current) {
-            if (newSelected.has(s.id)) {
+            if (selection.has(s.id)) {
               dragInitialBoundsRef.current.set(s.id, {
                 centerX: 0,
                 centerY: 0,
@@ -548,6 +554,32 @@ export function useCanvasDrawing({
               });
             }
           }
+        };
+
+        // Check 2: Hit test image
+        const imageHitId = hitTestImage(pt);
+        if (imageHitId) {
+          dragTypeRef.current = "move";
+          const newSelected = selectedIdsRef.current.has(imageHitId)
+            ? new Set(selectedIdsRef.current)
+            : new Set([imageHitId]);
+          setSelectedIds(newSelected);
+          selectedIdsRef.current = newSelected;
+          recordSelectionBounds(newSelected);
+          scheduleRedraw();
+          return;
+        }
+
+        // Check 3: Hit test stroke
+        const strokeHitId = hitTestStroke(pt);
+        if (strokeHitId) {
+          dragTypeRef.current = "move";
+          const newSelected = selectedIdsRef.current.has(strokeHitId)
+            ? new Set(selectedIdsRef.current)
+            : new Set([strokeHitId]);
+          setSelectedIds(newSelected);
+          selectedIdsRef.current = newSelected;
+          recordSelectionBounds(newSelected);
           scheduleRedraw();
           return;
         }
@@ -571,6 +603,7 @@ export function useCanvasDrawing({
         const strokeHit = hitTestStroke(pt, 12);
         if (strokeHit) {
           pushHistory();
+          eraserPushedRef.current = true;
           setStrokes((prev) => prev.filter((s) => s.id !== strokeHit));
         }
         dragTypeRef.current = "draw";
@@ -615,6 +648,10 @@ export function useCanvasDrawing({
         const initial = dragInitialBoundsRef.current.get(imgId);
         const handle = resizeHandleRef.current;
         if (!initial) return;
+        if (!dragHistoryPushedRef.current) {
+          pushHistory();
+          dragHistoryPushedRef.current = true;
+        }
 
         setImages((prev) =>
           prev.map((img) => {
@@ -676,6 +713,11 @@ export function useCanvasDrawing({
       if (dragType === "move") {
         const dx = pt.x - dragStartPointRef.current.x;
         const dy = pt.y - dragStartPointRef.current.y;
+        if (Math.abs(dx) < 1e-5 && Math.abs(dy) < 1e-5) return;
+        if (!dragHistoryPushedRef.current) {
+          pushHistory();
+          dragHistoryPushedRef.current = true;
+        }
 
         // Move selected images
         setImages((prev) =>
@@ -757,6 +799,10 @@ export function useCanvasDrawing({
       if (modeRef.current === "eraser") {
         const hit = hitTestStroke(pt, 12);
         if (hit) {
+          if (!eraserPushedRef.current) {
+            pushHistory();
+            eraserPushedRef.current = true;
+          }
           setStrokes((prev) => prev.filter((s) => s.id !== hit));
           scheduleRedraw();
         }
@@ -776,7 +822,7 @@ export function useCanvasDrawing({
         scheduleRedraw();
       }
     },
-    [getPoint, hitTestStroke, scheduleRedraw],
+    [getPoint, hitTestStroke, pushHistory, scheduleRedraw],
   );
 
   const handlePointerUp = useCallback(
@@ -800,6 +846,8 @@ export function useCanvasDrawing({
 
       marqueeRef.current = null;
       dragTypeRef.current = "none";
+      dragHistoryPushedRef.current = false;
+      eraserPushedRef.current = false;
       resizeHandleRef.current = null;
       resizeImageIdRef.current = null;
       scheduleRedraw();
@@ -892,9 +940,11 @@ export function useCanvasDrawing({
       if (!ctx) return null;
 
       // 1. Background fill
-      const isDark = theme === "dark";
-      ctx.fillStyle = isDark ? "#141416" : "#ffffff";
-      ctx.fillRect(0, 0, outW, outH);
+      if (!transparentBackground) {
+        const isDark = theme === "dark";
+        ctx.fillStyle = isDark ? "#141416" : "#ffffff";
+        ctx.fillRect(0, 0, outW, outH);
+      }
 
       // 2. Fixed background (ImageMarkupEditor)
       if (backgroundImage) {
@@ -917,11 +967,13 @@ export function useCanvasDrawing({
         offscreen.toBlob(resolve, type, quality);
       });
     },
-    [backgroundImage, theme],
+    [backgroundImage, theme, transparentBackground],
   );
 
   // Keyboard shortcut handler
   useEffect(() => {
+    if (!enabled) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is typing in an input or textarea
       const target = e.target as HTMLElement | null;
@@ -939,10 +991,6 @@ export function useCanvasDrawing({
           e.preventDefault();
           deleteSelected();
         }
-      } else if (e.key === "Escape") {
-        setSelectedIds(new Set());
-        selectedIdsRef.current = new Set();
-        scheduleRedraw();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) redo();
@@ -963,15 +1011,15 @@ export function useCanvasDrawing({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deleteSelected, redo, selectAll, scheduleRedraw, undo]);
+  }, [deleteSelected, enabled, redo, selectAll, undo]);
 
   // Sync theme changes to default stroke color if user hasn't explicitly changed it
   useEffect(() => {
-    if (!initialColor) {
-      setColor(theme === "dark" ? "#ffffff" : "#18181b");
+    if (!hasCustomColorRef.current) {
+      setColorState(theme === "dark" ? "#ffffff" : "#18181b");
     }
     scheduleRedraw();
-  }, [theme, initialColor, scheduleRedraw]);
+  }, [theme, scheduleRedraw]);
 
   // Redraw when state updates
   useEffect(() => {

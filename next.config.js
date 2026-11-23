@@ -44,8 +44,6 @@ const nextConfig = {
       "@radix-ui/react-dropdown-menu",
       "@radix-ui/react-popover",
       "@radix-ui/react-tooltip",
-      "@radix-ui/react-scroll-area",
-      "@radix-ui/react-progress",
     ],
   },
   images: {
@@ -104,6 +102,7 @@ const nextConfig = {
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' data: https://fonts.gstatic.com",
           "img-src 'self' data: blob: https:",
+          `media-src 'self' blob: https://*.supabase.co${isDevelopment ? " http://127.0.0.1:*" : ""}`,
           `connect-src 'self' https://*.supabase.co wss://*.supabase.co${isDevelopment ? " http://127.0.0.1:* ws://127.0.0.1:*" : ""}`,
           "worker-src 'self' blob:",
           "upgrade-insecure-requests",
@@ -115,7 +114,7 @@ const nextConfig = {
         source: "/:path*",
         headers: securityHeaders,
       },
-      ...["/s/:path*", "/n/:path*", "/:slug(\\d{4})/:path*", "/account/:path*", "/auth/:path*", "/checkout/:path*", "/api/billing/:path*", "/dashboard", "/sign-in", "/sign-up", "/recover", "/new"].map((source) => ({ source, headers: [
+      ...["/s/:path*", "/n/:path*", "/:slug(\\d{4})/:path*", "/api/files/:path*", "/api/notes/:path*", "/account/:path*", "/auth/:path*", "/checkout/:path*", "/api/billing/:path*", "/dashboard", "/sign-in", "/sign-up", "/recover", "/new"].map((source) => ({ source, headers: [
         { key: "Referrer-Policy", value: "no-referrer" },
         { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
         { key: "Cache-Control", value: "private, no-store" },

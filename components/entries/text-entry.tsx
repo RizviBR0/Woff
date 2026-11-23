@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Edit, Loader2, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,12 +17,43 @@ interface TextEntryProps {
   onReplace?: (placeholderId: string, realEntry: Entry) => void;
 }
 
+function splitUrlTrailingPunctuation(raw: string): { url: string; trailing: string } {
+  let url = raw;
+  let trailing = "";
+  while (url.length > 0) {
+    const last = url[url.length - 1];
+    if (/[.,;:!?'"\]]/.test(last)) {
+      trailing = last + trailing;
+      url = url.slice(0, -1);
+      continue;
+    }
+    if (last === ")") {
+      const opens = (url.match(/\(/g) || []).length;
+      const closes = (url.match(/\)/g) || []).length;
+      if (closes > opens) {
+        trailing = last + trailing;
+        url = url.slice(0, -1);
+        continue;
+      }
+    }
+    break;
+  }
+  return { url, trailing };
+}
+
 export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(entry.text || "");
   const [isSaving, setIsSaving] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   // Memoized parsed message segments (text + code blocks)
   const segments = useMemo(() => {
@@ -55,7 +86,8 @@ export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps
     try {
       await navigator.clipboard.writeText(entry.text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Failed to copy text");
     }
@@ -114,43 +146,47 @@ export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps
     );
   }
 
-  // URL regex for simple clickable link conversion + inline code
+  // Inline code takes precedence over URL linkification so backticks stay intact
   const renderFormattedText = (content: string) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
     const inlineCodeRegex = /(`[^`]+`)/g;
+    const urlSplitRegex = /(https?:\/\/[^\s]+)/g;
     const lines = content.split("\n");
 
     return lines.map((line, lineIdx) => {
-      const parts = line.split(urlRegex);
+      const codeParts = line.split(inlineCodeRegex);
       return (
         <span key={lineIdx} className="block min-h-[1.25rem]">
-          {parts.map((part, partIdx) => {
-            if (part.match(urlRegex)) {
+          {codeParts.map((part, partIdx) => {
+            if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
               return (
-                <a
+                <code
                   key={partIdx}
-                  href={part}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow"
-                  className="text-primary underline underline-offset-2 hover:opacity-80"
-                  onClick={(e) => e.stopPropagation()}
+                  className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground font-medium"
                 >
-                  {part}
-                </a>
+                  {part.slice(1, -1)}
+                </code>
               );
             }
-            // Check for inline code like `foo`
-            const subParts = part.split(inlineCodeRegex);
-            return subParts.map((sub, subIdx) => {
-              if (sub.startsWith("`") && sub.endsWith("`") && sub.length > 2) {
-                return (
-                  <code
-                    key={subIdx}
-                    className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground font-medium"
-                  >
-                    {sub.slice(1, -1)}
-                  </code>
-                );
+            const urlParts = part.split(urlSplitRegex);
+            return urlParts.map((sub, subIdx) => {
+              if (/^https?:\/\//.test(sub)) {
+                const { url, trailing } = splitUrlTrailingPunctuation(sub);
+                if (url) {
+                  return (
+                    <span key={`${partIdx}-${subIdx}`}>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        className="text-primary underline underline-offset-2 hover:opacity-80"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {url}
+                      </a>
+                      {trailing}
+                    </span>
+                  );
+                }
               }
               return sub;
             });
@@ -161,9 +197,16 @@ export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps
     });
   };
 
+  const canEdit =
+    isMine &&
+    !entry.isLoading &&
+    !entry.isError &&
+    !entry.id.startsWith("temp-") &&
+    !entry.id.startsWith("placeholder-");
+
   return (
     <div
-      className={`group/text relative pr-7 text-sm leading-relaxed transition-opacity ${
+      className={`group/text relative ${canEdit ? "pr-14" : "pr-7"} text-sm leading-relaxed transition-opacity ${
         entry.isLoading ? "opacity-60" : ""
       } ${entry.isError ? "text-destructive" : ""}`}
     >
@@ -225,18 +268,37 @@ export function TextEntry({ entry, isMine, onUpdate, onReplace }: TextEntryProps
         </div>
       )}
 
-      {/* Quick copy on hover */}
+      {/* Quick copy and edit actions */}
       {!entry.isLoading && (
-        <div className="absolute right-0 top-0 opacity-0 group-hover/text:opacity-100 transition-opacity">
+        <div className="absolute right-0 top-0 flex items-center gap-0.5 opacity-80 sm:opacity-0 sm:group-hover/text:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+          {canEdit && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 rounded-md hover:bg-muted"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditText(entry.text || "");
+                setIsEditing(true);
+              }}
+              aria-label="Edit message"
+              title="Edit message"
+            >
+              <Edit className="h-3 w-3 text-muted-foreground" />
+            </Button>
+          )}
           <Button
+            type="button"
             size="icon"
             variant="ghost"
             className="h-6 w-6 rounded-md hover:bg-muted"
             onClick={(e) => {
               e.stopPropagation();
-              handleCopy();
+              void handleCopy();
             }}
             aria-label="Copy text"
+            title="Copy text"
           >
             {copied ? (
               <Check className="h-3 w-3 text-green-500" />

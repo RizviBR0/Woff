@@ -1,21 +1,34 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Loader2, Mail } from "lucide-react";
 import { sendSignInEmail, type SignInState } from "@/app/sign-in/actions";
 import { Button } from "@/components/ui/button";
 import styles from "./auth.module.css";
 
-type Props = { next: string; enabled: boolean; mode: "existing" | "link" };
+type Props = {
+  next: string;
+  enabled: boolean;
+  mode: "existing" | "link";
+  initialEmail?: string;
+};
 
 export function SignInForm(props: Props) {
   const [attempt, setAttempt] = useState(0);
-  return <EmailForm key={attempt} {...props} onReset={() => setAttempt(value => value + 1)} />;
+  return (
+    <EmailForm
+      key={attempt}
+      {...props}
+      initialEmail={attempt === 0 ? props.initialEmail : undefined}
+      onReset={() => setAttempt(value => value + 1)}
+    />
+  );
 }
 
-function EmailForm({ next, enabled, mode, onReset }: Props & { onReset: () => void }) {
+function EmailForm({ next, enabled, mode, initialEmail, onReset }: Props & { onReset: () => void }) {
   const [state, action, pending] = useActionState<SignInState, FormData>(sendSignInEmail, {});
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail || "");
   const [cooldown, setCooldown] = useState(0);
   const sentHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -42,6 +55,30 @@ function EmailForm({ next, enabled, mode, onReset }: Props & { onReset: () => vo
       <input type="hidden" name="email" value={state.email || email} />
       <div className={styles.sentActions}><button type="submit" disabled={pending || cooldown > 0}>{pending ? "Sending…" : cooldown > 0 ? `Resend in ${cooldown}s` : "Resend link"}</button><button type="button" disabled={pending} onClick={onReset}>Use another email</button></div>
       <p className={styles.spamHint}>Can&apos;t find it? Check your spam folder too.</p>
+      <div className={styles.sentFallback}>
+        {mode === "existing" ? (
+          <p>
+            Don&apos;t have an account yet?{" "}
+            <Link
+              href={`/sign-up?email=${encodeURIComponent(state.email || email)}&next=${encodeURIComponent(next)}`}
+              className={styles.sentFallbackLink}
+            >
+              Create an account
+            </Link>{" "}
+            to register this email and keep your rooms.
+          </p>
+        ) : (
+          <p>
+            Already have an account?{" "}
+            <Link
+              href={`/sign-in?email=${encodeURIComponent(state.email || email)}&next=${encodeURIComponent(next)}`}
+              className={styles.sentFallbackLink}
+            >
+              Sign in instead
+            </Link>.
+          </p>
+        )}
+      </div>
     </div> : <>
       <label htmlFor="account-email" className={styles.emailLabel}>Continue with email</label>
       <div className={styles.emailField}><Mail size={20} aria-hidden="true" /><input id="account-email" name="email" type="email" required autoComplete="email" autoCapitalize="none" spellCheck={false} maxLength={254} placeholder="name@youremail.com" value={email} onChange={event => setEmail(event.target.value)} disabled={!enabled || pending} /></div>

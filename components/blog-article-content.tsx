@@ -42,7 +42,14 @@ function parseBlocks(content: string[]): ArticleBlock[] {
     if (value.startsWith("|")) {
       const rows = value
         .split("\n")
-        .map((line) => line.split("|").slice(1, -1).map((cell) => cell.trim()))
+        .map((line) =>
+          line
+            .trim()
+            .replace(/^\|/, "")
+            .replace(/\|$/, "")
+            .split("|")
+            .map((cell) => cell.trim()),
+        )
         .filter(
           (row) =>
             row.length > 0 &&
@@ -99,18 +106,31 @@ function InlineText({ text }: { text: string }) {
     }
     const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (link) {
-      const isExternal = /^https?:\/\//.test(link[2]);
-      return (
-        <a
-          key={`${part}-${index}`}
-          href={link[2]}
-          target={isExternal ? "_blank" : undefined}
-          rel={isExternal ? "noopener noreferrer" : undefined}
-          className="font-semibold text-orange-600 underline decoration-orange-500/30 underline-offset-4 hover:decoration-orange-500 dark:text-orange-400"
-        >
-          {link[1]}
-        </a>
-      );
+      const href = link[2].trim();
+      const linkClass =
+        "font-semibold text-orange-600 underline decoration-orange-500/30 underline-offset-4 hover:decoration-orange-500 dark:text-orange-400";
+      if (href.startsWith("/") && !href.startsWith("//")) {
+        return (
+          <Link key={`${part}-${index}`} href={href} className={linkClass}>
+            {link[1]}
+          </Link>
+        );
+      }
+      if (/^(?:https?:\/\/|mailto:)/i.test(href)) {
+        const isExternal = /^https?:\/\//i.test(href);
+        return (
+          <a
+            key={`${part}-${index}`}
+            href={href}
+            target={isExternal ? "_blank" : undefined}
+            rel={isExternal ? "noopener noreferrer" : undefined}
+            className={linkClass}
+          >
+            {link[1]}
+          </a>
+        );
+      }
+      return link[1];
     }
     return part;
   });
@@ -253,8 +273,14 @@ export function BlogArticleContent({ post }: { post: BlogPost }) {
           <div className="mt-6 divide-y border-y">
             {post.faq.map((item) => (
               <details key={item.question} className="group py-5">
-                <summary className="cursor-pointer list-none pr-8 font-bold marker:hidden">
-                  {item.question}
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold marker:hidden [&::-webkit-details-marker]:hidden">
+                  <span>{item.question}</span>
+                  <span
+                    aria-hidden="true"
+                    className="shrink-0 font-mono text-lg leading-none text-orange-500 transition-transform duration-200 group-open:rotate-45"
+                  >
+                    +
+                  </span>
                 </summary>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
                   {item.answer}

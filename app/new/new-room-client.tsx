@@ -18,8 +18,11 @@ export function NewRoomClient({ initialError = null, template }: NewRoomClientPr
   const [error, setError] = useState<string | null>(initialError);
   const [isCreating, setIsCreating] = useState(!initialError);
   const hasTriggeredRef = useRef(false);
+  const inFlightRef = useRef(false);
 
   const startCreation = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setIsCreating(true);
     setError(null);
     try {
@@ -34,6 +37,7 @@ export function NewRoomClient({ initialError = null, template }: NewRoomClientPr
           : "Failed to create space. Please try again.",
       );
       setIsCreating(false);
+      inFlightRef.current = false;
     }
   }, [router, template]);
 

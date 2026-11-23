@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { NoteEditor } from "@/components/note-editor";
 import { getNote } from "@/lib/actions";
 
+export const dynamic = "force-dynamic";
+
 interface NotePageProps {
   params: Promise<{
     note_slug: string;
@@ -16,6 +18,7 @@ export async function generateMetadata({
   return {
     title: "Editing Note • Woff",
     description: "Rich text editor for a shared Woff note",
+    referrer: "no-referrer",
     robots: {
       index: false,
       follow: false,
@@ -26,6 +29,9 @@ export async function generateMetadata({
 
 export default async function NotePage({ params }: NotePageProps) {
   const { note_slug } = await params;
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(note_slug)) {
+    notFound();
+  }
   const note = await getNote(note_slug);
   if (!note) notFound();
 

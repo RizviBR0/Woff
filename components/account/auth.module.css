@@ -377,6 +377,27 @@
   color: hsl(var(--muted-foreground));
 }
 
+.sentFallback {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed hsl(var(--border));
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.6;
+}
+
+.sentFallbackLink {
+  color: #ff6a00;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: opacity 0.15s ease;
+}
+
+.sentFallbackLink:hover {
+  opacity: 0.85;
+}
+
 .accountStatus {
   display: inline-flex;
   align-items: center;

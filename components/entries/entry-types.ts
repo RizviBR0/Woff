@@ -41,8 +41,53 @@ export function isVideoFile(type?: string, name?: string): boolean {
   );
 }
 
+const SAFE_NOTE_SLUG_RE = /^[a-zA-Z0-9_-]{1,128}$/;
+const LEGACY_NOTE_TEXT_RE = /^NOTE:([a-zA-Z0-9_-]{4,64})(?::|$)/;
+const SAFE_LEGACY_MEDIA_URL_RE =
+  /^(?:data:image\/(png|jpeg|jpg|gif|webp|avif);base64,[A-Za-z0-9+/=]+|\/api\/files\/[^\s]+)$/i;
+
+export function isValidNoteSlug(slug: unknown): slug is string {
+  return typeof slug === "string" && SAFE_NOTE_SLUG_RE.test(slug);
+}
+
+export function isSafeLegacyMediaUrl(url: unknown): url is string {
+  return typeof url === "string" && SAFE_LEGACY_MEDIA_URL_RE.test(url.trim());
+}
+
+export function parseLegacyPhotosText(raw: string): string[] {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(isSafeLegacyMediaUrl);
+      }
+    } catch {
+      // Fall back to comma-delimited parsing
+    }
+  }
+  return trimmed
+    .split(/,(?=(?:data:image\/|\/api\/files\/))/i)
+    .map((part) => part.trim())
+    .filter(isSafeLegacyMediaUrl);
+}
+
+export function extractNoteSlugFromEntry(entry: Entry): string | null {
+  if (isValidNoteSlug(entry.meta?.note_slug)) {
+    return entry.meta.note_slug;
+  }
+  if (typeof entry.text === "string") {
+    const match = entry.text.match(LEGACY_NOTE_TEXT_RE);
+    if (match && isValidNoteSlug(match[1])) return match[1];
+  }
+  return null;
+}
+
 export function getEntryCategory(entry: Entry): EntryCategory {
-  if (entry.meta?.type === "note" || entry.text?.startsWith("NOTE:")) {
+  if (
+    entry.meta?.type === "note" ||
+    (typeof entry.text === "string" && LEGACY_NOTE_TEXT_RE.test(entry.text))
+  ) {
     return "note";
   }
 
@@ -55,16 +100,19 @@ export function getEntryCategory(entry: Entry): EntryCategory {
 
   const isMediaText =
     entry.kind === "text" &&
-    entry.text !== null &&
-    (entry.text.startsWith("PHOTO:") ||
-      entry.text.startsWith("PHOTOS:") ||
-      entry.text.startsWith("DRAWING:"));
+    typeof entry.text === "string" &&
+    ((entry.text.startsWith("PHOTO:") &&
+      isSafeLegacyMediaUrl(entry.text.slice("PHOTO:".length))) ||
+      (entry.text.startsWith("DRAWING:") &&
+        isSafeLegacyMediaUrl(entry.text.slice("DRAWING:".length))) ||
+      (entry.text.startsWith("PHOTOS:") &&
+        parseLegacyPhotosText(entry.text.slice("PHOTOS:".length)).length > 0));
 
   if (isMediaPresentation || isMediaText) {
     return "media";
   }
 
-  if (entry.kind === "file" || entry.meta?.type === "files") {
+  if (entry.kind === "file" || entry.kind === "pdf" || entry.meta?.type === "files") {
     return "file";
   }
 

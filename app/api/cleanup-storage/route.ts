@@ -1,6 +1,16 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cleanupRoomQueue } from "@/lib/storage-cleanup";
+
+export const dynamic = "force-dynamic";
+
+function matchesBearerSecret(authHeader: string | null, secret: string): boolean {
+  if (!authHeader) return false;
+  const expected = createHash("sha256").update(`Bearer ${secret}`, "utf8").digest();
+  const actual = createHash("sha256").update(authHeader, "utf8").digest();
+  return timingSafeEqual(expected, actual);
+}
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -13,7 +23,7 @@ export async function GET(request: NextRequest) {
       { status: 503 },
     );
   }
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!matchesBearerSecret(authHeader, cronSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -28,7 +38,9 @@ export async function GET(request: NextRequest) {
   }
 
   // Create admin client with service role key to bypass RLS and delete files
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
   let failedRoomCount = 0;
   let failedObjectCount = 0;
   let failedReservationCount = 0;

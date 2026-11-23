@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function SignUpPage({ searchParams }: {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams: Promise<{ next?: string | string[]; error?: string | string[]; email?: string | string[] }>;
 }) {
   return <AuthPage mode="link" params={await searchParams} />;
 }

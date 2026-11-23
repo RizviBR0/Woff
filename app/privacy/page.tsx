@@ -21,15 +21,15 @@ export default function PrivacyPage() {
       
       {/* Glows */}
       <div className="pointer-events-none absolute right-0 top-1/4 h-[350px] w-[350px] rounded-full bg-[#ff5a00]/5 dark:bg-[#ff5a00]/15 blur-[120px]" />
-      <div className="pointer-events-none absolute left-1/4 bottom-1/4 h-[400px] w-[400px] rounded-full bg-[#ff5a00]/3 dark:bg-[#ff5a00]/10 blur-[130px]" />
+      <div className="pointer-events-none absolute left-1/4 bottom-1/4 h-[400px] w-[400px] rounded-full bg-[#ff5a00]/5 dark:bg-[#ff5a00]/10 blur-[130px]" />
 
       <Navbar />
 
       <main id="main-content" className="relative max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8 z-10">
         {/* Header */}
         <div className="text-center space-y-4 mb-16">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/8 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#ff5a00]">
-            <EyeOff className="w-3.5 h-3.5" />
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#ff5a00]/30 bg-[#ff5a00]/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#ff5a00]">
+            <EyeOff className="w-3.5 h-3.5" aria-hidden="true" />
             Your Privacy First
           </div>
           <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
@@ -48,7 +48,7 @@ export default function PrivacyPage() {
           
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-foreground">1. Sharing and Optional Accounts</h2>
-            <p className="text-muted-foreground leading-relaxed animate-fade-in">
+            <p className="text-muted-foreground leading-relaxed">
               Basic sharing and receiving do not require an email address or traditional account. Woff creates an anonymous session identifier to enforce room membership and ownership. If you choose a sender account, we use your email address for sign-in and account support. Files, notes, and any personal details you choose to put in them are stored to provide the sharing service.
             </p>
           </div>

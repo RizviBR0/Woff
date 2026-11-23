@@ -8,7 +8,6 @@ export interface ProgressiveBlurProps {
   height?: string
   position?: "top" | "bottom" | "both"
   blurLevels?: number[]
-  children?: React.ReactNode
 }
 
 export function ProgressiveBlur({
@@ -17,11 +16,16 @@ export function ProgressiveBlur({
   position = "bottom",
   blurLevels = [0.5, 1, 2, 4, 8, 16, 32, 64],
 }: ProgressiveBlurProps) {
+  if (blurLevels.length < 2) {
+    return null
+  }
+
   // Create array with length equal to blurLevels.length - 2 (for before/after pseudo elements)
   const divElements = Array(blurLevels.length - 2).fill(null)
 
   return (
     <div
+      aria-hidden="true"
       className={cn(
         "gradient-blur pointer-events-none absolute inset-x-0 z-10",
         className,
