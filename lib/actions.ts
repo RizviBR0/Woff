@@ -10,6 +10,11 @@ import { displayNameForDevice } from "@/lib/display-name";
 import { isValidRoomSlug, normalizeRoomSlug } from "@/lib/room-slug";
 import { HANDOFF_HTML, HANDOFF_JSON } from "@/lib/handoff-template";
 import {
+  isSafePosterDataUrl,
+  MAX_TOTAL_POSTER_CHARS_PER_ENTRY,
+  sanitizeVideoDuration,
+} from "@/lib/video-utils";
+import {
   createServerSupabaseClient,
   requireAnonymousUser,
 } from "@/lib/supabase";
@@ -554,6 +559,8 @@ export async function createUploadedEntry(
     size: number;
     width?: number;
     height?: number;
+    duration?: number;
+    poster?: string;
   }>,
   entryType: "files" | "photos" | "drawing" = "files",
 ): Promise<Entry> {
@@ -561,6 +568,8 @@ export async function createUploadedEntry(
   if (items.length < 1 || items.length > MAX_FILES_PER_ENTRY) {
     throw new Error(`Upload between 1 and ${MAX_FILES_PER_ENTRY} files`);
   }
+
+  let totalPosterChars = 0;
 
   const normalizedItems = items.map((item) => {
     const relativePath =
@@ -595,6 +604,14 @@ export async function createUploadedEntry(
       typeof item.height === "number" && Number.isFinite(item.height) && item.height > 0
         ? Math.round(item.height)
         : undefined;
+    const duration = sanitizeVideoDuration(item.duration);
+    let poster: string | undefined;
+    if (isSafePosterDataUrl(item.poster)) {
+      if (totalPosterChars + item.poster.length <= MAX_TOTAL_POSTER_CHARS_PER_ENTRY) {
+        poster = item.poster;
+        totalPosterChars += item.poster.length;
+      }
+    }
     return {
       path: item.path,
       url: `/api/files/${item.path
@@ -606,6 +623,8 @@ export async function createUploadedEntry(
       size: Math.trunc(item.size),
       width,
       height,
+      ...(duration !== undefined ? { duration } : {}),
+      ...(poster ? { poster } : {}),
     };
   });
 

@@ -28,6 +28,12 @@ import {
 } from "@/lib/actions";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { formatBytes } from "@/lib/utils";
+import {
+  extractVideoMetadataAndPoster,
+  type ExtractedVideoInfo,
+} from "@/lib/video-thumbnail";
+import { computePosterBudget, resolveUploadMimeType } from "@/lib/video-utils";
+import { isImageFile, isVideoFile } from "./entries/entry-types";
 import type { Entry } from "./entry-card";
 
 const DrawingCanvas = dynamic(
@@ -315,8 +321,10 @@ export function Composer({
       uploadedByIndex: number[],
       index: number,
       onProgress: () => void,
+      videoMetaPromise?: Promise<{ width?: number; height?: number; duration?: number; poster?: string }>,
     ) => {
-      const dimensions = getImageDimensions(file);
+      const resolvedMime = resolveUploadMimeType(file.name, file.type);
+      const dimensions = videoMetaPromise ?? getImageDimensions(file);
       const tus = await loadUploadLibrary();
       const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -364,7 +372,7 @@ export function Composer({
           metadata: {
             bucketName: intent.bucket,
             objectName: intent.path,
-            contentType: file.type || "application/octet-stream",
+            contentType: resolvedMime,
             cacheControl: "0",
           },
           onError(error) {
@@ -391,7 +399,7 @@ export function Composer({
         path: intent.path,
         url: localFileUrl(intent.path),
         name: file.name,
-        type: file.type || "application/octet-stream",
+        type: resolvedMime,
         size: file.size,
         ...(await dimensions),
       };
@@ -421,6 +429,30 @@ export function Composer({
       const uploadedByIndex = files.map(() => 0);
       clearPreviews();
 
+      const placeholderItems = files.map((file) => {
+        const resolvedType = resolveUploadMimeType(file.name, file.type);
+        const item: {
+          name: string;
+          type: string;
+          size: number;
+          url?: string;
+          width?: number;
+          height?: number;
+          duration?: number;
+          poster?: string;
+        } = {
+          name: file.name,
+          type: resolvedType,
+          size: file.size,
+        };
+        if (presentation === "files" && isImageFile(resolvedType, file.name)) {
+          const previewUrl = URL.createObjectURL(file);
+          previewUrlsRef.current.push(previewUrl);
+          item.url = previewUrl;
+        }
+        return item;
+      });
+
       const placeholderMeta =
         presentation === "photos"
           ? {
@@ -431,11 +463,7 @@ export function Composer({
                 return url;
               }),
               count: files.length,
-              items: files.map((file) => ({
-                name: file.name,
-                type: file.type,
-                size: file.size,
-              })),
+              items: placeholderItems,
             }
           : presentation === "drawing"
             ? (() => {
@@ -445,11 +473,7 @@ export function Composer({
               })()
             : {
                 type: "files",
-                items: files.map((file) => ({
-                  name: file.name,
-                  type: file.type,
-                  size: file.size,
-                })),
+                items: placeholderItems,
               };
 
       if (!existingId) {
@@ -471,6 +495,57 @@ export function Composer({
           uploadProgress: 0,
           meta: placeholderMeta,
         });
+      }
+
+      // Extract local video posters & durations in parallel (max 2 decoders at once)
+      // so chat shows thumbnails immediately while uploading without spiking memory.
+      const videoIndices = files
+        .map((file, idx) =>
+          isVideoFile(resolveUploadMimeType(file.name, file.type), file.name) ? idx : -1,
+        )
+        .filter((idx) => idx !== -1);
+      const posterBudget = computePosterBudget(videoIndices.length);
+      const videoMetaPromises = new Map<
+        number,
+        Promise<{ width?: number; height?: number; duration?: number; poster?: string }>
+      >();
+      if (videoIndices.length > 0) {
+        const resolvers = new Map<
+          number,
+          (value: { width?: number; height?: number; duration?: number; poster?: string }) => void
+        >();
+        for (const idx of videoIndices) {
+          videoMetaPromises.set(
+            idx,
+            new Promise((resolve) => {
+              resolvers.set(idx, resolve);
+            }),
+          );
+        }
+        let nextVideoPos = 0;
+        const workerCount = Math.min(2, videoIndices.length);
+        void Promise.all(
+          Array.from({ length: workerCount }, async () => {
+            while (nextVideoPos < videoIndices.length) {
+              const idx = videoIndices[nextVideoPos++];
+              if (controller.signal.aborted) {
+                resolvers.get(idx)?.({});
+                continue;
+              }
+              const info = await extractVideoMetadataAndPoster(files[idx], {
+                maxBase64Chars: posterBudget,
+                signal: controller.signal,
+              }).catch((): ExtractedVideoInfo => ({}));
+              resolvers.get(idx)?.(info);
+              if (!controller.signal.aborted && (info.poster || info.duration)) {
+                placeholderItems[idx] = { ...placeholderItems[idx], ...info };
+                onUpdateEntry(batchId, {
+                  meta: { ...placeholderMeta, items: [...placeholderItems] },
+                });
+              }
+            }
+          }),
+        );
       }
 
       setBatch({ id: batchId, files, presentation, progress: 0, status: "uploading" });
@@ -505,7 +580,7 @@ export function Composer({
             files.map((file) => ({
               name: file.name,
               size: file.size,
-              type: file.type,
+              type: resolveUploadMimeType(file.name, file.type),
             })),
           ),
           supabaseBrowser.auth.getSession(),
@@ -533,6 +608,7 @@ export function Composer({
                 uploadedByIndex,
                 index,
                 reportProgress,
+                videoMetaPromises.get(index),
               );
             }
           }),
@@ -700,9 +776,17 @@ export function Composer({
   const receiveFiles = useCallback(
     (list: FileList | File[], preferred?: UploadPresentation) => {
       const files = Array.from(list);
-      const presentation =
-        preferred ||
-        (files.every((file) => file.type.startsWith("image/")) ? "photos" : "files");
+      const allImages =
+        files.length > 0 &&
+        files.every((file) =>
+          isImageFile(resolveUploadMimeType(file.name, file.type), file.name),
+        );
+      const presentation: UploadPresentation =
+        preferred === "drawing"
+          ? "drawing"
+          : (preferred === "photos" || !preferred) && allImages
+            ? "photos"
+            : "files";
       void runUpload(files, presentation).catch((error) => {
         toast.error(error instanceof Error ? error.message : "Unable to upload");
       });
@@ -1089,12 +1173,13 @@ export function Composer({
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => photoInputRef.current?.click()}
+              onClick={() => { warmUploadLibrary(); photoInputRef.current?.click(); }}
               className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-orange-500/10 hover:text-orange-600 dark:text-zinc-400 dark:hover:text-orange-400"
-              aria-label="Upload photos"
+              aria-label="Upload photos and videos"
+              title="Photos & videos"
             >
               <ImageIcon className="h-4 w-4" />
-              <span className="hidden sm:inline">Photos</span>
+              <span className="hidden sm:inline">Media</span>
             </button>
             <button
               type="button"
@@ -1160,11 +1245,11 @@ export function Composer({
         <input
           ref={photoInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           multiple
           className="hidden"
           onChange={(event) => {
-            if (event.target.files) receiveFiles(event.target.files, "photos");
+            if (event.target.files) receiveFiles(event.target.files);
             event.target.value = "";
           }}
         />

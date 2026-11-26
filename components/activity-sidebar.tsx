@@ -6,16 +6,20 @@ import {
   extractNoteSlugFromEntry,
   getEntryCategory,
   isSafeLegacyMediaUrl,
+  isVideoFile,
   parseLegacyPhotosText,
 } from "./entries/entry-types";
+import { isSafePosterDataUrl } from "@/lib/video-utils";
 import {
   Search,
   Filter,
   Download,
   Eye,
   FileText,
+  Film,
   Image as ImageIcon,
   File,
+  Play,
   StickyNote,
   Check,
   Pen,
@@ -47,13 +51,14 @@ interface ActivitySidebarProps {
   spaceSlug?: string;
 }
 
-type FilterType = "all" | "images" | "files" | "notes";
+type FilterType = "all" | "images" | "videos" | "files" | "notes";
 
 interface MetaFileItem {
   name: string;
   size?: number;
   type?: string;
   url: string;
+  poster?: string;
 }
 
 function formatDateIso(date: Date): string {
@@ -64,10 +69,19 @@ function formatDateIso(date: Date): string {
   }
 }
 
-function getItemType(entry: Entry): "image" | "file" | "note" | "unknown" {
+function getItemType(entry: Entry): "image" | "video" | "file" | "note" | "unknown" {
   const category = getEntryCategory(entry);
   if (category === "media") return "image";
-  if (category === "file") return "file";
+  if (category === "file") {
+    const metaItems = getMetaItems(entry);
+    if (
+      metaItems.length > 0 &&
+      metaItems.some((item) => isVideoFile(item.type, item.name))
+    ) {
+      return "video";
+    }
+    return "file";
+  }
   if (category === "note") return "note";
   return "unknown";
 }
@@ -304,6 +318,91 @@ function SidebarItem({
       );
     }
 
+    if (type === "video") {
+      const videoCount = metaItems.filter((item) =>
+        isVideoFile(item.type, item.name),
+      ).length;
+      const firstVideo =
+        metaItems.find((item) => isVideoFile(item.type, item.name)) || first;
+      const thumbPoster = isSafePosterDataUrl(firstVideo?.poster)
+        ? firstVideo.poster
+        : undefined;
+      const displayName =
+        count > 1
+          ? videoCount === count
+            ? `${count} videos`
+            : `${videoCount} ${videoCount === 1 ? "video" : "videos"} + ${count - videoCount} more`
+          : firstVideo?.name || "Video";
+      const subtitle = videoCount > 1 ? "videos" : "video";
+
+      return (
+        <div className="group flex items-center gap-2 px-2 py-1.5 hover:bg-accent/50 rounded-lg mx-2 transition-colors">
+          <a
+            href={`#entry-${entry.id}`}
+            onClick={scrollToEntry}
+            className="flex items-center gap-3 flex-1 min-w-0 py-1 px-1"
+          >
+            <div className="relative h-10 w-10 flex-shrink-0">
+              {count > 1 && (
+                <>
+                  <div className="absolute top-0.5 left-0.5 h-9 w-9 rounded-lg bg-muted border border-border/30" />
+                  <div className="absolute top-1 left-1 h-9 w-9 rounded-lg bg-muted border border-border/30" />
+                </>
+              )}
+              <div className="relative h-10 w-10 rounded-lg overflow-hidden bg-zinc-900 border border-border/50 flex items-center justify-center z-10">
+                {thumbPoster ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={thumbPoster}
+                    alt={displayName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <Film className="h-4 w-4 text-orange-400" />
+                )}
+                {thumbPoster && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <Play className="h-3.5 w-3.5 fill-white text-white drop-shadow" />
+                  </div>
+                )}
+              </div>
+              {count > 1 && (
+                <div className="absolute -bottom-1 -right-1 z-20 bg-primary text-primary-foreground text-[9px] font-semibold px-1.5 py-0.5 rounded-full leading-none border-2 border-background">
+                  {count}
+                </div>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium truncate text-foreground">
+                {displayName}
+              </div>
+              <div className="text-xs text-muted-foreground">{subtitle}</div>
+            </div>
+          </a>
+          <div
+            className={`flex items-center gap-1 shrink-0 transition-opacity ${actionRevealClass}`}
+          >
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              disabled={isDownloading}
+              onClick={() => onDownload(entry)}
+              title={isDownloading ? "Downloading…" : "Download"}
+              aria-label={`Download ${displayName}`}
+            >
+              {isDownloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     const firstName = first?.name || "file";
     const displayName = count > 1 ? "Multiple files" : firstName;
     const subtitle = count > 1 ? `${count} files` : "file";
@@ -454,6 +553,7 @@ export function ActivitySidebar({
         if (type === "unknown") return false;
 
         if (activeFilter === "images" && type !== "image") return false;
+        if (activeFilter === "videos" && type !== "video") return false;
         if (activeFilter === "files" && type !== "file") return false;
         if (activeFilter === "notes" && type !== "note") return false;
 
@@ -467,6 +567,9 @@ export function ActivitySidebar({
               (item.name || "").toLowerCase().includes(q)
             );
             if (matchesName) return true;
+            if (type === "video") {
+              return "video videos clip".includes(q);
+            }
             if (type === "image") {
               const isDrawing =
                 e.meta?.presentation === "drawing" ||
@@ -523,13 +626,17 @@ export function ActivitySidebar({
       if (metaItems.length > 0) {
         if (metaItems.length === 1) {
           const single = metaItems[0];
-          const label = single.name || (type === "image" ? "photo.png" : "file");
+          const label =
+            single.name ||
+            (type === "image" ? "photo.png" : type === "video" ? "video.mp4" : "file");
           toastId = toast.loading(`Preparing "${label}" for download...`);
           await downloadFileFromUrl(single.url, label);
           toast.success(`Download started for "${label}"`, { id: toastId });
         } else {
+          const noun =
+            type === "image" ? "photos" : type === "video" ? "videos" : "files";
           toastId = toast.loading(
-            `Preparing ZIP for ${metaItems.length} ${type === "image" ? "photos" : "files"}...`,
+            `Preparing ZIP for ${metaItems.length} ${noun}...`,
             { action: cancelAction }
           );
           const zip = await createZip();
@@ -553,7 +660,7 @@ export function ActivitySidebar({
           });
           triggerBlobDownload(
             zipBlob,
-            `${type === "image" ? "photos" : "files"}-${entry.id}.zip`
+            `${noun}-${entry.id}.zip`
           );
           toast.success("ZIP download started", { id: toastId });
         }
@@ -673,7 +780,8 @@ export function ActivitySidebar({
         const type = getItemType(entry);
         const metaItems = getMetaItems(entry);
         if (metaItems.length > 0) {
-          const folder = type === "image" ? "images" : "files";
+          const folder =
+            type === "image" ? "images" : type === "video" ? "videos" : "files";
           for (const item of metaItems) {
             remoteFiles.push({
               url: item.url,
@@ -803,6 +911,11 @@ export function ActivitySidebar({
       value: "images",
       label: "Images",
       icon: <ImageIcon className="h-4 w-4" />,
+    },
+    {
+      value: "videos",
+      label: "Videos",
+      icon: <Film className="h-4 w-4" />,
     },
     { value: "files", label: "Files", icon: <File className="h-4 w-4" /> },
     {

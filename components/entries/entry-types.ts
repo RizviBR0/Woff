@@ -25,6 +25,8 @@ export interface UploadedFileItem {
   size: number;
   width?: number;
   height?: number;
+  duration?: number;
+  poster?: string;
 }
 
 export function isImageFile(type?: string, name?: string): boolean {
@@ -37,7 +39,7 @@ export function isImageFile(type?: string, name?: string): boolean {
 export function isVideoFile(type?: string, name?: string): boolean {
   return (
     Boolean(type?.startsWith("video/")) ||
-    /\.(mp4|webm|mov|m4v|ogv)$/i.test(name || "")
+    /\.(mp4|webm|mov|m4v|ogv|mkv)$/i.test(name || "")
   );
 }
 

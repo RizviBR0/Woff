@@ -8,6 +8,7 @@ import {
   RESERVED_ROOM_SLUGS, ROOM_SLUG_MAX_LENGTH, suggestRoomSlug,
 } from "../lib/room-slug.ts";
 import * as roomSlugs from "../lib/room-slug.ts";
+import * as videoUtils from "../lib/video-utils.ts";
 
 test("legacy four-digit room codes and named Pro URLs use one bounded syntax", () => {
   for (const slug of ["0000", "1234", "9999", "sabbir", "rose-lemon", "sabbir-2026", "42-rizvi", "a".repeat(40)]) {
@@ -66,6 +67,7 @@ function actionFixture(error = null) {
     nanoid: { customAlphabet: () => () => "AbCd12" }, "next/server": {},
     "@/lib/display-name": { displayNameForDevice: () => "Rose Lemon" },
     "@/lib/room-slug": roomSlugs, "@/lib/handoff-template": {},
+    "@/lib/video-utils": videoUtils,
     "@/lib/supabase": {
       requireAnonymousUser: async () => {
         identityLookups++;

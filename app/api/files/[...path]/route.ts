@@ -88,7 +88,7 @@ export async function GET(
   );
   const download = new URL(request.url).searchParams.get("download");
   const safeInline =
-    /^(image\/(png|jpeg|gif|webp|avif)|application\/pdf|audio\/(mpeg|ogg|wav)|video\/(mp4|webm))$/i.test(
+    /^(image\/(png|jpeg|gif|webp|avif)|application\/pdf|audio\/(mpeg|ogg|wav)|video\/(mp4|webm|quicktime|ogg|x-m4v))$/i.test(
       asset.mime || "",
     );
   const filename = (download || path[path.length - 1])
