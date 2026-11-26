@@ -1170,69 +1170,75 @@ export function GlobalVideoViewer({
             </div>
           )}
 
-          {/* Paused Center Play Button (great for touch & desktop discovery) */}
+          {/* Paused Center Play Button (overlaid so pausing never shifts the video) */}
           {!isPlaying && !isBuffering && !videoError && upNextCountdown === null && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                togglePlayPause(false);
-              }}
-              aria-label="Play video"
-              className="z-20 flex h-16 w-16 items-center justify-center rounded-full border border-white/30 bg-black/60 text-white shadow-2xl backdrop-blur-md transition-transform hover:scale-110 hover:bg-[#ff5a00] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
-            >
-              <Play className="ml-0.5 h-7 w-7 fill-current" />
-            </button>
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  togglePlayPause(false);
+                }}
+                aria-label="Play video"
+                className="pointer-events-auto flex h-16 w-16 items-center justify-center rounded-full border border-white/30 bg-black/60 text-white shadow-2xl backdrop-blur-md transition-transform hover:scale-110 hover:bg-[#ff5a00] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+              >
+                <Play className="ml-0.5 h-7 w-7 fill-current" />
+              </button>
+            </div>
           )}
 
           {/* Transient Action Flash (Play/Pause/Mute/Rate) */}
           {centerFlash && !seekHud && (
-            <div
-              key={centerFlash.key}
-              className="pointer-events-none absolute z-20 flex items-center gap-1.5 rounded-full border border-white/15 bg-black/70 px-4 py-2 text-sm font-semibold text-white shadow-2xl backdrop-blur-md animate-in zoom-in-90 fade-in duration-150"
-            >
-              {centerFlash.kind === "play" && <Play className="h-4 w-4 fill-current" />}
-              {centerFlash.kind === "pause" && <Pause className="h-4 w-4 fill-current" />}
-              {centerFlash.kind === "mute" && <VolumeX className="h-4 w-4" />}
-              {centerFlash.kind === "unmute" && <Volume2 className="h-4 w-4" />}
-              {centerFlash.kind === "rate" && <Gauge className="h-4 w-4 text-[#ff5a00]" />}
-              {centerFlash.label && (
-                <span className="tabular-nums">{centerFlash.label}</span>
-              )}
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              <div
+                key={centerFlash.key}
+                className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/70 px-4 py-2 text-sm font-semibold text-white shadow-2xl backdrop-blur-md animate-in zoom-in-90 fade-in duration-150"
+              >
+                {centerFlash.kind === "play" && <Play className="h-4 w-4 fill-current" />}
+                {centerFlash.kind === "pause" && <Pause className="h-4 w-4 fill-current" />}
+                {centerFlash.kind === "mute" && <VolumeX className="h-4 w-4" />}
+                {centerFlash.kind === "unmute" && <Volume2 className="h-4 w-4" />}
+                {centerFlash.kind === "rate" && <Gauge className="h-4 w-4 text-[#ff5a00]" />}
+                {centerFlash.label && (
+                  <span className="tabular-nums">{centerFlash.label}</span>
+                )}
+              </div>
             </div>
           )}
 
           {/* Up Next Auto-Advance Pill for multi-video messages */}
           {upNextCountdown !== null && nextVideo && (
-            <div
-              className="absolute bottom-28 z-30 mx-4 flex items-center gap-3 rounded-2xl border border-white/15 bg-zinc-950/90 px-4 py-3 text-white shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="min-w-0 max-w-[200px] sm:max-w-[260px]">
-                <p className="text-[11px] font-medium text-white/65 tabular-nums">
-                  Up next in {upNextCountdown}s
-                </p>
-                <p className="truncate text-xs font-semibold text-white">
-                  {nextVideo.name}
-                </p>
+            <div className="pointer-events-none absolute inset-x-0 bottom-28 z-30 flex justify-center px-4">
+              <div
+                className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-white/15 bg-zinc-950/90 px-4 py-3 text-white shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="min-w-0 max-w-[200px] sm:max-w-[260px]">
+                  <p className="text-[11px] font-medium text-white/65 tabular-nums">
+                    Up next in {upNextCountdown}s
+                  </p>
+                  <p className="truncate text-xs font-semibold text-white">
+                    {nextVideo.name}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={goToNext}
+                  className="h-8 rounded-lg bg-[#ff5a00] px-3 text-xs font-semibold text-white hover:bg-[#e55000]"
+                >
+                  Play now
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setUpNextCountdown(null)}
+                  className="h-8 rounded-lg px-2 text-xs text-white/75 hover:bg-white/10 hover:text-white"
+                >
+                  Cancel
+                </Button>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                onClick={goToNext}
-                className="h-8 rounded-lg bg-[#ff5a00] px-3 text-xs font-semibold text-white hover:bg-[#e55000]"
-              >
-                Play now
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => setUpNextCountdown(null)}
-                className="h-8 rounded-lg px-2 text-xs text-white/75 hover:bg-white/10 hover:text-white"
-              >
-                Cancel
-              </Button>
             </div>
           )}
 
