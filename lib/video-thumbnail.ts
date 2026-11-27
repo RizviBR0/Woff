@@ -240,9 +240,26 @@ function captureFromVideoSrc(
 
     video.onloadeddata = () => {
       if (settled) return;
-      if (!info.poster && (!info.duration || info.duration <= 0.35 || video.currentTime === 0)) {
-        // Wait briefly for pending seeked event when seeking away from 0.
-        if (info.duration && info.duration > 0.35) return;
+      if (!info.poster && video.videoWidth > 0 && video.videoHeight > 0) {
+        // Keep a fallback first-frame poster in case seeking is unsupported or slow.
+        const fallback = encodeCanvasWithinBudget(
+          video,
+          video.videoWidth,
+          video.videoHeight,
+          maxEdge,
+          maxBase64Chars,
+        );
+        if (fallback.poster) {
+          info = {
+            ...info,
+            width: video.videoWidth,
+            height: video.videoHeight,
+            duration: sanitizeVideoDuration(video.duration) ?? info.duration,
+            poster: fallback.poster,
+          };
+        }
+      }
+      if (!info.duration || info.duration <= 0.35) {
         captureCurrentFrame();
       }
     };

@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Download,
   FastForward,
+  Film,
   Gauge,
   Keyboard,
   Loader2,
@@ -17,8 +18,6 @@ import {
   Play,
   Repeat,
   Rewind,
-  RotateCcw,
-  RotateCw,
   Volume1,
   Volume2,
   VolumeX,
@@ -30,6 +29,11 @@ import { downloadFileFromUrl, triggerBlobDownload } from "@/lib/download";
 import { addArchiveFiles, generateArchive } from "@/lib/archive";
 import { formatBytes } from "@/lib/utils";
 import {
+  getCachedLazyVideoInfo,
+  requestLazyVideoPoster,
+  type ExtractedVideoInfo,
+} from "@/lib/video-thumbnail";
+import {
   buildRecoveryMediaUrl,
   clampSeekTime,
   formatVideoDuration,
@@ -39,6 +43,66 @@ import {
   stepPlaybackRate,
   type VideoPlaylistItem,
 } from "@/lib/video-utils";
+
+function SkipBack10Icon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M 4.75 10.12 A 8 8 0 1 0 10.61 5.62" />
+      <path d="M 12.6 3.1 L 9.8 5.6 L 12.6 8.1" />
+      <text
+        x="12"
+        y="16.4"
+        textAnchor="middle"
+        fill="currentColor"
+        stroke="none"
+        fontSize="7.4"
+        fontWeight="700"
+        fontFamily="inherit"
+      >
+        10
+      </text>
+    </svg>
+  );
+}
+
+function SkipForward10Icon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M 19.25 10.12 A 8 8 0 1 1 13.39 5.62" />
+      <path d="M 11.4 3.1 L 14.2 5.6 L 11.4 8.1" />
+      <text
+        x="12"
+        y="16.4"
+        textAnchor="middle"
+        fill="currentColor"
+        stroke="none"
+        fontSize="7.4"
+        fontWeight="700"
+        fontFamily="inherit"
+      >
+        10
+      </text>
+    </svg>
+  );
+}
 
 interface GlobalVideoViewerProps {
   isOpen: boolean;
@@ -100,6 +164,9 @@ export function GlobalVideoViewer({
   const [upNextCountdown, setUpNextCountdown] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
+  const [resolvedMeta, setResolvedMeta] = useState<
+    Record<string, ExtractedVideoInfo>
+  >({});
 
   const playerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -133,10 +200,46 @@ export function GlobalVideoViewer({
       : currentVideo.url
     : "";
   const hasMultiple = videos.length > 1;
+  const currentResolved = currentVideo
+    ? resolvedMeta[currentVideo.url] || getCachedLazyVideoInfo(currentVideo.url) || undefined
+    : undefined;
   const posterUrl =
-    currentVideo && isSafePosterDataUrl(currentVideo.poster)
+    (currentVideo && isSafePosterDataUrl(currentVideo.poster)
       ? currentVideo.poster
-      : undefined;
+      : undefined) || currentResolved?.poster;
+
+  // Hydrate missing posters/durations for multi-video filmstrip tiles from the
+  // shared lazy cache (or queue background capture for legacy uploads).
+  useEffect(() => {
+    if (!isOpen || videos.length <= 1) return;
+    const controller = new AbortController();
+    const initial: Record<string, ExtractedVideoInfo> = {};
+    const missingUrls: string[] = [];
+
+    for (const vid of videos) {
+      if (isSafePosterDataUrl(vid.poster) || !vid.url) continue;
+      const cached = getCachedLazyVideoInfo(vid.url);
+      if (cached) {
+        initial[vid.url] = cached;
+      } else if (cached === undefined && vid.url.startsWith("/api/files/")) {
+        missingUrls.push(vid.url);
+      }
+    }
+
+    if (Object.keys(initial).length > 0) {
+      setResolvedMeta((prev) => ({ ...initial, ...prev }));
+    }
+
+    for (const url of missingUrls) {
+      void requestLazyVideoPoster(url, controller.signal).then((info) => {
+        if (!controller.signal.aborted && info) {
+          setResolvedMeta((prev) => ({ ...prev, [url]: info }));
+        }
+      });
+    }
+
+    return () => controller.abort();
+  }, [isOpen, videos]);
 
   useEffect(() => {
     setMounted(true);
@@ -1038,6 +1141,15 @@ export function GlobalVideoViewer({
                 const v = e.currentTarget;
                 if (Number.isFinite(v.duration) && v.duration > 0) {
                   setDuration(v.duration);
+                  if (currentVideo.url && !currentVideo.duration) {
+                    setResolvedMeta((prev) => ({
+                      ...prev,
+                      [currentVideo.url]: {
+                        ...prev[currentVideo.url],
+                        duration: v.duration,
+                      },
+                    }));
+                  }
                 }
                 v.playbackRate = playbackRate;
                 v.muted = isMuted;
@@ -1424,12 +1536,9 @@ export function GlobalVideoViewer({
                 onClick={() => seekBy(-SEEK_STEP_SECONDS, true)}
                 aria-label="Skip back 10 seconds"
                 title="Back 10s (J)"
-                className="relative flex h-9 w-9 items-center justify-center rounded-full text-white/90 transition hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-white/90 transition hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
               >
-                <RotateCcw className="h-4 w-4" />
-                <span className="pointer-events-none absolute text-[8px] font-bold tabular-nums">
-                  10
-                </span>
+                <SkipBack10Icon className="h-[22px] w-[22px]" />
               </button>
 
               <button
@@ -1437,12 +1546,9 @@ export function GlobalVideoViewer({
                 onClick={() => seekBy(SEEK_STEP_SECONDS, true)}
                 aria-label="Skip forward 10 seconds"
                 title="Forward 10s (L)"
-                className="relative flex h-9 w-9 items-center justify-center rounded-full text-white/90 transition hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-white/90 transition hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
               >
-                <RotateCw className="h-4 w-4" />
-                <span className="pointer-events-none absolute text-[8px] font-bold tabular-nums">
-                  10
-                </span>
+                <SkipForward10Icon className="h-[22px] w-[22px]" />
               </button>
 
               {/* Volume cluster */}
@@ -1594,13 +1700,17 @@ export function GlobalVideoViewer({
 
           {/* Multi-Video Filmstrip Switcher */}
           {hasMultiple && (
-            <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-0.5 hover-scrollbar">
+            <div className="mt-2.5 -mx-1 flex items-center gap-2 overflow-x-auto px-1 py-1.5 hover-scrollbar">
               {videos.map((vid, idx) => {
                 const isActive = idx === safeIndex;
-                const thumb = isSafePosterDataUrl(vid.poster)
-                  ? vid.poster
-                  : undefined;
-                const dur = formatVideoDuration(vid.duration);
+                const lazy =
+                  resolvedMeta[vid.url] ||
+                  getCachedLazyVideoInfo(vid.url) ||
+                  undefined;
+                const thumb =
+                  (isSafePosterDataUrl(vid.poster) ? vid.poster : undefined) ||
+                  lazy?.poster;
+                const dur = formatVideoDuration(vid.duration ?? lazy?.duration);
                 return (
                   <button
                     key={`${vid.url}-${idx}`}
@@ -1609,12 +1719,13 @@ export function GlobalVideoViewer({
                     }}
                     type="button"
                     onClick={() => goToIndex(idx)}
+                    title={vid.name}
                     aria-label={`Watch video ${idx + 1}: ${vid.name}`}
                     aria-current={isActive ? "true" : undefined}
-                    className={`relative h-12 w-20 shrink-0 overflow-hidden rounded-lg bg-zinc-900 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
+                    className={`relative h-12 w-20 shrink-0 overflow-hidden rounded-lg bg-zinc-900 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 sm:h-[52px] sm:w-[88px] ${
                       isActive
-                        ? "ring-2 ring-[#ff5a00] opacity-100 scale-[1.03]"
-                        : "ring-1 ring-white/15 opacity-60 hover:opacity-95"
+                        ? "border-2 border-[#ff5a00] opacity-100 shadow-[0_0_12px_rgba(255,90,0,0.35)]"
+                        : "border border-white/15 opacity-65 hover:border-white/35 hover:opacity-100"
                     }`}
                   >
                     {thumb ? (
@@ -1625,13 +1736,13 @@ export function GlobalVideoViewer({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-white/60">
-                        #{idx + 1}
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-800/80 via-zinc-900 to-zinc-950 text-white/40">
+                        <Film className="h-4 w-4" aria-hidden="true" />
                       </div>
                     )}
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                    <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/75 px-1 text-[9px] font-semibold text-white tabular-nums">
-                      {dur || `${idx + 1}`}
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                    <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/75 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-white tabular-nums">
+                      {dur || `#${idx + 1}`}
                     </span>
                   </button>
                 );
